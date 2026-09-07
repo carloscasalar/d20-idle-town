@@ -77,3 +77,9 @@ aside { border-left: 2px solid var(--border); background: var(--panel); display:
 .muted { color: var(--muted); }
 .gold { color: var(--gold); }
 .log.hide-combat .event.combat details { display: none; }
+.event.economy { color: var(--muted); }
+.event.shop { color: var(--muted); }
+.status-safe { color: var(--green); }
+.status-threatened { color: var(--accent); }
+.status-ravaged { color: var(--red); }
+.card.ruined { opacity: 0.5; }

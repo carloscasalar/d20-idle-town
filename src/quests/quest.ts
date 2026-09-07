@@ -1,5 +1,6 @@
 import type { Rng } from '../core/rng';
-import type { QuestGiver } from '../town/town';
+import { ASSET_KINDS, type Asset } from '../town/assets';
+import type { Employer } from '../town/town';
 import { buildEncounter, type Difficulty, type EncounterSpec } from './encounters';
 import { THEMES, type ThemeId } from './themes';
 
@@ -10,6 +11,7 @@ export interface Quest {
   title: string;
   place: string;
   giverId: string;
+  assetId: string;
   theme: ThemeId;
   level: number;
   encounters: EncounterSpec[];
@@ -34,21 +36,38 @@ export function rollDifficulties(rng: Rng): [Difficulty, Difficulty, Difficulty]
   return [rng.weighted(DIFFICULTY_WEIGHTS), rng.weighted(DIFFICULTY_WEIGHTS), rng.weighted(DIFFICULTY_WEIGHTS)];
 }
 
-export function generateQuest(rng: Rng, giver: QuestGiver, level: number, partySize: number, tick: number): Quest {
-  const eligible = giver.themes.filter((t) => THEMES[t].minLevel <= level);
-  const theme = eligible.length > 0 ? rng.pick(eligible) : rng.pick(giver.themes);
-  const def = THEMES[theme];
-  const place = rng.pick(def.places);
-  const title = rng.pick(def.titles).replace('{place}', place);
+export interface QuestTerms {
+  employer: Employer;
+  asset: Asset;
+  theme: ThemeId;
+  level: number;
+  partySize: number;
+  tick: number;
+}
+
+/**
+ * Reward: what the asset is worth to its owner over a few days, scaled by how
+ * dangerous the job is, how generous the employer is, and how desperate (a
+ * ravaged asset pays more). Capped by what the employer can actually pay.
+ */
+export function generateQuest(rng: Rng, terms: QuestTerms): Quest {
+  const { employer, asset, theme, level, partySize, tick } = terms;
+  const def = ASSET_KINDS[asset.kind];
+  const threatLabel = THEMES[theme].label;
+  const title = rng.pick(def.titles).replace('{place}', asset.name).replace('{threat}', threatLabel);
   const difficulties = rollDifficulties(rng);
   const encounters = difficulties.map((d) => buildEncounter(rng, theme, partySize, level, d));
   const payFactor = difficulties.reduce((s, d) => s + DIFFICULTY_PAY[d], 0);
-  const reward = Math.round(level * level * 12 * payFactor * giver.wealth + 30 * payFactor);
+  const desperation = asset.status === 'ravaged' ? 1.5 : 1;
+  const base = asset.incomePerDay * 2 + level * level * 10;
+  const wanted = Math.round(base * payFactor * employer.generosity * desperation * 0.6);
+  const reward = Math.max(20, Math.min(wanted, Math.floor(employer.treasury * 0.8)));
   return {
     id: `quest-${++questCounter}`,
     title,
-    place,
-    giverId: giver.id,
+    place: asset.name,
+    giverId: employer.id,
+    assetId: asset.id,
     theme,
     level,
     encounters,

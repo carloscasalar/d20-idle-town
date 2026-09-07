@@ -28,6 +28,11 @@ export interface Party {
   questsDone: number;
   questsFailed: number;
   arrivedAt: number;
+  /** Healing potions in the shared pack. */
+  potions: number;
+  /** Lifetime ledger. */
+  earned: number;
+  spent: number;
 }
 
 let partyCounter = 0;
@@ -48,6 +53,9 @@ export function createParty(rng: Rng, level: number, size: number, tick: number)
     questsDone: 0,
     questsFailed: 0,
     arrivedAt: tick,
+    potions: 0,
+    earned: 0,
+    spent: 0,
   };
 }
 
@@ -83,6 +91,8 @@ export function mergeParties(host: Party, donor: Party): Hero[] {
   donor.members = donor.members.filter((h) => !moved.includes(h));
   host.gold += donor.gold;
   donor.gold = 0;
+  host.potions += donor.potions;
+  donor.potions = 0;
   return aliveMembers(donor);
 }
 

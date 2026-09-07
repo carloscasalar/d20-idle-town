@@ -10,7 +10,8 @@ export type ThemeId =
   | 'monstrosities'
   | 'fiends'
   | 'dragons'
-  | 'elementals';
+  | 'elementals'
+  | 'sea';
 
 export interface Theme {
   id: ThemeId;
@@ -79,6 +80,12 @@ const THEME_LIST: Theme[] = [
     monsters: ['Air Elemental', 'Earth Elemental', 'Fire Elemental', 'Water Elemental', 'Djinni', 'Efreeti', 'Remorhaz', 'Salamander', 'Gargoyle', 'Magmin', 'Azer'],
     places: ['the storm peak', 'the fire caves', 'the flooded temple', 'the elemental scar', 'the glassworks', 'the forge of Ur'],
     titles: ['Quell the storm at {place}', 'Seal the breach at {place}', 'Elemental fury at {place}', 'Rescue the expedition at {place}'],
+  },
+  {
+    id: 'sea', label: 'Sea Raiders', minLevel: 1,
+    monsters: ['Sahuagin Warrior', 'Merrow', 'Giant Crab', 'Giant Octopus', 'Reef Shark', 'Hunter Shark', 'Swarm of Piranhas', 'Giant Seahorse', 'Plesiosaurus', 'Water Elemental', 'Dragon Turtle', 'Pirate', 'Bandit'],
+    places: ['the harbour', 'the breakwater', 'the fish market', 'the drowned pier', 'the tide caves', 'the lighthouse'],
+    titles: ['Something climbs out of the water at {place}', 'Clear {place}', 'Raiders at {place}', 'Recover the cargo sunk at {place}'],
   },
   {
     id: 'dragons', label: 'Dragons', minLevel: 4,

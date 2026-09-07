@@ -14,6 +14,21 @@ export interface Hero {
   alive: boolean;
   kills: number;
   deaths: number;
+  /** Armour upgrades bought at the smith; each tier is +1 AC. */
+  armorTier: number;
+  /** Lifetime gold spent on this hero (gear, potions, resurrections). */
+  goldSpent: number;
+}
+
+export const MAX_ARMOR_TIER = 3;
+
+export function armorUpgradeCost(tier: number, level: number): number {
+  return Math.round((80 + 40 * level) * Math.pow(2.2, tier));
+}
+
+/** What the hero's AC is in combat, with the smith's work on top of the class chassis. */
+export function heroAc(hero: Hero): number {
+  return buildHero(hero.heroClass, hero.level).ac + hero.armorTier;
 }
 
 let heroCounter = 0;
@@ -37,6 +52,8 @@ export function createHero(rng: Rng, level: number, heroClass?: HeroClassName): 
     alive: true,
     kills: 0,
     deaths: 0,
+    armorTier: 0,
+    goldSpent: 0,
   };
 }
 
@@ -74,6 +91,15 @@ export function resurrectHero(hero: Hero): void {
 /** Gold the temple asks to bring someone back. Grows with level, like a 5e diamond bill would. */
 export function resurrectionCost(level: number): number {
   return 150 + level * level * 40;
+}
+
+/** A healing draught scaled to the buyer's level: one potion is about a third of a hero's hit points. */
+export function potionCost(level: number): number {
+  return 25 + 10 * level;
+}
+
+export function potionHeal(hero: Hero): number {
+  return Math.max(8, Math.ceil(hero.maxHp / 3));
 }
 
 export function describeHero(h: Hero): string {

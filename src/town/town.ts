@@ -1,108 +1,168 @@
 import { deityName, factionName, merchantName, nobleName, townName } from '../core/names';
 import type { Rng } from '../core/rng';
-import { THEME_IDS, type ThemeId } from '../quests/themes';
+import { createAsset, type Asset, type AssetKind } from './assets';
 
-export type GiverKind = 'noble' | 'merchant' | 'faction';
+export type EmployerKind = 'noble' | 'merchant' | 'faction' | 'temple';
 
-export interface QuestGiver {
+/** Shops where adventurers spend coin. Each belongs to one employer. */
+export type ServiceKind = 'tavern' | 'temple' | 'smith' | 'apothecary';
+
+export interface Employer {
   id: string;
   name: string;
-  kind: GiverKind;
-  /** Flavour: "House Valmont", "Spice Merchant", ... */
+  kind: EmployerKind;
+  /** "House Valmont", "Spice Merchant", "Faction", "Temple". */
   title: string;
-  themes: ThemeId[];
-  /** Reward multiplier. Nobles pay well, factions pay in favours. */
-  wealth: number;
-  /** Grows with completed quests; unlocks higher-level postings. */
+  /** Shop this employer runs in town, if any. */
+  service: ServiceKind | null;
+  assets: Asset[];
+  treasury: number;
+  /** Fixed daily costs: retainers, tithes, rent. */
+  upkeepPerDay: number;
+  /** Multiplier on contract rewards. */
+  generosity: number;
+  /** Grows with completed contracts. Reputable employers attract companies first. */
   reputation: number;
-  /** Ticks until this giver posts again. */
   cooldown: number;
+  ruined: boolean;
   questsPosted: number;
   questsCompleted: number;
   questsFailed: number;
-}
-
-export interface Temple {
-  name: string;
-  deity: string;
-  resurrections: number;
-  goldTaken: number;
+  /** Lifetime ledger. */
+  earned: number;
+  spent: number;
 }
 
 export interface Town {
   name: string;
-  givers: QuestGiver[];
-  temple: Temple;
-  tavern: string;
+  employers: Employer[];
+  tavernName: string;
+  deity: string;
 }
 
-const GIVER_THEMES: Record<GiverKind, ThemeId[]> = {
-  noble: ['bandits', 'undead', 'giants', 'dragons', 'fiends', 'monstrosities'],
-  merchant: ['bandits', 'goblins', 'beasts', 'monstrosities', 'elementals'],
-  faction: ['cultists', 'undead', 'fiends', 'goblins', 'elementals', 'dragons', 'beasts'],
+const EMPLOYER_ASSETS: Record<EmployerKind, AssetKind[]> = {
+  noble: ['mine', 'farmland', 'mountain-pass', 'vineyard', 'hunting-lodge', 'quarry'],
+  merchant: ['trade-route', 'port', 'warehouse', 'quarry', 'lumber-camp'],
+  faction: ['archive', 'watchtower', 'catacombs', 'trade-route', 'shrine'],
+  temple: ['shrine', 'cemetery', 'catacombs'],
+};
+
+const SERVICE_ASSETS: Record<ServiceKind, AssetKind[]> = {
+  tavern: ['vineyard', 'trade-route'],
+  temple: ['shrine', 'cemetery'],
+  smith: ['mine', 'quarry'],
+  apothecary: ['herb-garden', 'lumber-camp'],
+};
+
+const SERVICE_TITLES: Record<ServiceKind, string> = {
+  tavern: 'Innkeeper',
+  temple: 'Temple',
+  smith: 'Master Smith',
+  apothecary: 'Apothecary',
 };
 
 const TAVERNS = ['The Prancing Owlbear', 'The Rusty Flagon', 'The Drunken Dragon', 'The Last Ember', 'The Broken Lantern'];
 
-let giverCounter = 0;
+let employerCounter = 0;
 
-function pickThemes(rng: Rng, kind: GiverKind): ThemeId[] {
-  const pool = rng.shuffle(GIVER_THEMES[kind]);
-  const chosen = pool.slice(0, rng.int(2, 3));
-  return chosen.length > 0 ? chosen : [rng.pick(THEME_IDS)];
-}
-
-function makeGiver(rng: Rng, kind: GiverKind): QuestGiver {
+function makeEmployer(rng: Rng, kind: EmployerKind, service: ServiceKind | null, deity: string, tavernName: string): Employer {
   let name: string;
   let title: string;
-  let wealth: number;
-  if (kind === 'noble') {
-    name = nobleName(rng);
-    title = `House ${name.split(' ').pop()}`;
-    wealth = 1.3 + rng.next() * 0.5;
-  } else if (kind === 'merchant') {
-    const m = merchantName(rng);
-    name = m.name;
-    title = m.trade;
-    wealth = 1.0 + rng.next() * 0.4;
-  } else {
-    name = factionName(rng);
-    name = name.charAt(0).toUpperCase() + name.slice(1);
-    title = 'Faction';
-    wealth = 0.8 + rng.next() * 0.4;
+  let generosity: number;
+  let treasury: number;
+  switch (kind) {
+    case 'noble':
+      name = nobleName(rng);
+      title = `House ${name.split(' ').pop()}`;
+      generosity = 1.3 + rng.next() * 0.5;
+      treasury = rng.int(1500, 3000);
+      break;
+    case 'merchant': {
+      const m = merchantName(rng);
+      name = m.name;
+      title = service ? SERVICE_TITLES[service] : m.trade;
+      generosity = 1.0 + rng.next() * 0.4;
+      treasury = rng.int(800, 1600);
+      break;
+    }
+    case 'faction':
+      name = factionName(rng);
+      name = name.charAt(0).toUpperCase() + name.slice(1);
+      title = 'Faction';
+      generosity = 0.8 + rng.next() * 0.4;
+      treasury = rng.int(600, 1200);
+      break;
+    case 'temple':
+      name = `Temple of ${deity.split(',')[0]}`;
+      title = 'Temple';
+      generosity = 0.9 + rng.next() * 0.3;
+      treasury = rng.int(800, 1400);
+      break;
   }
+  if (service === 'tavern') {
+    name = tavernName;
+  }
+  const id = `employer-${++employerCounter}`;
+  const pool = service ? SERVICE_ASSETS[service] : EMPLOYER_ASSETS[kind];
+  const assetCount = kind === 'noble' ? rng.int(2, 3) : rng.int(1, 2);
+  const kinds = rng.shuffle(pool).slice(0, assetCount);
+  const assets = kinds.map((k) => createAsset(rng, k, id));
+  const income = assets.reduce((s, a) => s + a.incomePerDay, 0);
   return {
-    id: `giver-${++giverCounter}`,
+    id,
     name,
     kind,
     title,
-    themes: pickThemes(rng, kind),
-    wealth: Math.round(wealth * 100) / 100,
+    service,
+    assets,
+    treasury,
+    upkeepPerDay: Math.round(income * (0.35 + rng.next() * 0.2)),
+    generosity: Math.round(generosity * 100) / 100,
     reputation: 0,
     cooldown: rng.int(0, 6),
+    ruined: false,
     questsPosted: 0,
     questsCompleted: 0,
     questsFailed: 0,
+    earned: 0,
+    spent: 0,
   };
 }
 
 export function generateTown(rng: Rng): Town {
-  const givers: QuestGiver[] = [];
-  const counts: Record<GiverKind, number> = { noble: rng.int(2, 3), merchant: rng.int(2, 3), faction: rng.int(2, 3) };
-  for (const kind of ['noble', 'merchant', 'faction'] as GiverKind[]) {
-    for (let i = 0; i < counts[kind]; i++) givers.push(makeGiver(rng, kind));
-  }
-  // Avoid two factions with the same name.
-  const seen = new Set<string>();
-  for (const g of givers) {
-    while (seen.has(g.name)) g.name = g.kind === 'faction' ? factionName(rng) : nobleName(rng);
-    seen.add(g.name);
-  }
   const deity = deityName(rng);
-  return {
-    name: townName(rng),
-    givers,
-    temple: { name: `Temple of ${deity.split(',')[0]}`, deity, resurrections: 0, goldTaken: 0 },
-    tavern: rng.pick(TAVERNS),
-  };
+  const tavernName = rng.pick(TAVERNS);
+  const employers: Employer[] = [];
+  for (let i = 0; i < rng.int(2, 3); i++) employers.push(makeEmployer(rng, 'noble', null, deity, tavernName));
+  employers.push(makeEmployer(rng, 'merchant', 'tavern', deity, tavernName));
+  employers.push(makeEmployer(rng, 'merchant', 'smith', deity, tavernName));
+  employers.push(makeEmployer(rng, 'merchant', 'apothecary', deity, tavernName));
+  for (let i = 0; i < rng.int(1, 2); i++) employers.push(makeEmployer(rng, 'merchant', null, deity, tavernName));
+  for (let i = 0; i < rng.int(2, 3); i++) employers.push(makeEmployer(rng, 'faction', null, deity, tavernName));
+  employers.push(makeEmployer(rng, 'temple', 'temple', deity, tavernName));
+
+  const seen = new Set<string>();
+  for (const e of employers) {
+    while (seen.has(e.name)) e.name = e.kind === 'faction' ? factionName(rng) : nobleName(rng);
+    seen.add(e.name);
+  }
+  return { name: townName(rng), employers, tavernName, deity };
+}
+
+export function serviceOf(town: Town, service: ServiceKind): Employer {
+  const e = town.employers.find((x) => x.service === service);
+  if (!e) throw new Error(`town has no ${service}`);
+  return e;
+}
+
+export function assetById(town: Town, id: string): Asset | undefined {
+  for (const e of town.employers) {
+    const a = e.assets.find((x) => x.id === id);
+    if (a) return a;
+  }
+  return undefined;
+}
+
+export function dailyIncome(e: Employer): number {
+  return e.assets.reduce((s, a) => s + (a.status === 'safe' ? a.incomePerDay : a.status === 'threatened' ? Math.floor(a.incomePerDay / 2) : 0), 0);
 }

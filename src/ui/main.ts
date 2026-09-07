@@ -5,7 +5,9 @@ import { xpToNextLevel } from '../core/xp';
 import { describeEncounter } from '../quests/encounters';
 import { difficultyCode, type Quest } from '../quests/quest';
 import { THEMES } from '../quests/themes';
-import { formatTime, Game, type GameEvent } from '../sim/game';
+import { assetStatusLabel, formatTime, Game, type GameEvent } from '../sim/game';
+import { ASSET_KINDS } from '../town/assets';
+import { dailyIncome } from '../town/town';
 
 // ------------------------------------------------------------------ setup
 
@@ -146,19 +148,21 @@ function renderParties(): string {
         .map((h) => {
           const next = xpToNextLevel(h.level);
           const xp = next ? `${h.xp}/${next} xp` : 'max';
-          return `<div class="row ${h.alive ? '' : 'dead'}"><span class="name">${esc(h.name)}</span><span>${h.heroClass} ${h.level}</span><span>${hpBar(h)}</span><span title="${xp}">${h.kills}⚔</span></div>`;
+          const armour = h.armorTier > 0 ? ` <span class="badge" title="armour tier ${h.armorTier}">AC+${h.armorTier}</span>` : '';
+          return `<div class="row ${h.alive ? '' : 'dead'}"><span class="name">${esc(h.name)}${armour}</span><span>${h.heroClass} ${h.level}</span><span>${hpBar(h)}</span><span title="${xp}">${h.kills}⚔</span></div>`;
         })
         .join('');
       const dead = p.members.filter((m) => !m.alive);
       const bill = dead.length ? `<div class="row"><span>temple bill</span><span class="gold">${dead.reduce((s, h) => s + resurrectionCost(h.level), 0)} gp</span></div>` : '';
       return `<div class="card"><h3><span>${esc(p.name)}</span><span class="status">lvl ${partyLevel(p)} · <span class="gold">${p.gold} gp</span></span></h3>
-        <div class="row"><span>${esc(statusText(p))}</span><span>${p.questsDone}✓ ${p.questsFailed}✗</span></div>${rows}${bill}</div>`;
+        <div class="row"><span>${esc(statusText(p))}</span><span>${p.questsDone}✓ ${p.questsFailed}✗</span></div>${rows}${bill}
+        <div class="row muted"><span>${p.potions} potion${p.potions === 1 ? '' : 's'}</span><span>earned ${p.earned} · spent ${p.spent}</span></div></div>`;
     })
     .join('');
 }
 
 function questCard(q: Quest): string {
-  const giver = game.giverById(q.giverId);
+  const giver = game.employerById(q.giverId);
   const encs = q.encounters
     .map((e, i) => `<div class="row"><span><span class="diff ${e.difficulty}">${i + 1}. ${e.difficulty}</span></span><span>${esc(describeEncounter(e))}</span></div>`)
     .join('');
@@ -181,19 +185,28 @@ function renderBoard(): string {
 
 function renderTown(): string {
   const t = game.town;
-  const givers = t.givers
-    .map(
-      (g) => `<div class="card"><h3><span>${esc(g.name)}</span><span class="status">${esc(g.title)}</span></h3>
-      <div class="row"><span>${g.themes.map((id) => THEMES[id].label).join(', ')}</span><span>pays ×${g.wealth}</span></div>
-      <div class="row"><span>reputation ${g.reputation}</span><span>${g.questsCompleted}✓ ${g.questsFailed}✗ of ${g.questsPosted}</span></div></div>`,
-    )
+  const employers = [...t.employers]
+    .sort((a, b) => (a.ruined ? 1 : 0) - (b.ruined ? 1 : 0) || b.treasury - a.treasury)
+    .map((e) => {
+      const assets = e.assets
+        .map(
+          (a) => `<div class="row asset-${a.status}"><span class="name">${esc(a.name)} <span class="muted">(${ASSET_KINDS[a.kind].label})</span></span><span>${a.incomePerDay} gp/day · <span class="status-${a.status}">${assetStatusLabel(a)}</span></span></div>`,
+        )
+        .join('');
+      const service = e.service ? ` · ${e.service}` : '';
+      const net = dailyIncome(e) - e.upkeepPerDay;
+      return `<div class="card ${e.ruined ? 'ruined' : ''}"><h3><span>${esc(e.name)}</span><span class="status">${esc(e.title)}${service}</span></h3>
+      <div class="row"><span>treasury <span class="gold">${e.treasury} gp</span></span><span>${e.ruined ? 'RUINED' : `${net >= 0 ? '+' : ''}${net} gp/day`}</span></div>
+      <div class="row"><span>reputation ${e.reputation} · pays ×${e.generosity}</span><span>${e.questsCompleted}✓ ${e.questsFailed}✗ of ${e.questsPosted}</span></div>
+      <div class="row muted"><span>earned ${e.earned}</span><span>spent ${e.spent}</span></div>
+      ${assets}</div>`;
+    })
     .join('');
-  return `<div class="card"><h3><span>${esc(t.temple.name)}</span><span class="status">temple</span></h3>
-      <div class="row"><span>${esc(t.temple.deity)}</span></div>
-      <div class="row"><span>resurrections ${t.temple.resurrections}</span><span class="gold">${t.temple.goldTaken} gp tithed</span></div></div>
-    <div class="card"><h3><span>${esc(t.tavern)}</span><span class="status">tavern</span></h3>
-      <div class="row"><span>${game.activeParties.length} companies in town</span><span>${game.stats.partiesArrived} arrived so far</span></div></div>
-    ${givers}`;
+  return `<div class="card"><h3><span>${esc(t.name)}</span><span class="status">town</span></h3>
+      <div class="row"><span>${game.activeParties.length} companies in town</span><span>${game.stats.partiesArrived} arrived so far</span></div>
+      <div class="row"><span>heroes have spent</span><span class="gold">${game.stats.goldSpentByHeroes} gp</span></div>
+      <div class="row"><span>contracts expired</span><span>${game.stats.questsExpired}</span></div></div>
+    ${employers}`;
 }
 
 function renderChronicle(): string {

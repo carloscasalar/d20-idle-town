@@ -1,5 +1,5 @@
 import { Encounter, type BattleLog, type Creature } from 'battlecast-engine';
-import type { Hero } from '../adventurers/hero';
+import { heroAc, type Hero } from '../adventurers/hero';
 import type { EncounterSpec } from '../quests/encounters';
 
 export type CombatWinner = 'party' | 'monsters' | 'retreat' | 'stalemate';
@@ -40,7 +40,7 @@ export function runCombat(heroes: Hero[], spec: EncounterSpec, seed: number): Co
       heroClass: h.heroClass,
       heroLevel: h.level,
       team: 'blue',
-      heroOverrides: { hpOverride: h.maxHp, displayName: h.name },
+      heroOverrides: { hpOverride: h.maxHp, displayName: h.name, ...(h.armorTier > 0 ? { acOverride: heroAc(h) } : {}) },
     });
     if (!added) throw new Error(`engine refused hero ${h.name}`);
     idByHero.set(h.id, added.id);
