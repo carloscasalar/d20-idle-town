@@ -44,6 +44,8 @@ export interface Party {
   guildMember: boolean;
   /** In-game day the dues were last paid. */
   duesPaidDay: number;
+  /** Rounds bought at the tavern to learn about a contract, by quest id. */
+  investigations: Record<string, number>;
 }
 
 let partyCounter = 0;
@@ -72,6 +74,7 @@ export function createParty(rng: Rng, level: number, size: number, tick: number)
     blessed: false,
     guildMember: false,
     duesPaidDay: -1,
+    investigations: {},
   };
 }
 

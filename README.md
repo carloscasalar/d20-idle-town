@@ -31,8 +31,11 @@ One tick is one in-game hour. Every tick:
    pass, a shrine. Each kind of interest attracts its own threats (goblins and
    dragons for mines, pirates and sea raiders for the harbour, giants for the
    pass...). When trouble strikes, the holding stops paying and the owner posts a
-   contract: three encounters with independently rolled difficulties, and a reward
-   drawn from what the holding is worth and what the treasury can afford.
+   contract: two to six encounters with independently rolled difficulties, and a
+   reward drawn from what the holding is worth and what the treasury can afford.
+   Only the first encounter is public. A company with coin to spare buys a round
+   at the tavern to learn how long the job is and what else waits; whatever is
+   still unknown comes out when they reach the place.
 2. **Companies arrive.** Every so often four level-1 adventurers turn up at the
    tavern. A broken company that has waited too long attracts a small band of
    its own level instead.
@@ -51,8 +54,8 @@ One tick is one in-game hour. Every tick:
 
 Contracts are posted at the levels of the companies actually in town, never below
 the greenest of them. A company takes work at its own level only; after a slow day
-it will stoop one level, never more, so the small jobs stay for the companies that
-need them. Reputation grows with every completed contract; among contracts at its
+it will stretch one level either way, never more, so the small jobs stay for the
+companies that need them. Reputation grows with every completed contract; among contracts at its
 level a company picks the most reputable employer.
 
 ## Coin, and what to do with it

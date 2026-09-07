@@ -29,7 +29,7 @@ import { runCombat } from '../combat/battlecast';
 import { describeEffect, resalePrice, rollStockItem, type MagicItem } from '../items/items';
 import { Rng } from '../core/rng';
 import { describeEncounter } from '../quests/encounters';
-import { difficultyCode, generateQuest, type Quest } from '../quests/quest';
+import { difficultyCode, generateQuest, isFullyKnown, revealAll, revealNext, type Quest } from '../quests/quest';
 import { THEMES } from '../quests/themes';
 import { ASSET_KINDS, rollThreat, type Asset } from '../town/assets';
 import {
@@ -122,6 +122,9 @@ const BLESSING_HP_PER_LEVEL = 3;
 /** Share of the purse a company drinks through after a job well done. */
 const CAROUSING_SHARE = 0.05;
 const MAX_RENOWN = 10;
+/** Asking around about a job costs this much per company level, and a company asks at most this many times. */
+const INVESTIGATION_COST_PER_LEVEL = 15;
+const MAX_INVESTIGATIONS = 2;
 
 export class Game {
   readonly config: GameConfig;
@@ -429,7 +432,9 @@ export class Game {
           p.status = 'questing';
           p.progress = 0;
           const q = this.questById(p.questId)!;
-          this.log('party', `${p.name} reach ${q.place}.`);
+          const surprise = !isFullyKnown(q);
+          revealAll(q);
+          this.log('party', `${p.name} reach ${q.place}${surprise ? ` and take stock: ${q.encounters.length} fights ahead [${difficultyCode(q)}]` : ''}.`);
         }
         break;
       case 'questing':
@@ -459,11 +464,11 @@ export class Game {
     if (this.shop(p)) return;
     const level = partyLevel(p);
     // Companies take work at their level or a little below; nobody signs up to punch above their weight.
-    // A company takes work at its own level. After a slow day it will stoop one level, never more:
-    // the small jobs are for the companies that need them.
-    const lowest = p.idleTicks >= TICKS_PER_DAY ? level - 1 : level;
+    // A company takes work at its own level. After a slow day it will stretch one level either way,
+    // never more: the small jobs are for the companies that need them.
+    const stretch = p.idleTicks >= TICKS_PER_DAY ? 1 : 0;
     const candidates = this.openQuests.filter(
-      (q) => q.level <= level && q.level >= lowest && (!q.guildOnly || p.guildMember) && this.hasFirstRefusal(q, p),
+      (q) => Math.abs(q.level - level) <= stretch && (!q.guildOnly || p.guildMember) && this.hasFirstRefusal(q, p),
     );
     if (candidates.length === 0) return;
     // An old friend's contract first, then exact level, then the employer's name, then the pay.
@@ -473,6 +478,7 @@ export class Game {
       (a, b) => favored(b) - favored(a) || Math.abs(a.level - level) - Math.abs(b.level - level) || rep(b) - rep(a) || b.reward - a.reward,
     );
     const quest = candidates[0]!;
+    if (this.investigate(p, quest)) return;
     quest.status = 'taken';
     quest.partyId = p.id;
     p.questId = quest.id;
@@ -481,6 +487,30 @@ export class Game {
     p.idleTicks = 0;
     const employer = this.employerById(quest.giverId);
     this.log('quest', `${p.name} accept "${quest.title}" from ${employer?.name ?? 'an unknown client'} and set out for ${quest.place}.`);
+  }
+
+  /**
+   * Before signing, a company with coin to spare buys a round at the tavern and
+   * asks around: first how long the job is, then what else waits out there.
+   * Returns true if the hour went on that.
+   */
+  private investigate(p: Party, quest: Quest): boolean {
+    if (isFullyKnown(quest)) return false;
+    const done = p.investigations[quest.id] ?? 0;
+    if (done >= MAX_INVESTIGATIONS) return false;
+    const tavern = serviceOf(this.town, 'tavern');
+    const level = partyLevel(p);
+    const cost = INVESTIGATION_COST_PER_LEVEL * level;
+    if (tavern.ruined || p.gold - cost < resurrectionCost(level)) return false;
+    this.pay(p, tavern, cost);
+    p.investigations[quest.id] = done + 1;
+    const learned = revealNext(quest);
+    const what =
+      learned === 'count'
+        ? `it means ${quest.encounters.length} fights`
+        : `the next fight will be ${describeEncounter(quest.encounters[quest.revealed - 1]!)} (${quest.encounters[quest.revealed - 1]!.difficulty})`;
+    this.log('shop', `${p.name} buy a round at ${tavern.name} (${cost} gp) and ask about "${quest.title}": ${what}.`);
+    return true;
   }
 
   /** A retired adventurer's contracts are held a day for their old company. */
@@ -694,7 +724,7 @@ export class Game {
     }
     const fallen = fighters.filter((h) => !h.alive);
     const survivors = aliveMembers(p);
-    const summary = `Encounter ${n}/3 (${spec.difficulty}): ${describeEncounter(spec)}.`;
+    const summary = `Encounter ${n}/${quest.encounters.length} (${spec.difficulty}): ${describeEncounter(spec)}.`;
     const deathNotes = () => {
       for (const h of fallen) this.chronicleLog('death', `${describeHero(h)} of ${p.name} dies at ${quest.place} (${describeEncounter(spec)}).`);
     };

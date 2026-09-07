@@ -131,7 +131,7 @@ function statusText(p: Party): string {
     case 'traveling':
       return `on the road to ${q?.place ?? '?'} (${p.ticksLeft}h)`;
     case 'questing':
-      return `fighting at ${q?.place ?? '?'} (${p.progress}/3)`;
+      return `fighting at ${q?.place ?? '?'} (${p.progress}/${q?.encounters.length ?? '?'})`;
     case 'returning':
       return `returning (${p.ticksLeft}h)`;
     case 'resting':
@@ -167,9 +167,16 @@ function renderParties(): string {
 
 function questCard(q: Quest): string {
   const giver = game.employerById(q.giverId);
-  const encs = q.encounters
+  const known = q.encounters
+    .slice(0, q.revealed)
     .map((e, i) => `<div class="row"><span><span class="diff ${e.difficulty}">${i + 1}. ${e.difficulty}</span></span><span>${esc(describeEncounter(e))}</span></div>`)
     .join('');
+  const hidden = q.countRevealed
+    ? Array.from({ length: q.encounters.length - q.revealed }, (_, i) => `<div class="row muted"><span>${q.revealed + i + 1}. ?</span><span>unknown</span></div>`).join('')
+    : q.revealed < q.encounters.length
+      ? `<div class="row muted"><span>…</span><span>nobody knows how far it goes</span></div>`
+      : '';
+  const encs = known + hidden;
   const taker = q.partyId ? game.parties.find((p) => p.id === q.partyId) : null;
   return `<div class="card"><h3><span>${esc(q.title)}</span><span class="status">lvl ${q.level} [${difficultyCode(q)}]</span></h3>
     <div class="row"><span>${esc(giver?.name ?? '?')} · ${THEMES[q.theme].label}${q.guildOnly ? ' · <span class="badge">guild</span>' : ''}</span><span class="gold">${q.reward} gp${q.itemReward ? ` + <span class="item" title="${esc(describeEffect(q.itemReward.effect))}">${esc(q.itemReward.name)}</span>` : ''}</span></div>

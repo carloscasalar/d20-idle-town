@@ -15,7 +15,12 @@ export interface Quest {
   assetId: string;
   theme: ThemeId;
   level: number;
+  /** Two to six fights. Only the first is public; the rest come out through investigation or on arrival. */
   encounters: EncounterSpec[];
+  /** How many encounters the board (and the companies) know the composition of. */
+  revealed: number;
+  /** Whether the number of encounters is known. */
+  countRevealed: boolean;
   /** Gold paid on completion. */
   reward: number;
   /** Paid in kind on top of the gold. Rare. */
@@ -37,8 +42,22 @@ const DIFFICULTY_WEIGHTS: { item: Difficulty; weight: number }[] = [
 
 const DIFFICULTY_PAY: Record<Difficulty, number> = { easy: 1, intermediate: 1.5, hard: 2.5 };
 
-export function rollDifficulties(rng: Rng): [Difficulty, Difficulty, Difficulty] {
-  return [rng.weighted(DIFFICULTY_WEIGHTS), rng.weighted(DIFFICULTY_WEIGHTS), rng.weighted(DIFFICULTY_WEIGHTS)];
+export const MIN_ENCOUNTERS = 2;
+export const MAX_ENCOUNTERS = 6;
+
+/** Short jobs are common, long ones rare. */
+export function rollEncounterCount(rng: Rng): number {
+  return rng.weighted([
+    { item: 2, weight: 3 },
+    { item: 3, weight: 4 },
+    { item: 4, weight: 3 },
+    { item: 5, weight: 2 },
+    { item: 6, weight: 1 },
+  ]);
+}
+
+export function rollDifficulties(rng: Rng, count: number): Difficulty[] {
+  return Array.from({ length: count }, () => rng.weighted(DIFFICULTY_WEIGHTS));
 }
 
 export interface QuestTerms {
@@ -62,7 +81,7 @@ export function generateQuest(rng: Rng, terms: QuestTerms): Quest {
   const def = ASSET_KINDS[asset.kind];
   const threatLabel = THEMES[theme].label;
   const title = rng.pick(def.titles).replace('{place}', asset.name).replace('{threat}', threatLabel);
-  const difficulties = rollDifficulties(rng);
+  const difficulties = rollDifficulties(rng, rollEncounterCount(rng));
   const encounters = difficulties.map((d) => buildEncounter(rng, theme, partySize, level, d, terms.difficultyScale ?? 1));
   const payFactor = difficulties.reduce((s, d) => s + DIFFICULTY_PAY[d], 0);
   const desperation = asset.status === 'ravaged' ? 1.5 : 1;
@@ -83,6 +102,8 @@ export function generateQuest(rng: Rng, terms: QuestTerms): Quest {
     theme,
     level,
     encounters,
+    revealed: 1,
+    countRevealed: false,
     reward,
     itemReward,
     guildOnly,
@@ -96,6 +117,32 @@ export function questXp(q: Quest): number {
   return q.encounters.reduce((s, e) => s + e.totalXp, 0);
 }
 
+export function isFullyKnown(q: Quest): boolean {
+  return q.countRevealed && q.revealed >= q.encounters.length;
+}
+
+/** Learn the next thing about the job: first how long it is, then one more encounter each time. */
+export function revealNext(q: Quest): 'count' | 'encounter' | null {
+  if (!q.countRevealed) {
+    q.countRevealed = true;
+    return 'count';
+  }
+  if (q.revealed < q.encounters.length) {
+    q.revealed += 1;
+    return 'encounter';
+  }
+  return null;
+}
+
+export function revealAll(q: Quest): void {
+  q.countRevealed = true;
+  q.revealed = q.encounters.length;
+}
+
+/** "I/?/?" for a three-fight job with one known; "I/…" while even the length is a secret. */
 export function difficultyCode(q: Quest): string {
-  return q.encounters.map((e) => e.difficulty[0]!.toUpperCase()).join('/');
+  const known = q.encounters.slice(0, q.revealed).map((e) => e.difficulty[0]!.toUpperCase());
+  if (!q.countRevealed) return q.revealed < q.encounters.length ? `${known.join('/')}/…` : known.join('/');
+  const hidden = q.encounters.length - q.revealed;
+  return [...known, ...Array.from({ length: hidden }, () => '?')].join('/');
 }
