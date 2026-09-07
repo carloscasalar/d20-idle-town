@@ -1,3 +1,6 @@
 node_modules
 dist
 .DS_Store
+design/pixel-art/*.dc.html
+design/pixel-art/canvas.json
+design/pixel-art/d20-town-pixel-art.html
