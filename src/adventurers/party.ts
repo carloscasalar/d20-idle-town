@@ -1,5 +1,6 @@
 import { partyName } from '../core/names';
 import type { Rng } from '../core/rng';
+import type { MagicItem } from '../items/items';
 import { createHero, type Hero } from './hero';
 
 export const PARTY_SIZE = 4;
@@ -33,6 +34,16 @@ export interface Party {
   /** Lifetime ledger. */
   earned: number;
   spent: number;
+  /** Magic items nobody is wearing: loot to equip or sell. */
+  stash: MagicItem[];
+  /** Fame in town. Grows with contracts and tavern tales; famous companies get first pick of work. */
+  renown: number;
+  /** A temple blessing carried into the next contract. */
+  blessed: boolean;
+  /** Adventurers' guild membership: needed for noble and faction contracts. */
+  guildMember: boolean;
+  /** In-game day the dues were last paid. */
+  duesPaidDay: number;
 }
 
 let partyCounter = 0;
@@ -56,6 +67,11 @@ export function createParty(rng: Rng, level: number, size: number, tick: number)
     potions: 0,
     earned: 0,
     spent: 0,
+    stash: [],
+    renown: 0,
+    blessed: false,
+    guildMember: false,
+    duesPaidDay: -1,
   };
 }
 
@@ -93,6 +109,9 @@ export function mergeParties(host: Party, donor: Party): Hero[] {
   donor.gold = 0;
   host.potions += donor.potions;
   donor.potions = 0;
+  host.stash.push(...donor.stash);
+  donor.stash = [];
+  host.renown = Math.max(host.renown, donor.renown);
   return aliveMembers(donor);
 }
 

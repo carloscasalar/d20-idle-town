@@ -5,6 +5,7 @@ import { xpToNextLevel } from '../core/xp';
 import { describeEncounter } from '../quests/encounters';
 import { difficultyCode, type Quest } from '../quests/quest';
 import { THEMES } from '../quests/themes';
+import { describeEffect } from '../items/items';
 import { assetStatusLabel, formatTime, Game, type GameEvent } from '../sim/game';
 import { ASSET_KINDS } from '../town/assets';
 import { dailyIncome } from '../town/town';
@@ -149,14 +150,16 @@ function renderParties(): string {
           const next = xpToNextLevel(h.level);
           const xp = next ? `${h.xp}/${next} xp` : 'max';
           const armour = h.armorTier > 0 ? ` <span class="badge" title="armour tier ${h.armorTier}">AC+${h.armorTier}</span>` : '';
-          return `<div class="row ${h.alive ? '' : 'dead'}"><span class="name">${esc(h.name)}${armour}</span><span>${h.heroClass} ${h.level}</span><span>${hpBar(h)}</span><span title="${xp}">${h.kills}⚔</span></div>`;
+          const gear = h.items.map((i) => ` <span class="badge item" title="${esc(describeEffect(i.effect))}">${esc(i.name)}</span>`).join('');
+          return `<div class="row ${h.alive ? '' : 'dead'}"><span class="name">${esc(h.name)}${armour}${gear}</span><span>${h.heroClass} ${h.level}</span><span>${hpBar(h)}</span><span title="${xp}">${h.kills}⚔</span></div>`;
         })
         .join('');
       const dead = p.members.filter((m) => !m.alive);
       const bill = dead.length ? `<div class="row"><span>temple bill</span><span class="gold">${dead.reduce((s, h) => s + resurrectionCost(h.level), 0)} gp</span></div>` : '';
       return `<div class="card"><h3><span>${esc(p.name)}</span><span class="status">lvl ${partyLevel(p)} · <span class="gold">${p.gold} gp</span></span></h3>
         <div class="row"><span>${esc(statusText(p))}</span><span>${p.questsDone}✓ ${p.questsFailed}✗</span></div>${rows}${bill}
-        <div class="row muted"><span>${p.potions} potion${p.potions === 1 ? '' : 's'}</span><span>earned ${p.earned} · spent ${p.spent}</span></div></div>`;
+        <div class="row muted"><span>${p.potions} potion${p.potions === 1 ? '' : 's'}${p.blessed ? ' · blessed' : ''}${p.guildMember ? ' · guild' : ''} · renown ${p.renown}</span><span>earned ${p.earned} · spent ${p.spent}</span></div>
+        ${p.stash.length ? `<div class="row muted"><span>stash: ${p.stash.map((i) => esc(i.name)).join(', ')}</span></div>` : ''}</div>`;
     })
     .join('');
 }
@@ -168,7 +171,7 @@ function questCard(q: Quest): string {
     .join('');
   const taker = q.partyId ? game.parties.find((p) => p.id === q.partyId) : null;
   return `<div class="card"><h3><span>${esc(q.title)}</span><span class="status">lvl ${q.level} [${difficultyCode(q)}]</span></h3>
-    <div class="row"><span>${esc(giver?.name ?? '?')} · ${THEMES[q.theme].label}</span><span class="gold">${q.reward} gp</span></div>
+    <div class="row"><span>${esc(giver?.name ?? '?')} · ${THEMES[q.theme].label}${q.guildOnly ? ' · <span class="badge">guild</span>' : ''}</span><span class="gold">${q.reward} gp${q.itemReward ? ` + <span class="item" title="${esc(describeEffect(q.itemReward.effect))}">${esc(q.itemReward.name)}</span>` : ''}</span></div>
     ${encs}${taker ? `<div class="row"><span class="muted">taken by ${esc(taker.name)}</span></div>` : ''}</div>`;
 }
 
@@ -199,13 +202,17 @@ function renderTown(): string {
       <div class="row"><span>treasury <span class="gold">${e.treasury} gp</span></span><span>${e.ruined ? 'RUINED' : `${net >= 0 ? '+' : ''}${net} gp/day`}</span></div>
       <div class="row"><span>reputation ${e.reputation} · pays ×${e.generosity}</span><span>${e.questsCompleted}✓ ${e.questsFailed}✗ of ${e.questsPosted}</span></div>
       <div class="row muted"><span>earned ${e.earned}</span><span>spent ${e.spent}</span></div>
-      ${assets}</div>`;
+      ${assets}
+      ${e.stock.map((i) => `<div class="row"><span class="item" title="${esc(describeEffect(i.effect))}">for sale: ${esc(i.name)}</span><span class="gold">${i.price} gp</span></div>`).join('')}
+      ${e.assets.some((a) => a.loot.items.length || a.loot.gold) ? `<div class="row muted"><span>something was left behind out there…</span></div>` : ''}</div>`;
     })
     .join('');
   return `<div class="card"><h3><span>${esc(t.name)}</span><span class="status">town</span></h3>
       <div class="row"><span>${game.activeParties.length} companies in town</span><span>${game.stats.partiesArrived} arrived so far</span></div>
       <div class="row"><span>heroes have spent</span><span class="gold">${game.stats.goldSpentByHeroes} gp</span></div>
-      <div class="row"><span>contracts expired</span><span>${game.stats.questsExpired}</span></div></div>
+      <div class="row"><span>contracts expired</span><span>${game.stats.questsExpired}</span></div>
+      <div class="row"><span>magic items found / sold</span><span>${game.stats.itemsFound} / ${game.stats.itemsSold}</span></div>
+      <div class="row"><span>retired adventurers</span><span>${game.stats.retirements}</span></div></div>
     ${employers}`;
 }
 

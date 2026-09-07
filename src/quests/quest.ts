@@ -1,4 +1,5 @@
 import type { Rng } from '../core/rng';
+import { rollLootItem, type MagicItem } from '../items/items';
 import { ASSET_KINDS, type Asset } from '../town/assets';
 import type { Employer } from '../town/town';
 import { buildEncounter, type Difficulty, type EncounterSpec } from './encounters';
@@ -17,6 +18,10 @@ export interface Quest {
   encounters: EncounterSpec[];
   /** Gold paid on completion. */
   reward: number;
+  /** Paid in kind on top of the gold. Rare. */
+  itemReward: MagicItem | null;
+  /** Posted through the adventurers' guild: members only. */
+  guildOnly: boolean;
   status: QuestStatus;
   partyId: string | null;
   postedAt: number;
@@ -62,6 +67,11 @@ export function generateQuest(rng: Rng, terms: QuestTerms): Quest {
   const base = asset.incomePerDay * 2 + level * level * 10;
   const wanted = Math.round(base * payFactor * employer.generosity * desperation * 0.6);
   const reward = Math.max(20, Math.min(wanted, Math.floor(employer.treasury * 0.8)));
+  // Relics turn up in old places, and rich employers sometimes pay in kind.
+  const itemChance = (['archive', 'catacombs', 'shrine', 'cemetery'].includes(asset.kind) ? 0.12 : 0.04) + (employer.kind === 'noble' ? 0.04 : 0);
+  const itemReward = rng.chance(itemChance) ? rollLootItem(rng, level) : null;
+  // Noble houses and factions deal through the guild, but even they post the small jobs in public.
+  const guildOnly = (employer.kind === 'noble' || employer.kind === 'faction') && level >= 2;
   return {
     id: `quest-${++questCounter}`,
     title,
@@ -72,6 +82,8 @@ export function generateQuest(rng: Rng, terms: QuestTerms): Quest {
     level,
     encounters,
     reward,
+    itemReward,
+    guildOnly,
     status: 'open',
     partyId: null,
     postedAt: tick,

@@ -50,6 +50,36 @@ One tick is one in-game hour. Every tick:
 Reputation grows with every completed contract; idle companies pick the most
 reputable employer among contracts at their level.
 
+## Coin, and what to do with it
+
+Adventurers spend in real shops, and every coin lands in that shop's treasury:
+
+- **Innkeeper**: rooms after every contract, and a night of carousing after a clean
+  success. Tales told in the tavern raise the company's renown; famous companies get
+  first pick of the board.
+- **Apothecary**: healing potions, drunk between encounters.
+- **Smith**: three tiers of armour (+1 AC each, real in combat), and the odd +1 weapon.
+- **Temple**: resurrections, blessings (extra hit points for the next contract), and
+  a few holy items.
+- **Enchanter**: the only shop that trades in magic items in earnest. Also buys loot
+  the company cannot use and puts it back on sale, which is where most of the supply
+  comes from.
+- **Adventurers' Guild**: weekly dues. Noble houses and factions post everything
+  above level 1 through the guild, members only.
+
+Magic items are scarce on purpose: a thin catalogue in `src/items/items.ts`, shops
+that restock one item every few days at most, and contracts that rarely pay in kind
+(old places like archives, catacombs and shrines more often). Each item maps onto a
+real engine override: AC, weapon attack and damage, hit points, speed, resistances.
+
+When a company is wiped out, its gold and everything it carried stays on the field,
+and the next company to clear that holding finds it among the bones. The fallen a
+retreating company leaves behind lose their gear the same way.
+
+A level 8 adventurer whose company holds 25,000 gp retires: they buy a business,
+become an employer, and their old company gets a day's first refusal on any contract
+they post.
+
 Encounters are built from the DMG 2024 XP thresholds shipped with the engine, one
 tier lower than the book says because the engine's AI fights to the death and this
 game chains three fights. Two house rules keep companies alive: once half of them
@@ -61,7 +91,8 @@ contract and walks home. `scripts/calibrate.ts` measures single fresh fights.
 
 ```
 src/core        seeded RNG, XP table, name generators
-src/adventurers heroes (class, level, hp, xp) and parties (merging, level)
+src/adventurers heroes (class, level, hp, xp, gear) and parties (merging, stash, renown)
+src/items       magic item catalogue and effects
 src/town        employers, their holdings (assets) and the threats each kind attracts
 src/quests      threat rosters (SRD monsters), encounter builder, quest generator
 src/combat      adapter around battlecast-engine's Encounter API

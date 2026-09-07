@@ -2,6 +2,7 @@ import { buildHero, HERO_CLASS_NAMES, type HeroClassName } from 'battlecast-engi
 import { heroName } from '../core/names';
 import type { Rng } from '../core/rng';
 import { levelForXp, MAX_LEVEL } from '../core/xp';
+import type { ItemEffect, ItemSlot, MagicItem } from '../items/items';
 
 export interface Hero {
   id: string;
@@ -18,6 +19,43 @@ export interface Hero {
   armorTier: number;
   /** Lifetime gold spent on this hero (gear, potions, resurrections). */
   goldSpent: number;
+  /** Equipped magic items, at most one per slot. */
+  items: MagicItem[];
+}
+
+/** The class chassis attacks with a weapon rather than a cantrip; +1 swords are wasted on the rest. */
+export const WEAPON_CLASSES: HeroClassName[] = ['Barbarian', 'Fighter', 'Monk', 'Paladin', 'Ranger', 'Rogue'];
+
+export function itemInSlot(hero: Hero, slot: ItemSlot): MagicItem | undefined {
+  return hero.items.find((i) => i.slot === slot);
+}
+
+/** Whether `item` would be an upgrade for this hero: empty slot, or strictly better than what is worn. */
+export function wantsItem(hero: Hero, item: MagicItem): boolean {
+  if (item.slot === 'weapon' && !WEAPON_CLASSES.includes(hero.heroClass)) return false;
+  const current = itemInSlot(hero, item.slot);
+  return !current || current.price < item.price;
+}
+
+/** Equip an item, returning whatever it replaced. */
+export function equipItem(hero: Hero, item: MagicItem): MagicItem | undefined {
+  const current = itemInSlot(hero, item.slot);
+  hero.items = hero.items.filter((i) => i !== current);
+  hero.items.push(item);
+  return current;
+}
+
+/** Sum of the effects of everything the hero wears. */
+export function combinedEffect(hero: Hero): Required<Pick<ItemEffect, 'ac' | 'weaponBonus' | 'hp' | 'speed'>> & { resistances: string[] } {
+  const total = { ac: 0, weaponBonus: 0, hp: 0, speed: 0, resistances: [] as string[] };
+  for (const i of hero.items) {
+    total.ac += i.effect.ac ?? 0;
+    total.weaponBonus += i.effect.weaponBonus ?? 0;
+    total.hp += i.effect.hp ?? 0;
+    total.speed += i.effect.speed ?? 0;
+    for (const r of i.effect.resistances ?? []) if (!total.resistances.includes(r)) total.resistances.push(r);
+  }
+  return total;
 }
 
 export const MAX_ARMOR_TIER = 3;
@@ -26,9 +64,9 @@ export function armorUpgradeCost(tier: number, level: number): number {
   return Math.round((80 + 40 * level) * Math.pow(2.2, tier));
 }
 
-/** What the hero's AC is in combat, with the smith's work on top of the class chassis. */
+/** What the hero's AC is in combat: class chassis, the smith's work, and magic on top. */
 export function heroAc(hero: Hero): number {
-  return buildHero(hero.heroClass, hero.level).ac + hero.armorTier;
+  return buildHero(hero.heroClass, hero.level).ac + hero.armorTier + combinedEffect(hero).ac;
 }
 
 let heroCounter = 0;
@@ -54,6 +92,7 @@ export function createHero(rng: Rng, level: number, heroClass?: HeroClassName): 
     deaths: 0,
     armorTier: 0,
     goldSpent: 0,
+    items: [],
   };
 }
 

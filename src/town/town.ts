@@ -1,11 +1,12 @@
 import { deityName, factionName, merchantName, nobleName, townName } from '../core/names';
 import type { Rng } from '../core/rng';
+import type { MagicItem } from '../items/items';
 import { createAsset, type Asset, type AssetKind } from './assets';
 
 export type EmployerKind = 'noble' | 'merchant' | 'faction' | 'temple';
 
 /** Shops where adventurers spend coin. Each belongs to one employer. */
-export type ServiceKind = 'tavern' | 'temple' | 'smith' | 'apothecary';
+export type ServiceKind = 'tavern' | 'temple' | 'smith' | 'apothecary' | 'enchanter' | 'guild';
 
 export interface Employer {
   id: string;
@@ -31,6 +32,12 @@ export interface Employer {
   /** Lifetime ledger. */
   earned: number;
   spent: number;
+  /** Magic items for sale. Only shops that trade in them ever hold any. */
+  stock: MagicItem[];
+  /** Ticks until the shop puts something new on the shelf. */
+  restockIn: number;
+  /** A retired adventurer's old company gets first refusal on their contracts. */
+  favoredPartyId: string | null;
 }
 
 export interface Town {
@@ -52,6 +59,8 @@ const SERVICE_ASSETS: Record<ServiceKind, AssetKind[]> = {
   temple: ['shrine', 'cemetery'],
   smith: ['mine', 'quarry'],
   apothecary: ['herb-garden', 'lumber-camp'],
+  enchanter: ['archive', 'catacombs'],
+  guild: ['watchtower', 'trade-route'],
 };
 
 const SERVICE_TITLES: Record<ServiceKind, string> = {
@@ -59,7 +68,17 @@ const SERVICE_TITLES: Record<ServiceKind, string> = {
   temple: 'Temple',
   smith: 'Master Smith',
   apothecary: 'Apothecary',
+  enchanter: 'Enchanter',
+  guild: 'Adventurers’ Guild',
 };
+
+/** Shops that keep magic items on the shelf, and how often (ticks) something new turns up. */
+export const ITEM_SHOPS: Partial<Record<ServiceKind, number>> = { enchanter: 24 * 4, temple: 24 * 7, smith: 24 * 9 };
+export const MAX_STOCK = 2;
+
+/** What it costs a company to set one of its own up in business. Meant to be a lifetime's earnings. */
+export const RETIREMENT_PRICE = 25000;
+export const RETIREMENT_LEVEL = 8;
 
 const TAVERNS = ['The Prancing Owlbear', 'The Rusty Flagon', 'The Drunken Dragon', 'The Last Ember', 'The Broken Lantern'];
 
@@ -99,9 +118,9 @@ function makeEmployer(rng: Rng, kind: EmployerKind, service: ServiceKind | null,
       treasury = rng.int(800, 1400);
       break;
   }
-  if (service === 'tavern') {
-    name = tavernName;
-  }
+  if (service === 'tavern') name = tavernName;
+  if (service === 'guild') name = 'The Adventurers’ Guild';
+  if (service === 'enchanter') name = `${name}’s Curiosities`;
   const id = `employer-${++employerCounter}`;
   const pool = service ? SERVICE_ASSETS[service] : EMPLOYER_ASSETS[kind];
   const assetCount = kind === 'noble' ? rng.int(2, 3) : rng.int(1, 2);
@@ -126,6 +145,38 @@ function makeEmployer(rng: Rng, kind: EmployerKind, service: ServiceKind | null,
     questsFailed: 0,
     earned: 0,
     spent: 0,
+    stock: [],
+    restockIn: service && ITEM_SHOPS[service] ? Math.floor(ITEM_SHOPS[service]! / 2) : 0,
+    favoredPartyId: null,
+  };
+}
+
+/** A high-level adventurer buys a business and becomes an employer in their own right. */
+export function retiredEmployer(rng: Rng, heroName: string, partyId: string, gold: number): Employer {
+  const id = `employer-${++employerCounter}`;
+  const kind: AssetKind = rng.pick(['vineyard', 'warehouse', 'trade-route', 'hunting-lodge', 'farmland']);
+  const asset = createAsset(rng, kind, id);
+  return {
+    id,
+    name: heroName,
+    kind: 'merchant',
+    title: 'Retired adventurer',
+    service: null,
+    assets: [asset],
+    treasury: gold,
+    upkeepPerDay: Math.round(asset.incomePerDay * 0.4),
+    generosity: 1.2,
+    reputation: 1,
+    cooldown: rng.int(6, 12),
+    ruined: false,
+    questsPosted: 0,
+    questsCompleted: 0,
+    questsFailed: 0,
+    earned: 0,
+    spent: 0,
+    stock: [],
+    restockIn: 0,
+    favoredPartyId: partyId,
   };
 }
 
@@ -137,6 +188,8 @@ export function generateTown(rng: Rng): Town {
   employers.push(makeEmployer(rng, 'merchant', 'tavern', deity, tavernName));
   employers.push(makeEmployer(rng, 'merchant', 'smith', deity, tavernName));
   employers.push(makeEmployer(rng, 'merchant', 'apothecary', deity, tavernName));
+  employers.push(makeEmployer(rng, 'merchant', 'enchanter', deity, tavernName));
+  employers.push(makeEmployer(rng, 'faction', 'guild', deity, tavernName));
   for (let i = 0; i < rng.int(1, 2); i++) employers.push(makeEmployer(rng, 'merchant', null, deity, tavernName));
   for (let i = 0; i < rng.int(2, 3); i++) employers.push(makeEmployer(rng, 'faction', null, deity, tavernName));
   employers.push(makeEmployer(rng, 'temple', 'temple', deity, tavernName));

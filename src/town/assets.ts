@@ -1,4 +1,5 @@
 import type { Rng } from '../core/rng';
+import type { MagicItem } from '../items/items';
 import type { ThemeId } from '../quests/themes';
 
 /**
@@ -37,6 +38,8 @@ export interface Asset {
   questId: string | null;
   /** How many times it has been overrun without help. */
   timesRavaged: number;
+  /** What the last company to die here left behind. The next to clear the place finds it. */
+  loot: { gold: number; items: MagicItem[] };
 }
 
 export interface AssetKindDef {
@@ -170,6 +173,7 @@ export function createAsset(rng: Rng, kind: AssetKind, ownerId: string): Asset {
     status: 'safe',
     questId: null,
     timesRavaged: 0,
+    loot: { gold: 0, items: [] },
   };
 }
 

@@ -1,6 +1,8 @@
 import {
   armorUpgradeCost,
   describeHero,
+  equipItem,
+  wantsItem,
   gainXp,
   healHero,
   killHero,
@@ -24,12 +26,25 @@ import {
   type Party,
 } from '../adventurers/party';
 import { runCombat } from '../combat/battlecast';
+import { describeEffect, resalePrice, rollStockItem, type MagicItem } from '../items/items';
 import { Rng } from '../core/rng';
 import { describeEncounter } from '../quests/encounters';
 import { difficultyCode, generateQuest, type Quest } from '../quests/quest';
 import { THEMES } from '../quests/themes';
 import { ASSET_KINDS, rollThreat, type Asset } from '../town/assets';
-import { assetById, dailyIncome, generateTown, serviceOf, type Employer, type Town } from '../town/town';
+import {
+  assetById,
+  dailyIncome,
+  generateTown,
+  ITEM_SHOPS,
+  MAX_STOCK,
+  RETIREMENT_LEVEL,
+  RETIREMENT_PRICE,
+  retiredEmployer,
+  serviceOf,
+  type Employer,
+  type Town,
+} from '../town/town';
 
 export type EventKind = 'town' | 'quest' | 'party' | 'combat' | 'death' | 'levelup' | 'temple' | 'reward' | 'economy' | 'shop';
 
@@ -52,6 +67,9 @@ export interface GameStats {
   goldPaid: number;
   goldSpentByHeroes: number;
   employersRuined: number;
+  itemsFound: number;
+  itemsSold: number;
+  retirements: number;
 }
 
 export interface GameConfig {
@@ -88,6 +106,15 @@ export const TICKS_PER_DAY = 24;
 const WINDFALL_DAYS = 4;
 /** Days of income lost to looters when nobody answers the call. */
 const LOOTING_DAYS = 2;
+/** Guild dues per member per week, times the company level. */
+const GUILD_DUES_PER_LEVEL = 15;
+const DUES_PERIOD_DAYS = 7;
+/** A blessing costs this much per company level and adds this many hit points per level. */
+const BLESSING_COST_PER_LEVEL = 40;
+const BLESSING_HP_PER_LEVEL = 3;
+/** Share of the purse a company drinks through after a job well done. */
+const CAROUSING_SHARE = 0.05;
+const MAX_RENOWN = 10;
 
 export class Game {
   readonly config: GameConfig;
@@ -109,6 +136,9 @@ export class Game {
     goldPaid: 0,
     goldSpentByHeroes: 0,
     employersRuined: 0,
+    itemsFound: 0,
+    itemsSold: 0,
+    retirements: 0,
   };
   private nextArrival: number;
   private debtDays = new Map<string, number>();
@@ -155,10 +185,28 @@ export class Game {
   step(): void {
     this.tick += 1;
     if (this.tick % TICKS_PER_DAY === 0) this.closeTheBooks();
+    this.restock();
     this.postQuests();
     this.arrivals();
-    for (const party of this.activeParties) this.updateParty(party);
+    // Famous companies get first pick of the board.
+    for (const party of [...this.activeParties].sort((a, b) => b.renown - a.renown)) this.updateParty(party);
     this.expireQuests();
+  }
+
+  // ---------------------------------------------------------------- shops
+
+  /** Magic items trickle onto the shelves of the few shops that deal in them. */
+  private restock(): void {
+    for (const e of this.town.employers) {
+      if (e.ruined || !e.service || !ITEM_SHOPS[e.service]) continue;
+      if (e.stock.length >= MAX_STOCK) continue;
+      if (--e.restockIn > 0) continue;
+      e.restockIn = ITEM_SHOPS[e.service]!;
+      const item = rollStockItem(this.rng, e.service as 'enchanter' | 'temple' | 'smith');
+      if (!item) continue;
+      e.stock.push(item);
+      this.log('shop', `${e.name} put a ${item.name} on the shelf (${describeEffect(item.effect)}) for ${item.price} gp.`);
+    }
   }
 
   // ---------------------------------------------------------------- economy
@@ -231,7 +279,8 @@ export class Game {
       const lead = wasSafe
         ? `${THEMES[theme].label} threaten ${asset.name}.`
         : capitalize(`${asset.name} is still overrun; ${employer.name} raise the bounty.`);
-      this.log('quest', `${lead} ${employer.name} post a level ${quest.level} contract: "${quest.title}" [${difficultyCode(quest)}] for ${quest.reward} gp.`);
+      const extras = [quest.itemReward ? `and a ${quest.itemReward.name}` : '', quest.guildOnly ? '(guild)' : ''].filter(Boolean).join(' ');
+      this.log('quest', `${lead} ${employer.name} post a level ${quest.level} contract: "${quest.title}" [${difficultyCode(quest)}] for ${quest.reward} gp ${extras}`.trim() + '.');
     }
   }
 
@@ -266,7 +315,7 @@ export class Game {
         asset.timesRavaged += 1;
         this.chronicleLog('economy', `Nobody answered "${q.title}". ${THEMES[q.theme].label} overrun ${asset.name}; ${employer.name} lose ${loss} gp and the income of the ${ASSET_KINDS[asset.kind].label} with it.`);
       } else {
-        this.log('economy', `Nobody answered "${q.title}". ${asset.name} stays in enemy hands and ${employer.name} lose another ${loss} gp.`);
+        this.log('economy', `Nobody answered "${q.title}". ${capitalize(asset.name)} stays in enemy hands and ${employer.name} lose another ${loss} gp.`);
       }
     }
     if (this.quests.length > 200) this.quests = this.quests.filter((q) => q.status === 'open' || q.status === 'taken');
@@ -292,16 +341,33 @@ export class Game {
       p.gold += quest.reward;
       p.earned += quest.reward;
       p.questsDone += 1;
+      p.renown = Math.min(MAX_RENOWN, p.renown + 1);
       this.stats.questsCompleted += 1;
       this.stats.goldPaid += quest.reward;
+      let inKind = '';
+      if (quest.itemReward) {
+        p.stash.push(quest.itemReward);
+        this.stats.itemsFound += 1;
+        inKind = ` and a ${quest.itemReward.name}`;
+      }
       this.log(
         'reward',
-        `${p.name} return to ${this.town.name}. ${employer.name} pay ${quest.reward} gp and ${asset ? `${asset.name} is back in business (+${windfall} gp recovered)` : 'are grateful'}. Purse: ${p.gold} gp.`,
+        `${p.name} return to ${this.town.name}. ${employer.name} pay ${quest.reward} gp${inKind}; ${asset ? `${asset.name} is back in business (+${windfall} gp recovered)` : 'the client is grateful'}. Purse: ${p.gold} gp.`,
       );
+      if (asset && (asset.loot.gold > 0 || asset.loot.items.length > 0)) {
+        const found = [asset.loot.items.map((i) => i.name).join(', '), asset.loot.gold > 0 ? `${asset.loot.gold} gp` : ''].filter(Boolean).join(' and ');
+        p.gold += asset.loot.gold;
+        p.earned += asset.loot.gold;
+        p.stash.push(...asset.loot.items);
+        this.stats.itemsFound += asset.loot.items.length;
+        asset.loot = { gold: 0, items: [] };
+        this.chronicleLog('reward', `Among the bones at ${asset.name}, ${p.name} find ${found}: all that is left of the last company that came this way.`);
+      }
     } else {
       quest.status = 'failed';
       employer.questsFailed += 1;
       p.questsFailed += 1;
+      p.renown = Math.max(0, p.renown - 1);
       this.stats.questsFailed += 1;
       employer.cooldown = Math.min(employer.cooldown, this.rng.int(2, 8));
       this.log('party', `${p.name} limp back to ${this.town.name} empty-handed.${asset ? ` ${capitalize(asset.name)} remains in enemy hands.` : ''}`);
@@ -375,11 +441,16 @@ export class Game {
     if (this.shop(p)) return;
     const level = partyLevel(p);
     // Companies take work at their level or a little below; nobody signs up to punch above their weight.
-    const candidates = this.openQuests.filter((q) => q.level <= level && q.level >= level - 2);
+    const candidates = this.openQuests.filter(
+      (q) => q.level <= level && q.level >= level - 2 && (!q.guildOnly || p.guildMember) && this.hasFirstRefusal(q, p),
+    );
     if (candidates.length === 0) return;
-    // Exact level first, then the employer's name, then the pay.
+    // An old friend's contract first, then exact level, then the employer's name, then the pay.
     const rep = (q: Quest) => this.employerById(q.giverId)?.reputation ?? 0;
-    candidates.sort((a, b) => Math.abs(a.level - level) - Math.abs(b.level - level) || rep(b) - rep(a) || b.reward - a.reward);
+    const favored = (q: Quest) => (this.employerById(q.giverId)?.favoredPartyId === p.id ? 1 : 0);
+    candidates.sort(
+      (a, b) => favored(b) - favored(a) || Math.abs(a.level - level) - Math.abs(b.level - level) || rep(b) - rep(a) || b.reward - a.reward,
+    );
     const quest = candidates[0]!;
     quest.status = 'taken';
     quest.partyId = p.id;
@@ -389,6 +460,15 @@ export class Game {
     p.idleTicks = 0;
     const employer = this.employerById(quest.giverId);
     this.log('quest', `${p.name} accept "${quest.title}" from ${employer?.name ?? 'an unknown client'} and set out for ${quest.place}.`);
+  }
+
+  /** A retired adventurer's contracts are held a day for their old company. */
+  private hasFirstRefusal(q: Quest, p: Party): boolean {
+    const employer = this.employerById(q.giverId);
+    if (!employer?.favoredPartyId || employer.favoredPartyId === p.id) return true;
+    const friends = this.parties.find((o) => o.id === employer.favoredPartyId);
+    if (!friends || friends.status === 'disbanded') return true;
+    return this.tick - q.postedAt >= TICKS_PER_DAY;
   }
 
   /**
@@ -414,6 +494,12 @@ export class Game {
       }
     }
 
+    if (this.sellLoot(p, reserve)) return true;
+    if (this.buyItem(p, reserve)) return true;
+    if (this.payDues(p, reserve)) return true;
+    if (this.buyBlessing(p, reserve)) return true;
+    if (this.retire(p)) return true;
+
     const smith = serviceOf(this.town, 'smith');
     if (!smith.ruined) {
       const candidate = [...alive].sort((a, b) => a.armorTier - b.armorTier)[0];
@@ -429,6 +515,112 @@ export class Game {
       }
     }
     return false;
+  }
+
+  /** Equip loot from the stash where it helps; sell the rest to the enchanter, who puts it back on sale. */
+  private sellLoot(p: Party, _reserve: number): boolean {
+    if (p.stash.length === 0) return false;
+    const item = p.stash.shift()!;
+    const taker = aliveMembers(p).find((h) => wantsItem(h, item));
+    if (taker) {
+      const replaced = equipItem(taker, item);
+      if (replaced) p.stash.push(replaced);
+      this.log('shop', `${taker.name} takes up the ${item.name} (${describeEffect(item.effect)}).`);
+      return true;
+    }
+    const enchanter = serviceOf(this.town, 'enchanter');
+    const price = Math.min(resalePrice(item), enchanter.treasury);
+    if (enchanter.ruined || price <= 0 || enchanter.stock.length >= MAX_STOCK) {
+      p.stash.push(item);
+      return false;
+    }
+    enchanter.treasury -= price;
+    enchanter.spent += price;
+    enchanter.stock.push(item);
+    p.gold += price;
+    p.earned += price;
+    this.stats.itemsSold += 1;
+    this.log('shop', `${p.name} sell a ${item.name} to ${enchanter.name} for ${price} gp.`);
+    return true;
+  }
+
+  /** Buy the best affordable item any member could use. Prices are steep on purpose. */
+  private buyItem(p: Party, reserve: number): boolean {
+    const budget = p.gold - reserve;
+    let best: { shop: Employer; item: MagicItem; hero: Hero } | null = null;
+    for (const shop of this.town.employers) {
+      if (shop.ruined) continue;
+      for (const item of shop.stock) {
+        if (item.price > budget) continue;
+        const hero = aliveMembers(p).find((h) => wantsItem(h, item));
+        if (!hero) continue;
+        if (!best || item.price > best.item.price) best = { shop, item, hero };
+      }
+    }
+    if (!best) return false;
+    best.shop.stock = best.shop.stock.filter((i) => i !== best!.item);
+    this.pay(p, best.shop, best.item.price);
+    best.hero.goldSpent += best.item.price;
+    const replaced = equipItem(best.hero, best.item);
+    if (replaced) p.stash.push(replaced);
+    this.chronicleLog('shop', `${best.hero.name} buys a ${best.item.name} from ${best.shop.name} for ${best.item.price} gp (${describeEffect(best.item.effect)}).`);
+    return true;
+  }
+
+  /** Weekly dues keep a company on the guild's books; noble and faction contracts go through the guild. */
+  private payDues(p: Party, reserve: number): boolean {
+    const guild = serviceOf(this.town, 'guild');
+    if (guild.ruined) return false;
+    const due = p.duesPaidDay < 0 || this.day - p.duesPaidDay >= DUES_PERIOD_DAYS;
+    if (!due) return false;
+    const cost = GUILD_DUES_PER_LEVEL * partyLevel(p) * aliveMembers(p).length;
+    if (p.gold - cost < reserve) {
+      if (p.guildMember) {
+        p.guildMember = false;
+        this.log('shop', `${p.name} cannot pay their guild dues (${cost} gp). Their membership lapses.`);
+      }
+      return false;
+    }
+    this.pay(p, guild, cost);
+    p.duesPaidDay = this.day;
+    const joined = !p.guildMember;
+    p.guildMember = true;
+    this.log('shop', `${p.name} ${joined ? 'join the Adventurers’ Guild' : 'pay their guild dues'}: ${cost} gp.`);
+    return true;
+  }
+
+  /** A donation at the temple buys the company a blessing for its next contract. */
+  private buyBlessing(p: Party, reserve: number): boolean {
+    if (p.blessed) return false;
+    const temple = serviceOf(this.town, 'temple');
+    if (temple.ruined) return false;
+    const level = partyLevel(p);
+    const cost = BLESSING_COST_PER_LEVEL * level;
+    if (p.gold - cost < reserve * 1.5) return false;
+    this.pay(p, temple, cost);
+    p.blessed = true;
+    this.log('temple', `${p.name} leave ${cost} gp at the ${temple.name} and are blessed (+${BLESSING_HP_PER_LEVEL * level} hp on their next contract).`);
+    return true;
+  }
+
+  /** The richest, most seasoned adventurer in town may hang up the sword and buy a business. */
+  private retire(p: Party): boolean {
+    const veteran = aliveMembers(p).find((h) => h.level >= RETIREMENT_LEVEL);
+    if (!veteran || p.gold < RETIREMENT_PRICE + resurrectionCost(partyLevel(p))) return false;
+    p.gold -= RETIREMENT_PRICE;
+    p.spent += RETIREMENT_PRICE;
+    this.stats.goldSpentByHeroes += RETIREMENT_PRICE;
+    p.members = p.members.filter((h) => h !== veteran);
+    for (const item of veteran.items) p.stash.push(item);
+    veteran.items = [];
+    const employer = retiredEmployer(this.rng, veteran.name, p.id, Math.floor(RETIREMENT_PRICE * 0.2));
+    this.town.employers.push(employer);
+    this.stats.retirements += 1;
+    this.chronicleLog(
+      'town',
+      `${describeHero(veteran)} retires from ${p.name}, buys ${employer.assets[0]!.name} for ${RETIREMENT_PRICE} gp and settles in ${this.town.name}. Old friends will hear of any trouble first.`,
+    );
+    return true;
   }
 
   /** Fill empty seats: temple first if the coin is there, then merge with another incomplete band. */
@@ -467,7 +659,7 @@ export class Game {
     const spec = quest.encounters[p.progress]!;
     const n = p.progress + 1;
     const fighters = aliveMembers(p);
-    const outcome = runCombat(fighters, spec, this.rng.seed());
+    const outcome = runCombat(fighters, spec, this.rng.seed(), p.blessed ? { blessingHp: BLESSING_HP_PER_LEVEL * partyLevel(p) } : {});
 
     for (const r of outcome.heroes) {
       const hero = p.members.find((h) => h.id === r.heroId)!;
@@ -520,6 +712,7 @@ export class Game {
         this.chronicleLog('death', `${p.name} are wiped out at ${quest.place}.`);
         p.status = 'disbanded';
         this.stats.partiesWiped += 1;
+        this.leaveLoot(quest, p, p.members);
         this.settleQuest(quest, p, false);
       } else {
         this.log(
@@ -540,12 +733,33 @@ export class Game {
         outcome.lines,
       );
       for (const h of fallen) this.chronicleLog('death', `${describeHero(h)} of ${p.name} is left for dead at ${quest.place} (${describeEncounter(spec)}).`);
+      this.leaveLoot(quest, p, fallen);
       this.headHome(p);
       return;
     }
 
     this.log('combat', `${p.name}: ${summary} Neither side can finish it; the party withdraws.`, outcome.lines);
     this.headHome(p);
+  }
+
+  /** Whatever the fallen carried stays on the field for the next company to find. */
+  private leaveLoot(quest: Quest, p: Party, fallen: Hero[]): void {
+    const asset = assetById(this.town, quest.assetId);
+    if (!asset) return;
+    const items = fallen.flatMap((h) => h.items);
+    for (const h of fallen) h.items = [];
+    const wiped = p.status === 'disbanded';
+    if (wiped) {
+      items.push(...p.stash);
+      p.stash = [];
+      asset.loot.gold += p.gold;
+      p.gold = 0;
+    }
+    asset.loot.items.push(...items);
+    if (items.length > 0 || (wiped && asset.loot.gold > 0)) {
+      const what = [items.length > 0 ? items.map((i) => i.name).join(', ') : '', wiped && asset.loot.gold > 0 ? `${asset.loot.gold} gp` : ''].filter(Boolean).join(' and ');
+      this.log('death', `${what} lie${items.length + (wiped ? 1 : 0) === 1 ? 's' : ''} among the dead at ${quest.place}.`);
+    }
   }
 
   /** A short rest between fights, and a potion for anyone still badly hurt. */
@@ -589,11 +803,21 @@ export class Game {
       this.log('temple', `${p.name} carry their dead to the ${temple.name}. The priests ask ${bill}. Purse: ${p.gold} gp.`);
     }
 
+    p.blessed = false;
     const tavern = serviceOf(this.town, 'tavern');
     const fee = 3 * partyLevel(p) * aliveMembers(p).length;
     if (!tavern.ruined && p.gold >= fee) {
       this.pay(p, tavern, fee);
-      this.log('shop', `${p.name} take rooms at ${tavern.name} for ${fee} gp.`);
+      let line = `${p.name} take rooms at ${tavern.name} for ${fee} gp.`;
+      if (success && dead.length === 0 && p.renown < MAX_RENOWN) {
+        const spree = Math.max(10, Math.floor(p.gold * CAROUSING_SHARE));
+        if (p.gold - spree >= resurrectionCost(partyLevel(p))) {
+          this.pay(p, tavern, spree);
+          p.renown = Math.min(MAX_RENOWN, p.renown + 1);
+          line += ` They drink ${spree} gp away telling the tale (renown ${p.renown}).`;
+        }
+      }
+      this.log('shop', line);
     } else {
       this.log('party', `${p.name} cannot afford rooms and bed down in the stables.`);
     }
