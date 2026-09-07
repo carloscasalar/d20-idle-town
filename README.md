@@ -20,6 +20,8 @@ npm run build      # typecheck + production bundle in dist/
 npx vite-node scripts/calibrate.ts   # win/death rates per difficulty and level, single fights
 npx vite-node scripts/tune.ts        # deaths per contract and wipes at several difficulty scales
 npx vite-node scripts/variety.ts     # how many different monsters a long run throws at the companies
+npx vite-node scripts/assault.ts     # how often a level-matched company clears a lair
+npx vite-node scripts/lairs.ts       # a long run, lair events only
 ```
 
 ## How the world ticks
@@ -33,11 +35,25 @@ One tick is one in-game hour. Every tick:
    pass...). When trouble strikes, the holding stops paying and the owner posts a
    contract: two to six encounters with independently rolled difficulties, and a
    reward drawn from what the holding is worth and what the treasury can afford.
-   Only the first encounter is public. A company with coin to spare buys a round
-   at the tavern to learn how long the job is and what else waits; whatever is
-   still unknown comes out when they reach the place.
+   Only the first encounter is public. Before signing, the company's best talker
+   works the tavern (Persuasion DC 15, bards with advantage); the rich pay the
+   temple for a divination that shows the whole job; otherwise a round at the
+   tavern buys one fact at a time. On the road the best tracker reads the land
+   (Survival DC 15, rangers and druids with advantage). Whatever is still unknown
+   comes out when they reach the place.
+5. **Lairs send the raids.** Two or three lairs (a crime syndicate in the sewers,
+   a goblin warcamp, a dragon's roost with kobold slaves, a necromancer's crypt...)
+   sit near every town, level 5 to 8, each with a boss. When trouble of a lair's
+   kind hits a holding, the raid is theirs; every raid nobody answers makes the
+   lair stronger, richer and quicker to strike again. A company wiped out on a
+   lair's business feeds its hoard with everything it carried. Once a company in
+   town is close to the lair's level, the guild posts a standing bounty: three to
+   five fights ending with the boss, no running from the last one. Companies at
+   that level take it now and then; about four in ten clear it, at two deaths an
+   attempt, and win the hoard, a rare item, renown and a quiet spell for every
+   holding that kind of trouble had taken. Some days later something worse moves in.
 2. **Companies arrive.** Every so often four level-1 adventurers turn up at the
-   tavern. A broken company that has waited too long attracts a small band of
+   tavern, one for each classic role (front line, support, skirmisher, arcane). A broken company that has waited too long attracts a small band of
    its own level instead.
 3. **Companies act**: `idle -> traveling -> questing (3 fights) -> returning ->
    resting -> idle`. Idle companies with spare coin buy potions at the apothecary
@@ -100,7 +116,7 @@ are down and the enemy still has most of its hit points, the survivors flee (the
 fallen are left behind); and a company that wins but is battered abandons the
 contract and walks home. `scripts/calibrate.ts` measures single fresh fights;
 `scripts/tune.ts` runs whole towns at several difficulty scales and reports deaths
-per contract and companies wiped. The default scale (1.25, `?difficulty=` in the
+per contract and companies wiped. The default scale (1.15, `?difficulty=` in the
 URL) gives most of a death per contract and a wiped company every few days.
 
 ## Layout
@@ -109,7 +125,7 @@ URL) gives most of a death per contract and a wiped company every few days.
 src/core        seeded RNG, XP table, name generators
 src/adventurers heroes (class, level, hp, xp, gear) and parties (merging, stash, renown)
 src/items       magic item catalogue and effects
-src/town        employers, their holdings (assets) and the threats each kind attracts
+src/town        employers, their holdings (assets), the threats each kind attracts, and lairs
 src/quests      threat rosters (SRD monsters), encounter builder, quest generator
 src/combat      adapter around battlecast-engine's Encounter API
 src/sim         the Game class: tick loop, state machine, event log

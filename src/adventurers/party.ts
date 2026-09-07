@@ -1,6 +1,7 @@
 import { partyName } from '../core/names';
 import type { Rng } from '../core/rng';
 import type { MagicItem } from '../items/items';
+import type { HeroClassName } from 'battlecast-engine';
 import { createHero, type Hero } from './hero';
 
 export const PARTY_SIZE = 4;
@@ -50,9 +51,26 @@ export interface Party {
 
 let partyCounter = 0;
 
+/** A full company covers the classic roles; smaller bands are whoever survived. */
+const ROLES: HeroClassName[][] = [
+  ['Fighter', 'Barbarian', 'Paladin', 'Monk'],
+  ['Cleric', 'Druid', 'Bard'],
+  ['Rogue', 'Ranger', 'Bard', 'Monk'],
+  ['Wizard', 'Sorcerer', 'Warlock', 'Druid'],
+];
+
+export function rollClasses(rng: Rng, size: number): HeroClassName[] {
+  if (size < ROLES.length) return Array.from({ length: size }, () => rng.pick(rng.pick(ROLES)));
+  const chosen: HeroClassName[] = [];
+  for (const role of rng.shuffle(ROLES)) {
+    const options = role.filter((c) => !chosen.includes(c));
+    chosen.push(rng.pick(options.length > 0 ? options : role));
+  }
+  return chosen;
+}
+
 export function createParty(rng: Rng, level: number, size: number, tick: number): Party {
-  const members: Hero[] = [];
-  for (let i = 0; i < size; i++) members.push(createHero(rng, level));
+  const members: Hero[] = rollClasses(rng, size).map((cls) => createHero(rng, level, cls));
   return {
     id: `party-${++partyCounter}`,
     name: partyName(rng),

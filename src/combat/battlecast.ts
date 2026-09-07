@@ -32,6 +32,8 @@ const MAX_ROUNDS = 30;
 export interface CombatOptions {
   /** A temple blessing: extra hit points for the whole company. */
   blessingHp?: number;
+  /** No running from this one (a boss in its own hall). */
+  noRetreat?: boolean;
 }
 
 /**
@@ -121,7 +123,7 @@ export function runCombat(heroes: Hero[], spec: EncounterSpec, seed: number, opt
       winner = r.winner;
       break;
     }
-    if (shouldFlee(enc.creatures, fighters.length)) {
+    if (!opts.noRetreat && shouldFlee(enc.creatures, fighters.length)) {
       retreated = true;
       break;
     }

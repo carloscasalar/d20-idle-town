@@ -85,3 +85,8 @@ aside { border-left: 2px solid var(--border); background: var(--panel); display:
 .card.ruined { opacity: 0.5; }
 .item { color: var(--purple); }
 .badge.item { border-color: var(--purple); }
+.card.lair.active { border-color: #7a3b3b; }
+.card.lair.active h3 { color: var(--red); }
+.card.lair.cleared { opacity: 0.55; }
+.badge.assault { border-color: var(--red); color: var(--red); }
+.card.assault { border-color: #7a3b3b; }

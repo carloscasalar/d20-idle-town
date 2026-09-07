@@ -8,6 +8,7 @@ import { THEMES } from '../quests/themes';
 import { describeEffect } from '../items/items';
 import { assetStatusLabel, formatTime, Game, type GameEvent } from '../sim/game';
 import { ASSET_KINDS } from '../town/assets';
+import { raidInterval } from '../town/lairs';
 import { dailyIncome } from '../town/town';
 
 // ------------------------------------------------------------------ setup
@@ -178,7 +179,9 @@ function questCard(q: Quest): string {
       : '';
   const encs = known + hidden;
   const taker = q.partyId ? game.parties.find((p) => p.id === q.partyId) : null;
-  return `<div class="card"><h3><span>${esc(q.title)}</span><span class="status">lvl ${q.level} [${difficultyCode(q)}]</span></h3>
+  const lair = game.lairById(q.lairId);
+  const origin = lair ? `<div class="row muted"><span>${q.kind === 'assault' ? 'assault on' : 'raid out of'} ${esc(lair.name)}</span><span>${q.kind === 'assault' ? `hoard ${lair.hoard.gold} gp` : `strength ${lair.strength}`}</span></div>` : '';
+  return `<div class="card ${q.kind}"><h3><span>${q.kind === 'assault' ? '<span class="badge assault">lair</span> ' : ''}${esc(q.title)}</span><span class="status">lvl ${q.level} [${difficultyCode(q)}]</span></h3>${origin}
     <div class="row"><span>${esc(giver?.name ?? '?')} · ${THEMES[q.theme].label}${q.guildOnly ? ' · <span class="badge">guild</span>' : ''}</span><span class="gold">${q.reward} gp${q.itemReward ? ` + <span class="item" title="${esc(describeEffect(q.itemReward.effect))}">${esc(q.itemReward.name)}</span>` : ''}</span></div>
     ${encs}${taker ? `<div class="row"><span class="muted">taken by ${esc(taker.name)}</span></div>` : ''}</div>`;
 }
@@ -192,6 +195,19 @@ function renderBoard(): string {
     `<h3 class="muted">In progress (${taken.length})</h3>` +
     taken.map(questCard).join('')
   );
+}
+
+function renderLairs(): string {
+  const lairs = [...game.lairs].sort((a, b) => (a.status === 'active' ? 0 : 1) - (b.status === 'active' ? 0 : 1));
+  if (lairs.length === 0) return '';
+  return lairs
+    .map(
+      (l) => `<div class="card lair ${l.status}"><h3><span>${esc(l.name)}</span><span class="status">${l.status === 'active' ? `level ${l.level}` : 'broken'}</span></h3>
+      <div class="row"><span>${THEMES[l.theme].label} · ${esc(l.boss)}</span><span>${esc(l.place)}</span></div>
+      <div class="row"><span>strength ${l.strength} · raids ${l.raids} (${l.raidsWon} unanswered)</span><span>${l.status === 'active' ? `next raid in ${Math.max(0, l.raidCooldown)}h of ${raidInterval(l)}` : ''}</span></div>
+      <div class="row"><span>hoard <span class="gold">${l.hoard.gold} gp</span>${l.hoard.items.length ? ` + ${l.hoard.items.map((i) => esc(i.name)).join(', ')}` : ''}</span><span>${l.questId ? 'bounty posted' : ''}</span></div></div>`,
+    )
+    .join('');
 }
 
 function renderTown(): string {
@@ -220,7 +236,9 @@ function renderTown(): string {
       <div class="row"><span>heroes have spent</span><span class="gold">${game.stats.goldSpentByHeroes} gp</span></div>
       <div class="row"><span>contracts expired</span><span>${game.stats.questsExpired}</span></div>
       <div class="row"><span>magic items found / sold</span><span>${game.stats.itemsFound} / ${game.stats.itemsSold}</span></div>
-      <div class="row"><span>retired adventurers</span><span>${game.stats.retirements}</span></div></div>
+      <div class="row"><span>retired adventurers</span><span>${game.stats.retirements}</span></div>
+      <div class="row"><span>raids / lairs broken</span><span>${game.stats.raids} / ${game.stats.lairsCleared}</span></div></div>
+    ${renderLairs()}
     ${employers}`;
 }
 

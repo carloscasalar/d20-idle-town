@@ -141,6 +141,48 @@ export function potionHeal(hero: Hero): number {
   return Math.max(8, Math.ceil(hero.maxHp / 3));
 }
 
+/** Skills a class is good at beyond the numbers: the bard talks, the ranger reads the land. Rolled with advantage. */
+export const SKILL_ADVANTAGE: Record<string, HeroClassName[]> = {
+  Persuasion: ['Bard'],
+  Survival: ['Ranger', 'Druid'],
+};
+
+const ABILITY_FOR_SKILL: Record<string, keyof ReturnType<typeof buildHero>['abilities']> = {
+  Persuasion: 'cha',
+  Survival: 'wis',
+};
+
+/** The hero's total bonus on a skill: proficiency where the class has it, else the bare ability modifier. */
+export function skillBonus(hero: Hero, skill: string): number {
+  const data = buildHero(hero.heroClass, hero.level);
+  const trained = data.skills?.[skill];
+  if (typeof trained === 'number') return trained;
+  const ability = ABILITY_FOR_SKILL[skill] ?? 'wis';
+  return Math.floor((data.abilities[ability] - 10) / 2);
+}
+
+export interface SkillRoll {
+  hero: Hero;
+  roll: number;
+  bonus: number;
+  total: number;
+  advantage: boolean;
+  success: boolean;
+}
+
+/** The best member attempts the check; d20 (twice, keep the best, if their class has advantage) plus their bonus. */
+export function rollSkill(rng: Rng, members: Hero[], skill: string, dc: number): SkillRoll | null {
+  const alive = members.filter((h) => h.alive);
+  if (alive.length === 0) return null;
+  const hero = [...alive].sort((a, b) => skillBonus(b, skill) + (SKILL_ADVANTAGE[skill]?.includes(b.heroClass) ? 3 : 0) - (skillBonus(a, skill) + (SKILL_ADVANTAGE[skill]?.includes(a.heroClass) ? 3 : 0)))[0]!;
+  const advantage = SKILL_ADVANTAGE[skill]?.includes(hero.heroClass) ?? false;
+  const d1 = rng.int(1, 20);
+  const d2 = rng.int(1, 20);
+  const roll = advantage ? Math.max(d1, d2) : d1;
+  const bonus = skillBonus(hero, skill);
+  return { hero, roll, bonus, total: roll + bonus, advantage, success: roll + bonus >= dc };
+}
+
 export function describeHero(h: Hero): string {
   return `${h.name} (${h.heroClass} ${h.level})`;
 }
