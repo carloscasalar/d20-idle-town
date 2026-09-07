@@ -15,7 +15,8 @@ import { dailyIncome } from '../town/town';
 const params = new URLSearchParams(location.search);
 const seedParam = params.get('seed');
 const seed = seedParam ? (Number.isFinite(Number(seedParam)) ? Number(seedParam) : hashString(seedParam)) : Math.floor(Math.random() * 1e9);
-const game = new Game({ seed });
+const difficultyParam = Number(params.get('difficulty'));
+const game = new Game({ seed, ...(difficultyParam > 0 ? { difficultyScale: difficultyParam } : {}) });
 
 const SPEEDS: { label: string; ms: number }[] = [
   { label: '⏸', ms: 0 },
@@ -41,7 +42,7 @@ app.innerHTML = `
     <section class="log" id="log">
       <div class="toolbar">
         <label><input type="checkbox" id="toggle-combat" checked /> show combat narration</label>
-        <span class="muted">seed ${seed} · <a href="?seed=${seed}" style="color:inherit">permalink</a></span>
+        <span class="muted">seed ${seed} · difficulty ×${game.config.difficultyScale} · <a href="?seed=${seed}&difficulty=${game.config.difficultyScale}" style="color:inherit">permalink</a></span>
       </div>
     </section>
     <aside>

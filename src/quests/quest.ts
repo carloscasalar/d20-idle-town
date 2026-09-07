@@ -48,6 +48,8 @@ export interface QuestTerms {
   level: number;
   partySize: number;
   tick: number;
+  /** Multiplier on the XP budget of every encounter; the game's difficulty knob. */
+  difficultyScale?: number;
 }
 
 /**
@@ -61,7 +63,7 @@ export function generateQuest(rng: Rng, terms: QuestTerms): Quest {
   const threatLabel = THEMES[theme].label;
   const title = rng.pick(def.titles).replace('{place}', asset.name).replace('{threat}', threatLabel);
   const difficulties = rollDifficulties(rng);
-  const encounters = difficulties.map((d) => buildEncounter(rng, theme, partySize, level, d));
+  const encounters = difficulties.map((d) => buildEncounter(rng, theme, partySize, level, d, terms.difficultyScale ?? 1));
   const payFactor = difficulties.reduce((s, d) => s + DIFFICULTY_PAY[d], 0);
   const desperation = asset.status === 'ravaged' ? 1.5 : 1;
   const base = asset.incomePerDay * 2 + level * level * 10;

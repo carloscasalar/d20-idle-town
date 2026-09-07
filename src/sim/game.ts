@@ -86,6 +86,12 @@ export interface GameConfig {
   contractDays: number;
   /** Consecutive days in the red before an employer is ruined. */
   ruinDays: number;
+  /**
+   * Multiplier on every encounter's XP budget. 1 = the bands in encounters.ts, which
+   * are safe once potions, armour and retreats are in play; 1.25 (scripts/tune.ts) brings
+   * back most of a death per contract and a wiped company every few days.
+   */
+  difficultyScale: number;
 }
 
 export const DEFAULT_CONFIG: GameConfig = {
@@ -98,6 +104,7 @@ export const DEFAULT_CONFIG: GameConfig = {
   patienceTicks: 12,
   contractDays: 3,
   ruinDays: 3,
+  difficultyScale: 1.25,
 };
 
 export const TICKS_PER_DAY = 24;
@@ -269,7 +276,15 @@ export class Game {
       const asset = free.find((a) => a.status !== 'safe') ?? this.rng.pick(free);
       const theme = rollThreat(this.rng, asset);
       const level = this.pickQuestLevel(employer);
-      const quest = generateQuest(this.rng, { employer, asset, theme, level, partySize: PARTY_SIZE, tick: this.tick });
+      const quest = generateQuest(this.rng, {
+        employer,
+        asset,
+        theme,
+        level,
+        partySize: PARTY_SIZE,
+        tick: this.tick,
+        difficultyScale: this.config.difficultyScale,
+      });
       this.quests.push(quest);
       asset.questId = quest.id;
       const wasSafe = asset.status === 'safe';
@@ -285,15 +300,18 @@ export class Game {
   }
 
   /**
-   * Quest levels follow the adventurers who will actually be free to take them,
-   * with a little stretch as an employer's reputation grows.
+   * Contracts are posted at the levels of the companies actually in town, never
+   * below the greenest of them. Free companies weigh more than busy ones, and a
+   * reputable employer occasionally posts one level above the best company,
+   * which is work for them once they level up.
    */
   private pickQuestLevel(employer: Employer): number {
-    const free = this.activeParties.filter((p) => p.status === 'idle' || p.status === 'resting');
-    const levels = (free.length > 0 ? free : this.activeParties).map(partyLevel);
-    const ceiling = Math.max(1, ...levels) + (employer.reputation >= 3 ? 1 : 0);
-    if (levels.length > 0 && this.rng.chance(0.7)) return this.rng.pick(levels);
-    return this.rng.int(1, ceiling);
+    const parties = this.activeParties;
+    if (parties.length === 0) return 1;
+    const weights = parties.map((p) => ({ item: partyLevel(p), weight: p.status === 'idle' || p.status === 'resting' ? 3 : 1 }));
+    const top = Math.max(...weights.map((w) => w.item));
+    if (employer.reputation >= 3 && this.rng.chance(0.1)) return top + 1;
+    return this.rng.weighted(weights);
   }
 
   private expireQuests(): void {
@@ -441,8 +459,11 @@ export class Game {
     if (this.shop(p)) return;
     const level = partyLevel(p);
     // Companies take work at their level or a little below; nobody signs up to punch above their weight.
+    // A company takes work at its own level. After a slow day it will stoop one level, never more:
+    // the small jobs are for the companies that need them.
+    const lowest = p.idleTicks >= TICKS_PER_DAY ? level - 1 : level;
     const candidates = this.openQuests.filter(
-      (q) => q.level <= level && q.level >= level - 2 && (!q.guildOnly || p.guildMember) && this.hasFirstRefusal(q, p),
+      (q) => q.level <= level && q.level >= lowest && (!q.guildOnly || p.guildMember) && this.hasFirstRefusal(q, p),
     );
     if (candidates.length === 0) return;
     // An old friend's contract first, then exact level, then the employer's name, then the pay.
@@ -521,7 +542,7 @@ export class Game {
   private sellLoot(p: Party, _reserve: number): boolean {
     if (p.stash.length === 0) return false;
     const item = p.stash.shift()!;
-    const taker = aliveMembers(p).find((h) => wantsItem(h, item));
+    const taker = pickRecipient(aliveMembers(p), item);
     if (taker) {
       const replaced = equipItem(taker, item);
       if (replaced) p.stash.push(replaced);
@@ -552,7 +573,7 @@ export class Game {
       if (shop.ruined) continue;
       for (const item of shop.stock) {
         if (item.price > budget) continue;
-        const hero = aliveMembers(p).find((h) => wantsItem(h, item));
+        const hero = pickRecipient(aliveMembers(p), item);
         if (!hero) continue;
         if (!best || item.price > best.item.price) best = { shop, item, hero };
       }
@@ -840,6 +861,14 @@ export class Game {
     this.chronicle.push(e);
     if (this.chronicle.length > 300) this.chronicle.splice(0, this.chronicle.length - 300);
   }
+}
+
+/** Who gets an item: whoever can use it and carries the least magic already. */
+function pickRecipient(members: Hero[], item: MagicItem): Hero | undefined {
+  const worth = (h: Hero) => h.items.reduce((s, i) => s + i.price, 0);
+  return members
+    .filter((h) => wantsItem(h, item))
+    .sort((a, b) => a.items.length - b.items.length || worth(a) - worth(b))[0];
 }
 
 function capitalize(text: string): string {

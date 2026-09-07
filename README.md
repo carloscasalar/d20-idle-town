@@ -17,7 +17,9 @@ npm install
 npm run dev        # http://localhost:5173  (add ?seed=anything for a reproducible town)
 npm test           # vitest: unit tests + a deterministic 400-hour smoke simulation
 npm run build      # typecheck + production bundle in dist/
-npx vite-node scripts/calibrate.ts   # win/death rates per difficulty and level
+npx vite-node scripts/calibrate.ts   # win/death rates per difficulty and level, single fights
+npx vite-node scripts/tune.ts        # deaths per contract and wipes at several difficulty scales
+npx vite-node scripts/variety.ts     # how many different monsters a long run throws at the companies
 ```
 
 ## How the world ticks
@@ -47,8 +49,11 @@ One tick is one in-game hour. Every tick:
    Coin adventurers spend in town lands in the shopkeepers' treasuries, so a busy
    town keeps its own economy turning.
 
-Reputation grows with every completed contract; idle companies pick the most
-reputable employer among contracts at their level.
+Contracts are posted at the levels of the companies actually in town, never below
+the greenest of them. A company takes work at its own level only; after a slow day
+it will stoop one level, never more, so the small jobs stay for the companies that
+need them. Reputation grows with every completed contract; among contracts at its
+level a company picks the most reputable employer.
 
 ## Coin, and what to do with it
 
@@ -80,12 +85,20 @@ A level 8 adventurer whose company holds 25,000 gp retires: they buy a business,
 become an employer, and their old company gets a day's first refusal on any contract
 they post.
 
+Every threat draws on a roster built from the curated names in `src/quests/themes.ts`
+plus every SRD monster of the matching creature type (about 190 different monsters
+show up over a long run). A fight is a single big monster, a horde of one kind, a
+leader with minions, or a mix of two or three kinds.
+
 Encounters are built from the DMG 2024 XP thresholds shipped with the engine, one
 tier lower than the book says because the engine's AI fights to the death and this
 game chains three fights. Two house rules keep companies alive: once half of them
 are down and the enemy still has most of its hit points, the survivors flee (the
 fallen are left behind); and a company that wins but is battered abandons the
-contract and walks home. `scripts/calibrate.ts` measures single fresh fights.
+contract and walks home. `scripts/calibrate.ts` measures single fresh fights;
+`scripts/tune.ts` runs whole towns at several difficulty scales and reports deaths
+per contract and companies wiped. The default scale (1.25, `?difficulty=` in the
+URL) gives most of a death per contract and a wiped company every few days.
 
 ## Layout
 

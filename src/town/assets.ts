@@ -69,7 +69,7 @@ export const ASSET_KINDS: Record<AssetKind, AssetKindDef> = {
   quarry: {
     label: 'quarry', income: 40,
     names: ['the {name} quarry'], nameParts: LANDMARKS,
-    threats: [{ item: 'goblins', weight: 3 }, { item: 'giants', weight: 3 }, { item: 'monstrosities', weight: 2 }, { item: 'elementals', weight: 1 }],
+    threats: [{ item: 'goblins', weight: 3 }, { item: 'giants', weight: 2 }, { item: 'monstrosities', weight: 3 }, { item: 'elementals', weight: 2 }],
     titles: ['{threat} are squatting in {place}', 'Get the stonecutters back to {place}', 'Something crawled out of {place}'],
   },
   farmland: {
@@ -81,25 +81,25 @@ export const ASSET_KINDS: Record<AssetKind, AssetKindDef> = {
   vineyard: {
     label: 'vineyard', income: 45,
     names: ['the {name} vineyards'], nameParts: SURNAMES,
-    threats: [{ item: 'bandits', weight: 3 }, { item: 'beasts', weight: 3 }, { item: 'fiends', weight: 1 }, { item: 'cultists', weight: 1 }],
+    threats: [{ item: 'bandits', weight: 3 }, { item: 'beasts', weight: 2 }, { item: 'fey', weight: 2 }, { item: 'fiends', weight: 1 }, { item: 'cultists', weight: 1 }],
     titles: ['Save the vintage at {place}', '{threat} have taken {place}', 'The cellars of {place} are not empty'],
   },
   'lumber-camp': {
     label: 'lumber camp', income: 40,
     names: ['the {name} lumber camp'], nameParts: LANDMARKS,
-    threats: [{ item: 'beasts', weight: 4 }, { item: 'monstrosities', weight: 3 }, { item: 'goblins', weight: 2 }, { item: 'giants', weight: 1 }],
+    threats: [{ item: 'beasts', weight: 4 }, { item: 'monstrosities', weight: 2 }, { item: 'fey', weight: 3 }, { item: 'goblins', weight: 2 }],
     titles: ['The woodcutters fled {place}', 'Hunt whatever stalks {place}', '{threat} at {place}'],
   },
   'herb-garden': {
     label: 'herb gardens', income: 30,
     names: ['the {name} herb gardens'], nameParts: LANDMARKS,
-    threats: [{ item: 'beasts', weight: 3 }, { item: 'monstrosities', weight: 2 }, { item: 'cultists', weight: 2 }, { item: 'undead', weight: 1 }],
+    threats: [{ item: 'beasts', weight: 3 }, { item: 'fey', weight: 3 }, { item: 'monstrosities', weight: 1 }, { item: 'cultists', weight: 2 }],
     titles: ['Recover the harvest from {place}', '{threat} trample {place}', 'The gardeners will not return to {place}'],
   },
   'hunting-lodge': {
     label: 'hunting lodge', income: 30,
     names: ['the {name} hunting lodge'], nameParts: LANDMARKS,
-    threats: [{ item: 'beasts', weight: 4 }, { item: 'monstrosities', weight: 3 }, { item: 'giants', weight: 1 }, { item: 'dragons', weight: 1 }],
+    threats: [{ item: 'beasts', weight: 4 }, { item: 'monstrosities', weight: 2 }, { item: 'fey', weight: 2 }, { item: 'giants', weight: 1 }, { item: 'dragons', weight: 1 }],
     titles: ['A man-eater near {place}', 'Retake {place}', '{threat} drove the gamekeepers from {place}'],
   },
   'trade-route': {
