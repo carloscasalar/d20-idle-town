@@ -14,6 +14,8 @@ export interface HeroResult {
 }
 
 export type Ambush = 'party' | 'monsters' | null;
+/** How an ambush is sprung: closing in from every side, or hitting the back line from behind. */
+export type AmbushTactic = 'surround' | 'rear';
 
 export interface CombatOutcome {
   winner: CombatWinner;
@@ -99,8 +101,8 @@ export function runCombat(heroes: Hero[], spec: EncounterSpec, seed: number, opt
     const data = getMonsterByName(group.name);
     if (data) for (let i = 0; i < group.count; i++) monsters.push(data);
   }
-  const { ambush, opening } = resolveOpening(rng, fighters, monsters, opts);
-  const layout = deploy(rng, fighters, monsters, ambush);
+  const { ambush, tactic, opening } = resolveOpening(rng, fighters, monsters, opts);
+  const layout = deploy(rng, fighters, monsters, ambush, tactic);
 
   const taken = new Set<string>();
   const place = (wanted: { x: number; y: number } | undefined, add: (pos?: { x: number; y: number }) => void) => {
@@ -249,8 +251,15 @@ function groupStealth(rng: Rng, bonuses: number[], passive: number): { passed: n
  * Chance decides who spots whom first; the side that does tries to sneak up.
  * Deep in a lair the defenders are more and more likely to be the ones watching.
  */
-function resolveOpening(rng: Rng, fighters: Hero[], monsters: MonsterData[], opts: CombatOptions): { ambush: Ambush; opening: string } {
-  if (fighters.length === 0 || monsters.length === 0) return { ambush: null, opening: 'The field is empty.' };
+function resolveOpening(
+  rng: Rng,
+  fighters: Hero[],
+  monsters: MonsterData[],
+  opts: CombatOptions,
+): { ambush: Ambush; tactic: AmbushTactic; opening: string } {
+  const tactic: AmbushTactic = rng.chance(0.5) ? 'surround' : 'rear';
+  const how = tactic === 'surround' ? 'closing in from every side' : 'coming up behind the back line';
+  if (fighters.length === 0 || monsters.length === 0) return { ambush: null, tactic, opening: 'The field is empty.' };
   let monstersFirst = 0.3;
   if (opts.lairDepth) monstersFirst = 0.3 + 0.5 * (opts.lairDepth.index / Math.max(1, opts.lairDepth.total - 1));
   const partyFirst = (1 - monstersFirst) * 0.43;
@@ -261,18 +270,18 @@ function resolveOpening(rng: Rng, fighters: Hero[], monsters: MonsterData[], opt
     const check = groupStealth(rng, monsters.map((m) => monsterSkill(m, 'Stealth')), passive);
     const dice = `Stealth ${check.passed}/${monsters.length} vs passive Perception ${passive}`;
     return check.success
-      ? { ambush: 'monsters', opening: `Ambush! ${capitalizeFirst(foe)} catch the company unawares (${dice}).` }
-      : { ambush: null, opening: `${capitalizeFirst(foe)} try to sneak up, but the company spots them (${dice}).` };
+      ? { ambush: 'monsters', tactic, opening: `Ambush! ${capitalizeFirst(foe)} catch the company unawares, ${how} (${dice}).` }
+      : { ambush: null, tactic, opening: `${capitalizeFirst(foe)} try to sneak up, but the company spots them (${dice}).` };
   }
   if (roll < monstersFirst + partyFirst) {
     const passive = Math.max(...monsters.map(monsterPassivePerception));
     const check = groupStealth(rng, fighters.map((h) => skillBonus(h, 'Stealth')), passive);
     const dice = `Stealth ${check.passed}/${fighters.length} vs passive Perception ${passive}`;
     return check.success
-      ? { ambush: 'party', opening: `The company gets the drop on ${foe} (${dice}).` }
-      : { ambush: null, opening: `The company tries to sneak up on ${foe}, but is spotted (${dice}).` };
+      ? { ambush: 'party', tactic, opening: `The company gets the drop on ${foe}, ${how} (${dice}).` }
+      : { ambush: null, tactic, opening: `The company tries to sneak up on ${foe}, but is spotted (${dice}).` };
   }
-  return { ambush: null, opening: `Both sides see each other at once.` };
+  return { ambush: null, tactic, opening: `Both sides see each other at once.` };
 }
 
 function describeMonsters(monsters: MonsterData[]): string {
@@ -307,36 +316,57 @@ function rows(count: number, spacing = 1): number[] {
 /**
  * Company on the right, front line ahead of the back line; monsters on the
  * left, minions (the cheapest) ahead of their betters, or scattered when there
- * are only a couple. An ambush puts the surprised side in a loose knot in the
- * middle and the ambushers in a ring around them.
+ * are only a couple. An ambush either puts the surprised side in a loose knot
+ * in the middle with the ambushers in a ring around them, or leaves the
+ * surprised side in marching order and drops the ambushers behind its back line.
  */
-function deploy(rng: Rng, fighters: Hero[], monsters: MonsterData[], ambush: Ambush): Layout {
-  if (ambush === 'monsters') {
+function deploy(rng: Rng, fighters: Hero[], monsters: MonsterData[], ambush: Ambush, tactic: AmbushTactic): Layout {
+  if (ambush === 'monsters' && tactic === 'surround') {
     const party = knot(rng, fighters.length);
     return { party, monsters: ring(rng, monsters.length, party) };
   }
-  if (ambush === 'party') {
+  if (ambush === 'party' && tactic === 'surround') {
     const mons = knot(rng, monsters.length);
     return { party: ring(rng, fighters.length, mons), monsters: mons };
   }
+  if (ambush === 'monsters') {
+    // The company marches further into the field; the monsters come out behind its casters.
+    return { party: partyFormation(fighters, 7, 10), monsters: rearGuard(rng, monsters.length, 13) };
+  }
+  if (ambush === 'party') {
+    // The monsters sit further right; the company comes at their leaders from behind.
+    return { party: rearGuard(rng, fighters.length, 2), monsters: monsterFormation(rng, monsters, 8, 5) };
+  }
+  return { party: partyFormation(fighters, 10, 13), monsters: monsterFormation(rng, monsters, 5, 2) };
+}
+
+function partyFormation(fighters: Hero[], frontX: number, backX: number): Layout['party'] {
   const front = fighters.map((h, i) => [h, i] as const).filter(([h]) => FRONT_LINE.has(h.heroClass));
   const back = fighters.map((h, i) => [h, i] as const).filter(([h]) => !FRONT_LINE.has(h.heroClass));
   const party: Layout['party'] = new Array(fighters.length);
-  rows(front.length).forEach((y, k) => (party[front[k]![1]] = { x: 10, y }));
-  rows(back.length).forEach((y, k) => (party[back[k]![1]] = { x: 13, y }));
+  rows(front.length).forEach((y, k) => (party[front[k]![1]] = { x: frontX, y }));
+  rows(back.length).forEach((y, k) => (party[back[k]![1]] = { x: backX, y }));
+  return party;
+}
 
+function monsterFormation(rng: Rng, monsters: MonsterData[], frontX: number, backX: number): Layout['monsters'] {
   const mons: Layout['monsters'] = new Array(monsters.length);
   if (monsters.length <= 2) {
-    monsters.forEach((_, i) => (mons[i] = { x: rng.int(1, 6), y: rng.int(2, 13) }));
-    return { party, monsters: mons };
+    monsters.forEach((_, i) => (mons[i] = { x: rng.int(Math.max(1, backX - 1), frontX + 1), y: rng.int(2, 13) }));
+    return mons;
   }
   const sorted = monsters.map((m, i) => [m, i] as const).sort((a, b) => a[0].xp - b[0].xp);
   const cheapest = sorted[0]![0].xp;
   const minions = sorted.filter(([m]) => m.xp <= cheapest * 2.5 || m.xp < sorted[sorted.length - 1]![0].xp / 3);
   const leaders = sorted.filter((e) => !minions.includes(e));
-  rows(minions.length, 2).forEach((y, k) => (mons[minions[k]![1]] = { x: 5, y }));
-  rows(leaders.length, 2).forEach((y, k) => (mons[leaders[k]![1]] = { x: 2, y }));
-  return { party, monsters: mons };
+  rows(minions.length, 2).forEach((y, k) => (mons[minions[k]![1]] = { x: frontX, y }));
+  rows(leaders.length, 2).forEach((y, k) => (mons[leaders[k]![1]] = { x: backX, y }));
+  return mons;
+}
+
+/** A line two deep at the given column, jittered so it reads as a rush rather than a parade. */
+function rearGuard(rng: Rng, count: number, x: number): { x: number; y: number }[] {
+  return rows(count).map((y, i) => ({ x: clamp(x + (i % 2 === 0 ? 0 : rng.int(0, 1))), y }));
 }
 
 /** A loose cluster near the middle of the field. */

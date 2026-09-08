@@ -110,8 +110,9 @@ otherwise both sides meet at once. The side that sees first tries to sneak up as
 group (each rolls Stealth against the other side's sharpest passive Perception,
 half must pass; untrained creatures use their bare Dexterity and Wisdom, and monster
 passive Perception comes off the stat block). A surprised side takes 5 off its
-initiative (the 2024 rules' disadvantage, flattened), starts in a loose knot in the
-middle of the field, and the ambushers begin in a ring around it. Otherwise the company deploys with fighters, barbarians, paladins
+initiative (the 2024 rules' disadvantage, flattened). Half the time the ambushers
+close in from every side around a surprised side caught in a loose knot; the other
+half they come up behind its back line, where the casters or the leaders stand. Otherwise the company deploys with fighters, barbarians, paladins
 and monks in front and everyone else behind, while monsters put their cheapest
 bodies forward and their leaders back, or scatter when there are only a couple.
 Deep in a lair the defenders are more and more likely to be the ones watching.
