@@ -145,16 +145,9 @@ export function runCombat(heroes: Hero[], spec: EncounterSpec, seed: number, opt
     const carried = h.maxHp - h.hp;
     if (carried > 0) enc.damage(idByHero.get(h.id)!, carried);
   }
-  // The surprised side loses its first turn. Some creatures (swarms, constructs) shrug it off.
-  const surprise = (id: string) => {
-    try {
-      enc.addCondition(id, 'incapacitated', 'end_of_current_turn');
-    } catch {
-      // immune: it keeps its wits
-    }
-  };
-  if (ambush === 'monsters') for (const h of fighters) surprise(idByHero.get(h.id)!);
-  if (ambush === 'party') for (const id of monsterIds) surprise(id);
+  // Surprise, 2024 rules: the surprised side rolls initiative at a disadvantage; here a flat -5.
+  if (ambush === 'monsters') penaliseInitiative(enc, fighters.map((h) => idByHero.get(h.id)!));
+  if (ambush === 'party') penaliseInitiative(enc, monsterIds);
 
   const lines: string[] = [];
   const kills = new Map<string, number>();
@@ -210,6 +203,18 @@ export function runCombat(heroes: Hero[], spec: EncounterSpec, seed: number, opt
 
 const GRID = 16;
 const CENTER = { x: 7.5, y: 7.5 };
+const SURPRISE_INITIATIVE_PENALTY = 5;
+
+/** Knock the surprised creatures down the initiative order before the first turn is taken. */
+function penaliseInitiative(enc: Encounter, ids: string[]): void {
+  const state = enc.state;
+  if (!state) return;
+  const surprised = new Set(ids);
+  for (const c of state.creatures) if (surprised.has(c.id)) c.initiative -= SURPRISE_INITIATIVE_PENALTY;
+  const byId = new Map(state.creatures.map((c) => [c.id, c]));
+  const before = new Map(state.initiativeOrder.map((id, i) => [id, i]));
+  state.initiativeOrder.sort((a, b) => (byId.get(b)?.initiative ?? 0) - (byId.get(a)?.initiative ?? 0) || (before.get(a) ?? 0) - (before.get(b) ?? 0));
+}
 
 // ---------------------------------------------------------------- who sees whom
 
