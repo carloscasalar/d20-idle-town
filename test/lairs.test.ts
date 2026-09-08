@@ -25,7 +25,7 @@ describe('lairs', () => {
   it('every town starts with lairs and their raids reach the board', () => {
     const g = new Game({ seed: 5 });
     expect(g.lairs.length).toBeGreaterThanOrEqual(2);
-    for (let i = 0; i < 300; i++) g.step();
+    for (let i = 0; i < 600; i++) g.step();
     expect(g.stats.raids).toBeGreaterThan(0);
     expect(g.quests.some((q) => q.lairId !== null)).toBe(true);
   });

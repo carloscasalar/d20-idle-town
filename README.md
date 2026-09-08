@@ -104,6 +104,18 @@ A level 8 adventurer whose company holds 25,000 gp retires: they buy a business,
 become an employer, and their old company gets a day's first refusal on any contract
 they post.
 
+**How a fight starts.** Chance decides who spots whom: three times in ten the
+monsters see the company first, a little less often the company sees them, and
+otherwise both sides meet at once. The side that sees first tries to sneak up as a
+group (each rolls Stealth against the other side's sharpest passive Perception,
+half must pass; untrained creatures use their bare Dexterity and Wisdom, and monster
+passive Perception comes off the stat block). A surprised side loses its first
+turn, starts in a loose knot in the middle of the field, and the ambushers begin in
+a ring around it. Otherwise the company deploys with fighters, barbarians, paladins
+and monks in front and everyone else behind, while monsters put their cheapest
+bodies forward and their leaders back, or scatter when there are only a couple.
+Deep in a lair the defenders are more and more likely to be the ones watching.
+
 Every threat draws on a roster built from the curated names in `src/quests/themes.ts`
 plus every SRD monster of the matching creature type (about 190 different monsters
 show up over a long run). A fight is a single big monster, a horde of one kind, a

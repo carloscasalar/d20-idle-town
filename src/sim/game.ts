@@ -783,16 +783,24 @@ export class Game {
 
     const smith = serviceOf(this.town, 'smith');
     if (!smith.ruined) {
-      const candidate = [...alive].sort((a, b) => a.armorTier - b.armorTier)[0];
-      if (candidate && candidate.armorTier < MAX_ARMOR_TIER) {
-        const cost = armorUpgradeCost(candidate.armorTier, candidate.level);
-        if (p.gold - cost >= reserve) {
-          this.pay(p, smith, cost);
-          candidate.armorTier += 1;
-          candidate.goldSpent += cost;
-          this.log('shop', `${candidate.name} pays ${smith.name} ${cost} gp for better armour (AC +${candidate.armorTier}).`);
-          return true;
-        }
+      // Everyone who can afford it gets fitted in the same visit, the worst-armoured first.
+      const fitted: string[] = [];
+      let bill = 0;
+      for (const h of [...alive].sort((a, b) => a.armorTier - b.armorTier)) {
+        if (h.armorTier >= MAX_ARMOR_TIER) continue;
+        const cost = armorUpgradeCost(h.armorTier, h.level);
+        if (p.gold - cost < reserve) continue;
+        this.pay(p, smith, cost);
+        h.armorTier += 1;
+        h.goldSpent += cost;
+        bill += cost;
+        fitted.push(`${h.name} (AC +${h.armorTier})`);
+      }
+      if (fitted.length > 0) {
+        this.log('shop', fitted.length === alive.length && new Set(alive.map((h) => h.armorTier)).size === 1
+          ? `${p.name} pay ${smith.name} ${bill} gp to have the whole company fitted with better armour (AC +${alive[0]!.armorTier}).`
+          : `${p.name} pay ${smith.name} ${bill} gp for better armour: ${listNames(fitted)}.`);
+        return true;
       }
     }
     return false;
@@ -801,14 +809,22 @@ export class Game {
   /** Equip loot from the stash where it helps; sell the rest to the enchanter, who puts it back on sale. */
   private sellLoot(p: Party, _reserve: number): boolean {
     if (p.stash.length === 0) return false;
-    const item = p.stash.shift()!;
-    const taker = pickRecipient(aliveMembers(p), item);
-    if (taker) {
+    const equipped: string[] = [];
+    let guard = 0;
+    while (guard++ < 20) {
+      const idx = p.stash.findIndex((i) => pickRecipient(aliveMembers(p), i));
+      if (idx < 0) break;
+      const item = p.stash.splice(idx, 1)[0]!;
+      const taker = pickRecipient(aliveMembers(p), item)!;
       const replaced = equipItem(taker, item);
       if (replaced) p.stash.push(replaced);
-      this.log('shop', `${taker.name} takes up the ${item.name} (${describeEffect(item.effect)}).`);
+      equipped.push(`${taker.name} the ${item.name}`);
+    }
+    if (equipped.length > 0) {
+      this.log('shop', `${p.name} share out their finds: ${listNames(equipped)}.`);
       return true;
     }
+    const item = p.stash.shift()!;
     const enchanter = serviceOf(this.town, 'enchanter');
     const price = Math.min(resalePrice(item), enchanter.treasury);
     if (enchanter.ruined || price <= 0 || enchanter.stock.length >= MAX_STOCK) {
@@ -907,6 +923,8 @@ export class Game {
   /** Fill empty seats: temple first if the coin is there, then merge with another incomplete band. */
   private recruit(p: Party): void {
     const temple = serviceOf(this.town, 'temple');
+    const raised: Hero[] = [];
+    let bill = 0;
     for (const dead of deadMembers(p)) {
       const cost = resurrectionCost(dead.level);
       if (p.gold < cost) continue;
@@ -914,7 +932,11 @@ export class Game {
       dead.goldSpent += cost;
       resurrectHero(dead);
       this.stats.resurrections += 1;
-      this.chronicleLog('temple', `${p.name} pay ${cost} gp at the ${temple.name}. ${describeHero(dead)} draws breath again.`);
+      raised.push(dead);
+      bill += cost;
+    }
+    if (raised.length > 0) {
+      this.chronicleLog('temple', `${p.name} pay ${bill} gp at the ${temple.name}. ${listNames(raised.map(describeHero))} ${raised.length === 1 ? 'draws' : 'draw'} breath again.`);
     }
     if (isFull(p)) return;
 
@@ -944,6 +966,7 @@ export class Game {
     const outcome = runCombat(fighters, spec, this.rng.seed(), {
       ...(p.blessed ? { blessingHp: BLESSING_HP_PER_LEVEL * partyLevel(p) } : {}),
       noRetreat: bossFight,
+      ...(quest.kind === 'assault' ? { lairDepth: { index: p.progress, total: quest.encounters.length } } : {}),
     });
 
     for (const r of outcome.heroes) {
@@ -958,22 +981,27 @@ export class Game {
     }
     const fallen = fighters.filter((h) => !h.alive);
     const survivors = aliveMembers(p);
-    const summary = `Encounter ${n}/${quest.encounters.length} (${spec.difficulty}): ${describeEncounter(spec)}.`;
-    const deathNotes = () => {
-      for (const h of fallen) this.chronicleLog('death', `${describeHero(h)} of ${p.name} dies at ${quest.place} (${describeEncounter(spec)}).`);
+    const ambushNote = outcome.ambush === 'monsters' ? ' Ambushed!' : outcome.ambush === 'party' ? ' They strike first.' : '';
+    const summary = `Encounter ${n}/${quest.encounters.length} (${spec.difficulty}): ${describeEncounter(spec)}.${ambushNote}`;
+    const deathNotes = (verb = 'dies') => {
+      if (fallen.length === 0) return;
+      const plural = verb === 'dies' ? 'die' : 'are left for dead';
+      const who = fallen.length === 1 ? `${describeHero(fallen[0]!)} of ${p.name} ${verb}` : `${listNames(fallen.map(describeHero))} of ${p.name} ${plural}`;
+      this.chronicleLog('death', `${who} at ${quest.place} (${describeEncounter(spec)}).`);
     };
 
     if (outcome.winner === 'party') {
       const share = Math.floor(outcome.xpEarned / Math.max(1, survivors.length));
-      const levelUps: string[] = [];
-      for (const h of survivors) {
-        const before = h.level;
-        if (gainXp(h, share) > 0) levelUps.push(`${h.name} reaches level ${h.level} (was ${before})`);
-      }
+      const levelled: Hero[] = [];
+      for (const h of survivors) if (gainXp(h, share) > 0) levelled.push(h);
       const losses = fallen.length > 0 ? ` Fallen: ${fallen.map((h) => h.name).join(', ')}.` : '';
       this.log('combat', `${p.name}: ${summary} Victory in ${outcome.rounds} rounds, ${share} XP each.${losses}`, outcome.lines);
       deathNotes();
-      for (const text of levelUps) this.chronicleLog('levelup', `${text}.`);
+      if (levelled.length > 0) {
+        const levels = new Set(levelled.map((h) => h.level));
+        if (levelled.length === survivors.length && levels.size === 1) this.chronicleLog('levelup', `${p.name} reach level ${levelled[0]!.level}.`);
+        else this.chronicleLog('levelup', `${listNames(levelled.map((h) => `${h.name} (${h.level})`))} of ${p.name} level up.`);
+      }
 
       p.progress += 1;
       if (p.progress < quest.encounters.length && this.shouldRetreat(p, fighters.length)) {
@@ -1002,7 +1030,7 @@ export class Game {
       } else {
         this.log(
           'combat',
-          `${p.name}: ${summary} Defeat. ${survivors.map((h) => h.name).join(', ')} flee with the bodies of ${fallen.map((h) => h.name).join(', ')}.`,
+          `${p.name}: ${summary} Defeat. ${listNames(survivors.map((h) => h.name))} flee with the bodies of ${listNames(fallen.map((h) => h.name))}.`,
           outcome.lines,
         );
         deathNotes();
@@ -1014,10 +1042,10 @@ export class Game {
     if (outcome.winner === 'retreat') {
       this.log(
         'combat',
-        `${p.name}: ${summary} The line breaks. ${survivors.map((h) => h.name).join(', ')} ${survivors.length === 1 ? 'runs' : 'run'} for it, leaving ${fallen.map((h) => h.name).join(', ')} behind.`,
+        `${p.name}: ${summary} The line breaks. ${listNames(survivors.map((h) => h.name))} ${survivors.length === 1 ? 'runs' : 'run'} for it, leaving ${listNames(fallen.map((h) => h.name))} behind.`,
         outcome.lines,
       );
-      for (const h of fallen) this.chronicleLog('death', `${describeHero(h)} of ${p.name} is left for dead at ${quest.place} (${describeEncounter(spec)}).`);
+      deathNotes('is left for dead');
       this.leaveLoot(quest, p, fallen);
       this.headHome(p);
       return;
@@ -1141,6 +1169,12 @@ function pickRecipient(members: Hero[], item: MagicItem): Hero | undefined {
   return members
     .filter((h) => wantsItem(h, item))
     .sort((a, b) => a.items.length - b.items.length || worth(a) - worth(b))[0];
+}
+
+/** "A", "A and B", "A, B and C". */
+function listNames(names: string[]): string {
+  if (names.length <= 1) return names.join('');
+  return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
 }
 
 function capitalize(text: string): string {

@@ -150,6 +150,8 @@ export const SKILL_ADVANTAGE: Record<string, HeroClassName[]> = {
 const ABILITY_FOR_SKILL: Record<string, keyof ReturnType<typeof buildHero>['abilities']> = {
   Persuasion: 'cha',
   Survival: 'wis',
+  Perception: 'wis',
+  Stealth: 'dex',
 };
 
 /** The hero's total bonus on a skill: proficiency where the class has it, else the bare ability modifier. */

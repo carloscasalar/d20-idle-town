@@ -1,5 +1,6 @@
-import { buildHero, Encounter, type BattleLog, type Creature } from 'battlecast-engine';
-import { combinedEffect, heroAc, type Hero } from '../adventurers/hero';
+import { buildHero, Encounter, getMonsterByName, type BattleLog, type Creature, type HeroClassName, type MonsterData } from 'battlecast-engine';
+import { Rng } from '../core/rng';
+import { combinedEffect, heroAc, skillBonus, WEAPON_CLASSES, type Hero } from '../adventurers/hero';
 import type { EncounterSpec } from '../quests/encounters';
 
 export type CombatWinner = 'party' | 'monsters' | 'retreat' | 'stalemate';
@@ -12,9 +13,15 @@ export interface HeroResult {
   kills: number;
 }
 
+export type Ambush = 'party' | 'monsters' | null;
+
 export interface CombatOutcome {
   winner: CombatWinner;
   rounds: number;
+  /** Who caught whom unawares, if anyone. */
+  ambush: Ambush;
+  /** One sentence on how the fight opened. */
+  opening: string;
   /** Battle log lines, straight from the engine's narration. */
   lines: string[];
   heroes: HeroResult[];
@@ -34,6 +41,8 @@ export interface CombatOptions {
   blessingHp?: number;
   /** No running from this one (a boss in its own hall). */
   noRetreat?: boolean;
+  /** Deep in a lair the defenders are ever more likely to see the company coming: fight index and total. */
+  lairDepth?: { index: number; total: number };
 }
 
 /**
@@ -80,30 +89,72 @@ function fmtBonus(n: number): string {
 
 export function runCombat(heroes: Hero[], spec: EncounterSpec, seed: number, opts: CombatOptions = {}): CombatOutcome {
   const fighters = heroes.filter((h) => h.alive);
-  const enc = new Encounter({ gridSize: 16, seed });
+  const rng = new Rng(seed);
+  const enc = new Encounter({ gridSize: GRID, seed });
   const idByHero = new Map<string, string>();
   const heroByCreature = new Map<string, Hero>();
 
-  for (const h of fighters) {
-    const [added] = enc.addCreature({
-      heroClass: h.heroClass,
-      heroLevel: h.level,
-      team: 'blue',
-      heroOverrides: heroOverrides(h, opts),
-    });
-    if (!added) throw new Error(`engine refused hero ${h.name}`);
-    idByHero.set(h.id, added.id);
-    heroByCreature.set(added.name, h);
-  }
+  const monsters: MonsterData[] = [];
   for (const group of spec.monsters) {
-    enc.addCreature({ monster: group.name, team: 'red', count: group.count });
+    const data = getMonsterByName(group.name);
+    if (data) for (let i = 0; i < group.count; i++) monsters.push(data);
   }
+  const { ambush, opening } = resolveOpening(rng, fighters, monsters, opts);
+  const layout = deploy(rng, fighters, monsters, ambush);
+
+  const taken = new Set<string>();
+  const place = (wanted: { x: number; y: number } | undefined, add: (pos?: { x: number; y: number }) => void) => {
+    if (!wanted) return add();
+    for (const pos of candidates(rng, wanted)) {
+      if (taken.has(`${pos.x},${pos.y}`)) continue;
+      try {
+        add(pos);
+        taken.add(`${pos.x},${pos.y}`);
+        return;
+      } catch {
+        // occupied by a larger footprint or terrain; try the next cell
+      }
+    }
+    add();
+  };
+
+  fighters.forEach((h, i) => {
+    place(layout.party[i], (position) => {
+      const [added] = enc.addCreature({
+        heroClass: h.heroClass,
+        heroLevel: h.level,
+        team: 'blue',
+        heroOverrides: heroOverrides(h, opts),
+        ...(position ? { position } : {}),
+      });
+      if (!added) throw new Error(`engine refused hero ${h.name}`);
+      idByHero.set(h.id, added.id);
+      heroByCreature.set(added.name, h);
+    });
+  });
+  const monsterIds: string[] = [];
+  monsters.forEach((m, i) => {
+    place(layout.monsters[i], (position) => {
+      const [added] = enc.addCreature({ monster: m.name, team: 'red', ...(position ? { position } : {}) });
+      if (added) monsterIds.push(added.id);
+    });
+  });
 
   enc.start();
   for (const h of fighters) {
     const carried = h.maxHp - h.hp;
     if (carried > 0) enc.damage(idByHero.get(h.id)!, carried);
   }
+  // The surprised side loses its first turn. Some creatures (swarms, constructs) shrug it off.
+  const surprise = (id: string) => {
+    try {
+      enc.addCondition(id, 'incapacitated', 'end_of_current_turn');
+    } catch {
+      // immune: it keeps its wits
+    }
+  };
+  if (ambush === 'monsters') for (const h of fighters) surprise(idByHero.get(h.id)!);
+  if (ambush === 'party') for (const id of monsterIds) surprise(id);
 
   const lines: string[] = [];
   const kills = new Map<string, number>();
@@ -149,10 +200,181 @@ export function runCombat(heroes: Hero[], spec: EncounterSpec, seed: number, opt
   return {
     winner: outcome,
     rounds,
-    lines,
+    ambush,
+    opening,
+    lines: [opening, ...lines],
     heroes: results,
     xpEarned: partyWon ? spec.totalXp : 0,
   };
+}
+
+const GRID = 16;
+const CENTER = { x: 7.5, y: 7.5 };
+
+// ---------------------------------------------------------------- who sees whom
+
+function mod(score: number): number {
+  return Math.floor((score - 10) / 2);
+}
+
+function monsterSkill(m: MonsterData, skill: 'Stealth' | 'Perception'): number {
+  const trained = m.skills?.[skill];
+  if (typeof trained === 'number') return trained;
+  return mod(skill === 'Stealth' ? m.abilities.dex : m.abilities.wis);
+}
+
+/** Passive Perception as printed in the stat block, else 10 plus the bonus. */
+function monsterPassivePerception(m: MonsterData): number {
+  const printed = /Passive Perception (\d+)/i.exec(m.senses ?? '');
+  return printed ? Number(printed[1]) : 10 + monsterSkill(m, 'Perception');
+}
+
+function heroPassivePerception(h: Hero): number {
+  return 10 + skillBonus(h, 'Perception');
+}
+
+/** A group sneaks if at least half of them beat the other side's sharpest passive Perception. */
+function groupStealth(rng: Rng, bonuses: number[], passive: number): { passed: number; needed: number; success: boolean } {
+  const passed = bonuses.filter((b) => rng.int(1, 20) + b >= passive).length;
+  const needed = Math.ceil(bonuses.length / 2);
+  return { passed, needed, success: passed >= needed };
+}
+
+/**
+ * Chance decides who spots whom first; the side that does tries to sneak up.
+ * Deep in a lair the defenders are more and more likely to be the ones watching.
+ */
+function resolveOpening(rng: Rng, fighters: Hero[], monsters: MonsterData[], opts: CombatOptions): { ambush: Ambush; opening: string } {
+  if (fighters.length === 0 || monsters.length === 0) return { ambush: null, opening: 'The field is empty.' };
+  let monstersFirst = 0.3;
+  if (opts.lairDepth) monstersFirst = 0.3 + 0.5 * (opts.lairDepth.index / Math.max(1, opts.lairDepth.total - 1));
+  const partyFirst = (1 - monstersFirst) * 0.43;
+  const roll = rng.next();
+  const foe = describeMonsters(monsters);
+  if (roll < monstersFirst) {
+    const passive = Math.max(...fighters.map(heroPassivePerception));
+    const check = groupStealth(rng, monsters.map((m) => monsterSkill(m, 'Stealth')), passive);
+    const dice = `Stealth ${check.passed}/${monsters.length} vs passive Perception ${passive}`;
+    return check.success
+      ? { ambush: 'monsters', opening: `Ambush! ${capitalizeFirst(foe)} catch the company unawares (${dice}).` }
+      : { ambush: null, opening: `${capitalizeFirst(foe)} try to sneak up, but the company spots them (${dice}).` };
+  }
+  if (roll < monstersFirst + partyFirst) {
+    const passive = Math.max(...monsters.map(monsterPassivePerception));
+    const check = groupStealth(rng, fighters.map((h) => skillBonus(h, 'Stealth')), passive);
+    const dice = `Stealth ${check.passed}/${fighters.length} vs passive Perception ${passive}`;
+    return check.success
+      ? { ambush: 'party', opening: `The company gets the drop on ${foe} (${dice}).` }
+      : { ambush: null, opening: `The company tries to sneak up on ${foe}, but is spotted (${dice}).` };
+  }
+  return { ambush: null, opening: `Both sides see each other at once.` };
+}
+
+function describeMonsters(monsters: MonsterData[]): string {
+  const counts = new Map<string, number>();
+  for (const m of monsters) counts.set(m.name, (counts.get(m.name) ?? 0) + 1);
+  return [...counts.entries()].map(([n, c]) => (c > 1 ? `${c}x ${n}` : `the ${n}`)).join(', ');
+}
+
+function capitalizeFirst(text: string): string {
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+// ---------------------------------------------------------------- where everyone starts
+
+interface Layout {
+  party: ({ x: number; y: number } | undefined)[];
+  monsters: ({ x: number; y: number } | undefined)[];
+}
+
+const FRONT_LINE = new Set<HeroClassName>(WEAPON_CLASSES.filter((c) => c !== 'Rogue' && c !== 'Ranger'));
+
+/** Rows fan out from the middle: 7, 8, 6, 9, 5, 10 ... */
+function rows(count: number, spacing = 1): number[] {
+  const out: number[] = [];
+  for (let i = 0; out.length < count; i++) {
+    const off = Math.ceil(i / 2) * spacing;
+    out.push(i % 2 === 0 ? 7 + off : 7 - off);
+  }
+  return out.map((y) => Math.max(0, Math.min(GRID - 1, y)));
+}
+
+/**
+ * Company on the right, front line ahead of the back line; monsters on the
+ * left, minions (the cheapest) ahead of their betters, or scattered when there
+ * are only a couple. An ambush puts the surprised side in a loose knot in the
+ * middle and the ambushers in a ring around them.
+ */
+function deploy(rng: Rng, fighters: Hero[], monsters: MonsterData[], ambush: Ambush): Layout {
+  if (ambush === 'monsters') {
+    const party = knot(rng, fighters.length);
+    return { party, monsters: ring(rng, monsters.length, party) };
+  }
+  if (ambush === 'party') {
+    const mons = knot(rng, monsters.length);
+    return { party: ring(rng, fighters.length, mons), monsters: mons };
+  }
+  const front = fighters.map((h, i) => [h, i] as const).filter(([h]) => FRONT_LINE.has(h.heroClass));
+  const back = fighters.map((h, i) => [h, i] as const).filter(([h]) => !FRONT_LINE.has(h.heroClass));
+  const party: Layout['party'] = new Array(fighters.length);
+  rows(front.length).forEach((y, k) => (party[front[k]![1]] = { x: 10, y }));
+  rows(back.length).forEach((y, k) => (party[back[k]![1]] = { x: 13, y }));
+
+  const mons: Layout['monsters'] = new Array(monsters.length);
+  if (monsters.length <= 2) {
+    monsters.forEach((_, i) => (mons[i] = { x: rng.int(1, 6), y: rng.int(2, 13) }));
+    return { party, monsters: mons };
+  }
+  const sorted = monsters.map((m, i) => [m, i] as const).sort((a, b) => a[0].xp - b[0].xp);
+  const cheapest = sorted[0]![0].xp;
+  const minions = sorted.filter(([m]) => m.xp <= cheapest * 2.5 || m.xp < sorted[sorted.length - 1]![0].xp / 3);
+  const leaders = sorted.filter((e) => !minions.includes(e));
+  rows(minions.length, 2).forEach((y, k) => (mons[minions[k]![1]] = { x: 5, y }));
+  rows(leaders.length, 2).forEach((y, k) => (mons[leaders[k]![1]] = { x: 2, y }));
+  return { party, monsters: mons };
+}
+
+/** A loose cluster near the middle of the field. */
+function knot(rng: Rng, count: number): { x: number; y: number }[] {
+  const out: { x: number; y: number }[] = [];
+  while (out.length < count) {
+    const p = { x: rng.int(6, 9), y: rng.int(5, 10) };
+    if (!out.some((o) => o.x === p.x && o.y === p.y)) out.push(p);
+  }
+  return out;
+}
+
+/** Evenly spaced around the knot, three to four squares out. */
+function ring(rng: Rng, count: number, around: { x: number; y: number }[]): { x: number; y: number }[] {
+  const cx = around.reduce((s, p) => s + p.x, 0) / Math.max(1, around.length) || CENTER.x;
+  const cy = around.reduce((s, p) => s + p.y, 0) / Math.max(1, around.length) || CENTER.y;
+  const start = rng.next() * Math.PI * 2;
+  const out: { x: number; y: number }[] = [];
+  for (let i = 0; i < count; i++) {
+    const a = start + (i / count) * Math.PI * 2;
+    const r = 3 + (i % 2);
+    out.push({ x: clamp(Math.round(cx + Math.cos(a) * r)), y: clamp(Math.round(cy + Math.sin(a) * r)) });
+  }
+  return out;
+}
+
+function clamp(v: number): number {
+  return Math.max(0, Math.min(GRID - 1, v));
+}
+
+/** The wanted cell first, then its neighbours in a widening, shuffled search. */
+function candidates(rng: Rng, wanted: { x: number; y: number }): { x: number; y: number }[] {
+  const out = [wanted];
+  for (let d = 1; d <= 3; d++) {
+    const shell: { x: number; y: number }[] = [];
+    for (let dx = -d; dx <= d; dx++) for (let dy = -d; dy <= d; dy++) {
+      if (Math.max(Math.abs(dx), Math.abs(dy)) !== d) continue;
+      const x = wanted.x + dx, y = wanted.y + dy;
+      if (x >= 0 && y >= 0 && x < GRID && y < GRID) shell.push({ x, y });
+    }
+    out.push(...rng.shuffle(shell));
+  }
+  return out;
 }
 
 /**
