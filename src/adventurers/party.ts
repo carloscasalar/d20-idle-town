@@ -4,7 +4,9 @@ import type { MagicItem } from '../items/items';
 import type { HeroClassName } from 'battlecast-engine';
 import { createHero, type Hero } from './hero';
 
+/** A company sets out with at least this many and never more than MAX_PARTY_SIZE. */
 export const PARTY_SIZE = 4;
+export const MAX_PARTY_SIZE = 6;
 
 export type PartyStatus =
   | 'idle'
@@ -104,8 +106,13 @@ export function deadMembers(p: Party): Hero[] {
   return p.members.filter((m) => !m.alive);
 }
 
+/** Enough to take a contract. */
 export function isFull(p: Party): boolean {
   return aliveMembers(p).length >= PARTY_SIZE;
+}
+
+export function hasRoom(p: Party): boolean {
+  return aliveMembers(p).length < MAX_PARTY_SIZE;
 }
 
 export function partyLevel(p: Party): number {
@@ -115,13 +122,13 @@ export function partyLevel(p: Party): number {
 }
 
 /**
- * Moves survivors of `donor` into `host` until the host is full.
+ * Moves survivors of `donor` into `host` while there is room (six at most).
  * Returns the survivors that did not fit (the donor keeps them).
  */
 export function mergeParties(host: Party, donor: Party): Hero[] {
   const moved: Hero[] = [];
   for (const h of aliveMembers(donor)) {
-    if (isFull(host)) break;
+    if (!hasRoom(host)) break;
     host.members.push(h);
     moved.push(h);
   }
@@ -144,5 +151,6 @@ export function buryDead(p: Party): Hero[] {
 }
 
 export function describeParty(p: Party): string {
-  return `${p.name} (lvl ${partyLevel(p)}, ${aliveMembers(p).length}/${PARTY_SIZE})`;
+  const n = aliveMembers(p).length;
+  return `${p.name} (lvl ${partyLevel(p)}, ${n < PARTY_SIZE ? `${n} of ${PARTY_SIZE} needed` : `${n} strong`})`;
 }

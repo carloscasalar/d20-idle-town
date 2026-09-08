@@ -29,7 +29,7 @@ describe('hero progression', () => {
 });
 
 describe('party merging', () => {
-  it('fills the host with the donor survivors and leaves the rest behind', () => {
+  it('takes every donor survivor while there is room for six', () => {
     const rng = new Rng(5);
     const host = createParty(rng, 3, 4, 0);
     const donor = createParty(rng, 3, 4, 0);
@@ -40,10 +40,22 @@ describe('party merging', () => {
     donor.gold = 5;
     const leftover = mergeParties(host, donor);
     expect(isFull(host)).toBe(true);
-    expect(aliveMembers(host).length).toBe(4);
-    expect(leftover.length).toBe(1);
-    expect(aliveMembers(donor).length).toBe(1);
+    expect(aliveMembers(host).length).toBe(5); // 2 + 3: room for six, so everyone comes along
+    expect(leftover.length).toBe(0);
+    expect(aliveMembers(donor).length).toBe(0);
     expect(host.gold).toBe(15);
     expect(partyLevel(host)).toBe(3);
+  });
+});
+
+describe('bigger companies', () => {
+  it('meet proportionally more monsters', async () => {
+    const { scaleEncounter } = await import('../src/quests/encounters');
+    const spec = { difficulty: 'intermediate' as const, monsters: [{ name: 'Goblin Warrior', count: 4, xpEach: 50 }, { name: 'Goblin Boss', count: 1, xpEach: 200 }], totalXp: 400, tier: 'Moderate' };
+    const six = scaleEncounter(spec, 6);
+    expect(six.monsters[0]!.count).toBe(6);
+    expect(six.monsters[1]!.count).toBe(1);
+    expect(six.totalXp).toBe(500);
+    expect(scaleEncounter(spec, 4)).toBe(spec);
   });
 });

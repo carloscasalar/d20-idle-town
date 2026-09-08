@@ -141,6 +141,18 @@ function attempt(rng: Rng, usable: MonsterData[], target: number, pattern: Patte
   }
 }
 
+/**
+ * Contracts are budgeted for four. A bigger company meets proportionally more
+ * of the same monsters (a lone boss stays alone until the count would double).
+ */
+export function scaleEncounter(spec: EncounterSpec, partySize: number, baseSize = 4): EncounterSpec {
+  if (partySize <= baseSize) return spec;
+  const factor = partySize / baseSize;
+  const monsters = spec.monsters.map((g) => ({ ...g, count: Math.max(g.count, Math.floor(g.count * factor + 0.25)) }));
+  const totalXp = monsters.reduce((s, g) => s + g.count * g.xpEach, 0);
+  return { ...spec, monsters, totalXp };
+}
+
 export function describeEncounter(spec: EncounterSpec): string {
   return spec.monsters.map((g) => (g.count > 1 ? `${g.count}x ${g.name}` : g.name)).join(', ');
 }

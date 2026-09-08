@@ -20,6 +20,7 @@ import {
   createParty,
   deadMembers,
   describeParty,
+  hasRoom,
   isFull,
   mergeParties,
   partyLevel,
@@ -29,7 +30,7 @@ import {
 import { runCombat } from '../combat/battlecast';
 import { describeEffect, resalePrice, rollStockItem, type MagicItem } from '../items/items';
 import { Rng } from '../core/rng';
-import { describeEncounter } from '../quests/encounters';
+import { describeEncounter, scaleEncounter } from '../quests/encounters';
 import { difficultyCode, generateAssault, generateQuest, isFullyKnown, revealAll, revealNext, type Quest } from '../quests/quest';
 import { THEMES, type ThemeId } from '../quests/themes';
 import { ASSET_KINDS, rollThreat, type Asset } from '../town/assets';
@@ -139,6 +140,8 @@ const LAIR_RESPAWN_DAYS = 12;
 /** Renown for breaking a lair, and the odds an eligible company goes for it on a given idle hour. */
 const ASSAULT_RENOWN = 3;
 const ASSAULT_APPETITE = 0.35;
+/** Days a broken company waits for its own recruits before its survivors sign on with whoever has room. */
+const DISBAND_AFTER_DAYS = 3;
 
 export class Game {
   readonly config: GameConfig;
@@ -577,7 +580,7 @@ export class Game {
     const stranded = this.activeParties.find((p) => p.status === 'idle' && !isFull(p) && p.idleTicks >= this.config.patienceTicks);
     if (stranded) {
       const missing = PARTY_SIZE - aliveMembers(stranded).length;
-      const band = createParty(this.rng, partyLevel(stranded), this.rng.int(1, Math.max(1, missing)), this.tick);
+      const band = createParty(this.rng, partyLevel(stranded), this.rng.int(Math.max(1, missing), Math.max(1, missing) + 1), this.tick);
       this.parties.push(band);
       this.stats.partiesArrived += 1;
       this.log('party', `${describeParty(band)} arrive at ${this.town.tavernName}: survivors of another company, looking for work.`);
@@ -942,26 +945,47 @@ export class Game {
 
     const level = partyLevel(p);
     const donor = this.activeParties.find((o) => o !== p && o.status === 'idle' && !isFull(o) && partyLevel(o) === level);
-    if (!donor) return;
+    if (donor) {
+      this.absorb(p, donor);
+      return;
+    }
+    // Nobody in the same boat. After a few days the survivors sign on with whoever has room.
+    if (p.idleTicks < DISBAND_AFTER_DAYS * TICKS_PER_DAY) return;
+    const host = this.activeParties
+      .filter((o) => o !== p && (o.status === 'idle' || o.status === 'resting') && isFull(o) && hasRoom(o) && Math.abs(partyLevel(o) - level) <= 1)
+      .sort((a, b) => Math.abs(partyLevel(a) - level) - Math.abs(partyLevel(b) - level) || aliveMembers(a).length - aliveMembers(b).length)[0];
+    if (!host) return;
+    this.absorb(host, p, true);
+  }
+
+  /** Donor survivors join the host while there is room; a host with six turns the rest away. */
+  private absorb(host: Party, donor: Party, gaveUp = false): void {
     const donorName = donor.name;
     const donorMembers = aliveMembers(donor).map((h) => h.name);
-    const leftover = mergeParties(p, donor);
+    const leftover = mergeParties(host, donor);
+    const size = aliveMembers(host).length;
     if (leftover.length === 0) {
+      for (const h of buryDead(donor)) this.log('death', `${donorName} leave ${h.name} in the temple's care for good.`);
       donor.status = 'disbanded';
-      this.log('party', `${donorName} (${donorMembers.join(', ')}) join ${p.name}. The two companies march as one.`);
+      this.log(
+        'party',
+        gaveUp
+          ? `${donorName} give up waiting. ${listNames(donorMembers)} sign on with ${host.name}, now ${size} strong.`
+          : `${donorName} (${listNames(donorMembers)}) join ${host.name}. The company marches ${size} strong.`,
+      );
     } else {
-      this.log('party', `${p.name} recruit from ${donorName}; ${leftover.map((h) => h.name).join(', ')} stay behind waiting for another band.`);
+      this.log('party', `${host.name} take on ${listNames(donorMembers.filter((n) => !leftover.some((h) => h.name === n)))} from ${donorName}; ${listNames(leftover.map((h) => h.name))} stay behind waiting for another band.`);
     }
-    if (isFull(p)) {
-      for (const h of buryDead(p)) this.log('death', `${p.name} lay ${h.name} to rest. They will not be coming back.`);
+    if (isFull(host)) {
+      for (const h of buryDead(host)) this.log('death', `${host.name} lay ${h.name} to rest. They will not be coming back.`);
     }
   }
 
   private fight(p: Party): void {
     const quest = this.questById(p.questId)!;
-    const spec = quest.encounters[p.progress]!;
-    const n = p.progress + 1;
     const fighters = aliveMembers(p);
+    const spec = scaleEncounter(quest.encounters[p.progress]!, fighters.length);
+    const n = p.progress + 1;
     const bossFight = quest.kind === 'assault' && p.progress === quest.encounters.length - 1;
     const outcome = runCombat(fighters, spec, this.rng.seed(), {
       ...(p.blessed ? { blessingHp: BLESSING_HP_PER_LEVEL * partyLevel(p) } : {}),

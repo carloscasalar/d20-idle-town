@@ -59,7 +59,11 @@ One tick is one in-game hour. Every tick:
    resting -> idle`. Idle companies with spare coin buy potions at the apothecary
    and armour at the smith; on return they pay the innkeeper. Dead members are
    carried to the temple and raised if the purse covers the fee, otherwise the
-   company waits to merge with another incomplete company of its level.
+   company waits to merge with another incomplete company of its level: the two
+   become one, anywhere from four to six strong. Bigger companies meet
+   proportionally more monsters and split the same pay and XP more ways. Survivors
+   still short-handed after three days give up and sign on with the first company
+   in town that has room.
 4. **Once a day the books close.** Employers collect from safe holdings (half from
    threatened ones, nothing from overrun ones) and pay their upkeep. A completed
    contract returns the holding to business plus a windfall of several days of its
