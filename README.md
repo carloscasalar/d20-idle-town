@@ -163,6 +163,7 @@ browser. A pixel-art renderer would subscribe to `game.onEvent` and read
 diagram and the dependency rules, what each file owns, the tick loop and the party
 state machine, the exact engine API the adapter uses, how seeding keeps a run
 reproducible, and where to add a new theme, holding, item or renderer.
+**[CHANGELOG.md](CHANGELOG.md)** lists what landed, by day.
 
 ## Credits and licence
 
