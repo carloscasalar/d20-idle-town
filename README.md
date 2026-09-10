@@ -5,10 +5,14 @@ contracts, companies of four adventurers show up at the tavern, take the contrac
 fight three encounters (each easy, intermediate or hard), level up, die, get raised
 at the temple or merge with other broken companies of the same level. You watch.
 
-Combat is resolved by [battlecast-engine](https://github.com/bjedrzejewski/battlecast-engine),
-a D&D 5e (2024 SRD) rules engine with 317 monsters and 12 hero classes, used as a
-plain library (no MCP server involved). The town, its people and the quests are
-generated procedurally in this repo.
+Combat is resolved by **[battlecast-engine][engine]**, Bartosz Jedrzejewski's D&D 5e
+(2024 SRD) rules and combat-state engine — 317 monsters, 12 hero classes, a full
+combat AI and deterministic seeded battles — used here as a plain library, no MCP
+server involved. Every die in this game is rolled by that engine; the town, its
+people, the contracts and the economy are generated procedurally in this repo.
+See [Credits and licence](#credits-and-licence).
+
+[engine]: https://github.com/bjedrzejewski/battlecast-engine
 
 ## Run
 
@@ -155,7 +159,34 @@ The simulation has no DOM dependency; `Game` runs the same in tests, Node and th
 browser. A pixel-art renderer would subscribe to `game.onEvent` and read
 `game.parties` / `game.quests` exactly as the text UI does.
 
-## Credits
+**[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** goes module by module: the layer
+diagram and the dependency rules, what each file owns, the tick loop and the party
+state machine, the exact engine API the adapter uses, how seeding keeps a run
+reproducible, and where to add a new theme, holding, item or renderer.
 
-Powered by battlecast-engine (MIT). Monster, spell and class data derive from the
-D&D 5.2 SRD, CC-BY-4.0 by Wizards of the Coast.
+## Credits and licence
+
+**This game does not implement D&D. [battlecast-engine][engine] does.**
+
+Initiative, attacks, saving throws, the damage pipeline, conditions, spells and
+concentration, movement and line of sight on the grid, the combat AI, the 317 SRD
+monsters and the 12 hero classes at levels 1-20 — all of it is the work of
+**Bartosz Jedrzejewski**, extracted from [BattleCast](https://battlecast.gg) and
+published as [`battlecast-engine`](https://www.npmjs.com/package/battlecast-engine)
+under the MIT licence. Its determinism (same seed, same battle, byte for byte) is
+what lets this project calibrate difficulty, run a reproducible smoke simulation
+and replay any fight. Without it there would be no game here, only a town.
+
+d20 Town contributes the layer above: the town and its economy, employers and
+their holdings, threat themes and encounter budgets, lairs and raids, companies
+that merge, retreat, level, retire and die, and the narration. `src/combat` is
+the only module that speaks to the engine — see
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#the-battlecast-engine-boundary) for
+the exact API surface.
+
+Monster, spell and class data derive from the D&D 5.2 SRD, CC-BY-4.0 by Wizards
+of the Coast, and reach this project through the engine's data files.
+
+d20 Town is released under the MIT licence — the same terms as the engine it
+builds on — see [LICENSE](LICENSE). Upstream notices are reproduced in full in
+[THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
