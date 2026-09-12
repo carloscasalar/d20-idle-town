@@ -100,6 +100,17 @@ enchanter buys back.
   assaulted. `pickBoss` uses the engine's `calculateDifficulty` to find a stat
   block worth being the last fight.
 
+- **`services.ts`** — `visitTownServices(party, context)` owns an idle
+  company's purchases and equipment allocation: potions, loot sharing/sales,
+  magic items, guild dues, blessings and armour. It updates the supplied town,
+  party and spending counters, returning whether the hour was consumed.
+  Regular purchases retain the resurrection reserve; blessings retain 1.5 times
+  that amount. Events are reported synchronously to Game, which publishes them
+  to the log and chronicle. A retirement callback keeps Game's population change
+  between blessings and armour in the priority order. Recruitment and resurrection
+  remain in Game. `payForService` records payments for both this module and
+  Game's other service visits; `BLESSING_HP_PER_LEVEL` is shared with combat setup.
+
 ### `src/quests` — what companies actually do
 
 - **`themes.ts`** — the ten-odd threat themes (`goblins`, `undead`, `dragons`,
@@ -169,7 +180,8 @@ idle ──accept──► traveling ──arrive──► questing ──cleare
 ```
 
 `idle` is where most of the economy happens: recruiting or merging, buying
-potions, armour, items and blessings, paying guild dues, selling loot,
+potions, armour, items and blessings, paying guild dues and selling loot
+through `visitTownServices`,
 investigating a contract, and finally accepting one. `questing` calls `fight`
 once per tick until the contract is finished, the company retreats or it is
 wiped out.
@@ -221,13 +233,17 @@ fight badly hurt abandons the contract and walks home.
 
 Practical consequence: any change to the *order* of rolls in `step()` changes
 every seeded expectation downstream, including the smoke test. That is
-intentional — it is how a whole-world regression gets noticed.
+intentional — it is how a whole-world regression gets noticed. The smoke test
+checks repeatability; `simulation-regression.test.ts` additionally compares each
+400-hour trajectory against a reference recorded before the services extraction.
 
 ## Tests and calibration
 
 | Path | What it covers |
 | --- | --- |
 | `test/smoke.test.ts` | A deterministic 400-hour run: no crashes, and the world produces contracts, deaths and coin |
+| `test/town-services.test.ts` | Public hourly ticks: purchase priorities, reserve thresholds, ledgers, stock, equipment allocation, guild renewal, blessings and retirement ordering |
+| `test/simulation-regression.test.ts` | Three seeds, 400 hours each: SHA-256 references over every tick’s domain state, RNG state and event history |
 | `test/party.test.ts` | Hero progression on the 5e thresholds, death and resurrection, merging, party levels |
 | `test/encounters.test.ts` | XP bands land inside the engine's own thresholds |
 | `test/items.test.ts` | Item effects reach the engine as overrides |

@@ -1,13 +1,10 @@
+import { listNames } from '../core/names';
+import { BLESSING_HP_PER_LEVEL, payForService, visitTownServices } from '../town/services';
 import {
-  armorUpgradeCost,
   describeHero,
-  equipItem,
-  wantsItem,
   gainXp,
   healHero,
   killHero,
-  MAX_ARMOR_TIER,
-  potionCost,
   potionHeal,
   resurrectHero,
   resurrectionCost,
@@ -28,7 +25,7 @@ import {
   type Party,
 } from '../adventurers/party';
 import { runCombat } from '../combat/battlecast';
-import { describeEffect, resalePrice, rollStockItem, type MagicItem } from '../items/items';
+import { describeEffect, rollStockItem } from '../items/items';
 import { Rng } from '../core/rng';
 import { describeEncounter, scaleEncounter } from '../quests/encounters';
 import { difficultyCode, generateAssault, generateQuest, isFullyKnown, revealAll, revealNext, type Quest } from '../quests/quest';
@@ -118,12 +115,6 @@ export const TICKS_PER_DAY = 24;
 const WINDFALL_DAYS = 4;
 /** Days of income lost to looters when nobody answers the call. */
 const LOOTING_DAYS = 2;
-/** Guild dues per member per week, times the company level. */
-const GUILD_DUES_PER_LEVEL = 15;
-const DUES_PERIOD_DAYS = 7;
-/** A blessing costs this much per company level and adds this many hit points per level. */
-const BLESSING_COST_PER_LEVEL = 40;
-const BLESSING_HP_PER_LEVEL = 3;
 /** Share of the purse a company drinks through after a job well done. */
 const CAROUSING_SHARE = 0.05;
 const MAX_RENOWN = 10;
@@ -297,11 +288,7 @@ export class Game {
 
   /** Coin from adventurers into a town business. */
   private pay(from: Party, to: Employer, amount: number): void {
-    from.gold -= amount;
-    from.spent += amount;
-    to.treasury += amount;
-    to.earned += amount;
-    this.stats.goldSpentByHeroes += amount;
+    payForService(from, to, amount, this.stats);
   }
 
   // ---------------------------------------------------------------- quests
@@ -755,152 +742,18 @@ export class Game {
     return this.tick - q.postedAt >= TICKS_PER_DAY;
   }
 
-  /**
-   * Adventurers with coin to spare visit the shops: potions first, then the
-   * smith. One purchase per hour keeps the log readable. Returns true if they
-   * spent the hour shopping.
-   */
+  /** Spend this idle hour on the town's services, keeping retirement in Game. */
   private shop(p: Party): boolean {
-    const level = partyLevel(p);
-    const reserve = resurrectionCost(level);
-    const alive = aliveMembers(p);
-
-    if (p.potions < alive.length) {
-      const apothecary = serviceOf(this.town, 'apothecary');
-      const cost = potionCost(level);
-      const wanted = alive.length - p.potions;
-      const affordable = Math.min(wanted, Math.floor((p.gold - reserve) / cost));
-      if (affordable > 0 && !apothecary.ruined) {
-        this.pay(p, apothecary, affordable * cost);
-        p.potions += affordable;
-        this.log('shop', `${p.name} buy ${affordable} healing potion${affordable > 1 ? 's' : ''} from ${apothecary.name} for ${affordable * cost} gp.`);
-        return true;
-      }
-    }
-
-    if (this.sellLoot(p, reserve)) return true;
-    if (this.buyItem(p, reserve)) return true;
-    if (this.payDues(p, reserve)) return true;
-    if (this.buyBlessing(p, reserve)) return true;
-    if (this.retire(p)) return true;
-
-    const smith = serviceOf(this.town, 'smith');
-    if (!smith.ruined) {
-      // Everyone who can afford it gets fitted in the same visit, the worst-armoured first.
-      const fitted: string[] = [];
-      let bill = 0;
-      for (const h of [...alive].sort((a, b) => a.armorTier - b.armorTier)) {
-        if (h.armorTier >= MAX_ARMOR_TIER) continue;
-        const cost = armorUpgradeCost(h.armorTier, h.level);
-        if (p.gold - cost < reserve) continue;
-        this.pay(p, smith, cost);
-        h.armorTier += 1;
-        h.goldSpent += cost;
-        bill += cost;
-        fitted.push(`${h.name} (AC +${h.armorTier})`);
-      }
-      if (fitted.length > 0) {
-        this.log('shop', fitted.length === alive.length && new Set(alive.map((h) => h.armorTier)).size === 1
-          ? `${p.name} pay ${smith.name} ${bill} gp to have the whole company fitted with better armour (AC +${alive[0]!.armorTier}).`
-          : `${p.name} pay ${smith.name} ${bill} gp for better armour: ${listNames(fitted)}.`);
-        return true;
-      }
-    }
-    return false;
-  }
-
-  /** Equip loot from the stash where it helps; sell the rest to the enchanter, who puts it back on sale. */
-  private sellLoot(p: Party, _reserve: number): boolean {
-    if (p.stash.length === 0) return false;
-    const equipped: string[] = [];
-    let guard = 0;
-    while (guard++ < 20) {
-      const idx = p.stash.findIndex((i) => pickRecipient(aliveMembers(p), i));
-      if (idx < 0) break;
-      const item = p.stash.splice(idx, 1)[0]!;
-      const taker = pickRecipient(aliveMembers(p), item)!;
-      const replaced = equipItem(taker, item);
-      if (replaced) p.stash.push(replaced);
-      equipped.push(`${taker.name} the ${item.name}`);
-    }
-    if (equipped.length > 0) {
-      this.log('shop', `${p.name} share out their finds: ${listNames(equipped)}.`);
-      return true;
-    }
-    const item = p.stash.shift()!;
-    const enchanter = serviceOf(this.town, 'enchanter');
-    const price = Math.min(resalePrice(item), enchanter.treasury);
-    if (enchanter.ruined || price <= 0 || enchanter.stock.length >= MAX_STOCK) {
-      p.stash.push(item);
-      return false;
-    }
-    enchanter.treasury -= price;
-    enchanter.spent += price;
-    enchanter.stock.push(item);
-    p.gold += price;
-    p.earned += price;
-    this.stats.itemsSold += 1;
-    this.log('shop', `${p.name} sell a ${item.name} to ${enchanter.name} for ${price} gp.`);
-    return true;
-  }
-
-  /** Buy the best affordable item any member could use. Prices are steep on purpose. */
-  private buyItem(p: Party, reserve: number): boolean {
-    const budget = p.gold - reserve;
-    let best: { shop: Employer; item: MagicItem; hero: Hero } | null = null;
-    for (const shop of this.town.employers) {
-      if (shop.ruined) continue;
-      for (const item of shop.stock) {
-        if (item.price > budget) continue;
-        const hero = pickRecipient(aliveMembers(p), item);
-        if (!hero) continue;
-        if (!best || item.price > best.item.price) best = { shop, item, hero };
-      }
-    }
-    if (!best) return false;
-    best.shop.stock = best.shop.stock.filter((i) => i !== best!.item);
-    this.pay(p, best.shop, best.item.price);
-    best.hero.goldSpent += best.item.price;
-    const replaced = equipItem(best.hero, best.item);
-    if (replaced) p.stash.push(replaced);
-    this.chronicleLog('shop', `${best.hero.name} buys a ${best.item.name} from ${best.shop.name} for ${best.item.price} gp (${describeEffect(best.item.effect)}).`);
-    return true;
-  }
-
-  /** Weekly dues keep a company on the guild's books; noble and faction contracts go through the guild. */
-  private payDues(p: Party, reserve: number): boolean {
-    const guild = serviceOf(this.town, 'guild');
-    if (guild.ruined) return false;
-    const due = p.duesPaidDay < 0 || this.day - p.duesPaidDay >= DUES_PERIOD_DAYS;
-    if (!due) return false;
-    const cost = GUILD_DUES_PER_LEVEL * partyLevel(p) * aliveMembers(p).length;
-    if (p.gold - cost < reserve) {
-      if (p.guildMember) {
-        p.guildMember = false;
-        this.log('shop', `${p.name} cannot pay their guild dues (${cost} gp). Their membership lapses.`);
-      }
-      return false;
-    }
-    this.pay(p, guild, cost);
-    p.duesPaidDay = this.day;
-    const joined = !p.guildMember;
-    p.guildMember = true;
-    this.log('shop', `${p.name} ${joined ? 'join the Adventurers’ Guild' : 'pay their guild dues'}: ${cost} gp.`);
-    return true;
-  }
-
-  /** A donation at the temple buys the company a blessing for its next contract. */
-  private buyBlessing(p: Party, reserve: number): boolean {
-    if (p.blessed) return false;
-    const temple = serviceOf(this.town, 'temple');
-    if (temple.ruined) return false;
-    const level = partyLevel(p);
-    const cost = BLESSING_COST_PER_LEVEL * level;
-    if (p.gold - cost < reserve * 1.5) return false;
-    this.pay(p, temple, cost);
-    p.blessed = true;
-    this.log('temple', `${p.name} leave ${cost} gp at the ${temple.name} and are blessed (+${BLESSING_HP_PER_LEVEL * level} hp on their next contract).`);
-    return true;
+    return visitTownServices(p, {
+      town: this.town,
+      day: this.day,
+      ledger: this.stats,
+      report: ({ kind, text, chronicle }) => {
+        if (chronicle) this.chronicleLog(kind, text);
+        else this.log(kind, text);
+      },
+      tryRetire: () => this.retire(p),
+    });
   }
 
   /** The richest, most seasoned adventurer in town may hang up the sword and buy a business. */
@@ -1185,20 +1038,6 @@ export class Game {
     this.chronicle.push(e);
     if (this.chronicle.length > 300) this.chronicle.splice(0, this.chronicle.length - 300);
   }
-}
-
-/** Who gets an item: whoever can use it and carries the least magic already. */
-function pickRecipient(members: Hero[], item: MagicItem): Hero | undefined {
-  const worth = (h: Hero) => h.items.reduce((s, i) => s + i.price, 0);
-  return members
-    .filter((h) => wantsItem(h, item))
-    .sort((a, b) => a.items.length - b.items.length || worth(a) - worth(b))[0];
-}
-
-/** "A", "A and B", "A, B and C". */
-function listNames(names: string[]): string {
-  if (names.length <= 1) return names.join('');
-  return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
 }
 
 function capitalize(text: string): string {
