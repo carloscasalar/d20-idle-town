@@ -17,15 +17,15 @@ See [Credits and licence](#credits-and-licence).
 ## Run
 
 ```bash
-npm install
-npm run dev        # http://localhost:5173  (add ?seed=anything for a reproducible town)
-npm test           # vitest: unit tests + a deterministic 400-hour smoke simulation
-npm run build      # typecheck + production bundle in dist/
-npx vite-node scripts/calibrate.ts   # win/death rates per difficulty and level, single fights
-npx vite-node scripts/tune.ts        # deaths per contract and wipes at several difficulty scales
-npx vite-node scripts/variety.ts     # how many different monsters a long run throws at the companies
-npx vite-node scripts/assault.ts     # how often a level-matched company clears a lair
-npx vite-node scripts/lairs.ts       # a long run, lair events only
+pnpm install
+pnpm dev           # http://localhost:5173  (add ?seed=anything for a reproducible town)
+pnpm test          # vitest: unit tests + a deterministic 400-hour smoke simulation
+pnpm build         # typecheck + production bundle in dist/
+pnpm dlx vite-node scripts/calibrate.ts   # win/death rates per difficulty and level, single fights
+pnpm dlx vite-node scripts/tune.ts        # deaths per contract and wipes at several difficulty scales
+pnpm dlx vite-node scripts/variety.ts     # how many different monsters a long run throws at the companies
+pnpm dlx vite-node scripts/assault.ts     # how often a level-matched company clears a lair
+pnpm dlx vite-node scripts/lairs.ts       # a long run, lair events only
 ```
 
 ## How the world ticks
