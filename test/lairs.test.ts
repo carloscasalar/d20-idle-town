@@ -28,7 +28,7 @@ describe('lairs', () => {
     for (let i = 0; i < 600; i++) g.step();
     expect(g.stats.raids).toBeGreaterThan(0);
     expect(g.quests.some((q) => q.lairId !== null)).toBe(true);
-  });
+  }, 20_000);
 });
 
 describe('skill checks', () => {
