@@ -186,17 +186,19 @@ investigating a contract, and finally accepting one. `questing` calls `fight`
 once per tick until the contract is finished, the company retreats or it is
 wiped out.
 
-Two outputs leave the class: `events` (the running log, with collapsed combat
-narration in `detail`) and `chronicle` (the highlights — deaths, level-ups,
-lairs). `onEvent(listener)` pushes each event as it happens; that is the entire
-subscription API a renderer needs.
+Renderers cross two seams: `onEvent(listener)` pushes each log event as it
+happens, and `view()` returns a fresh immutable snapshot for the current frame.
+The view resolves the relationships and derived values a renderer needs — party
+status, board links, holding labels and net income, and lair timing — without
+making the renderer import domain modules. The mutable state remains public for
+scripts and scenario tests during the first migration step.
 
 ### `src/ui` — one subscriber
 
 `main.ts` creates a `Game` from the URL (`?seed=`, `?difficulty=`), drives
 `step()` on a timer at selectable speeds, appends events to the log as they
-arrive and re-renders four tabs — parties, board, town, chronicle — from public
-`Game` state. It reads; it never writes. A pixel-art renderer would attach the
+arrive and re-renders four tabs — parties, board, town, chronicle — from
+`game.view()`. It reads; it never writes. A pixel-art renderer would attach the
 same way (see [`design/pixel-art/README.md`](../design/pixel-art/README.md)).
 
 ## The battlecast-engine boundary
@@ -243,6 +245,7 @@ checks repeatability; `simulation-regression.test.ts` additionally compares each
 | --- | --- |
 | `test/smoke.test.ts` | A deterministic 400-hour run: no crashes, and the world produces contracts, deaths and coin |
 | `test/town-services.test.ts` | Public hourly ticks: purchase priorities, reserve thresholds, ledgers, stock, equipment allocation, guild renewal, blessings and retirement ordering |
+| `test/game-view.test.ts` | Immutable renderer snapshots: party states, linked board data, town economy, lairs, counters and chronicle |
 | `test/simulation-regression.test.ts` | Three seeds, 400 hours each: SHA-256 references over every tick’s domain state, RNG state and event history |
 | `test/party.test.ts` | Hero progression on the 5e thresholds, death and resurrection, merging, party levels |
 | `test/encounters.test.ts` | XP bands land inside the engine's own thresholds |
@@ -269,9 +272,10 @@ touching `difficultyScale` or the XP bands.
 - **A new magic item** — add an `ItemTemplate` to `ITEM_CATALOGUE` in
   `src/items/items.ts`. If its effect needs a field the engine exposes but
   `ItemEffect` does not, add it there and map it in `heroOverrides`.
-- **A new renderer** — construct a `Game`, subscribe with `onEvent`, read
-  `game.parties`, `game.quests`, `game.town`, `game.lairs`. Do not reach into
-  private state; if something you need is not public, that is the bug.
+- **A new renderer** — construct a `Game`, subscribe with `onEvent`, and read
+  the immutable snapshot from `game.view()`. If a renderer needs a relationship
+  or derived value that is absent from the view, add it there rather than
+  importing the domain modules.
 - **Tuning difficulty** — `difficultyScale` in `GameConfig` (or `?difficulty=`)
   multiplies every encounter's XP budget. Measure with `scripts/tune.ts` before
   and after.

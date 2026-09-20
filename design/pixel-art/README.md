@@ -12,4 +12,4 @@ https://claude.ai/code/artifact/d2e8d74f-1092-473b-8403-8c4307a0bec2
 8×12 figures with one shared body, four head styles and twelve class colours,
 procedural facades, monsters, and the palette from `src/ui/style.css`. Generated
 files are ignored by git. The renderer, when it comes, subscribes to `game.onEvent`
-and reads `game.parties` / `game.quests` like the text UI does.
+and reads `game.view()` like the text UI does.

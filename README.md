@@ -156,8 +156,8 @@ scripts         calibration
 ```
 
 The simulation has no DOM dependency; `Game` runs the same in tests, Node and the
-browser. A pixel-art renderer would subscribe to `game.onEvent` and read
-`game.parties` / `game.quests` exactly as the text UI does.
+browser. A renderer subscribes to `game.onEvent` and reads the immutable
+snapshot returned by `game.view()` exactly as the text UI does.
 
 **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** goes module by module: the layer
 diagram and the dependency rules, what each file owns, the tick loop and the party

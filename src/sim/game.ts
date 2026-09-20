@@ -25,9 +25,10 @@ import {
   type Party,
 } from '../adventurers/party';
 import { runCombat } from '../combat/battlecast';
-import { describeEffect, rollStockItem } from '../items/items';
-import { Rng } from '../core/rng';
-import { describeEncounter, scaleEncounter } from '../quests/encounters';
+import { describeEffect, rollStockItem, type MagicItem } from '../items/items';
+import { hashString, Rng } from '../core/rng';
+import { xpToNextLevel } from '../core/xp';
+import { describeEncounter, scaleEncounter, type Difficulty } from '../quests/encounters';
 import { difficultyCode, generateAssault, generateQuest, isFullyKnown, revealAll, revealNext, type Quest } from '../quests/quest';
 import { THEMES, type ThemeId } from '../quests/themes';
 import { ASSET_KINDS, rollThreat, type Asset } from '../town/assets';
@@ -94,6 +95,144 @@ export interface GameConfig {
    * back most of a death per contract and a wiped company every few days.
    */
   difficultyScale: number;
+}
+
+/** Immutable information a renderer can read without reaching into the simulation. */
+export interface GameView {
+  readonly time: string;
+  readonly difficultyScale: number;
+  readonly town: GameTownView;
+  readonly parties: readonly GamePartyView[];
+  readonly board: Readonly<{
+    open: readonly GameQuestView[];
+    taken: readonly GameQuestView[];
+  }>;
+  readonly lairs: readonly GameLairView[];
+  readonly stats: Readonly<GameStats>;
+  readonly events: readonly GameEventView[];
+  readonly chronicle: readonly GameEventView[];
+}
+
+export interface GameEventView {
+  readonly tick: number;
+  readonly kind: EventKind;
+  readonly text: string;
+  readonly detail?: readonly string[];
+}
+
+export interface GameItemView {
+  readonly name: string;
+  readonly effect: string;
+  readonly price: number;
+}
+
+export interface GameAssetView {
+  readonly name: string;
+  readonly kindLabel: string;
+  readonly incomePerDay: number;
+  readonly status: Asset['status'];
+  readonly statusLabel: string;
+  readonly hasLoot: boolean;
+}
+
+export interface GameEmployerView {
+  readonly name: string;
+  readonly title: string;
+  readonly service: Employer['service'];
+  readonly treasury: number;
+  readonly dailyNet: number;
+  readonly ruined: boolean;
+  readonly reputation: number;
+  readonly generosity: number;
+  readonly questsPosted: number;
+  readonly questsCompleted: number;
+  readonly questsFailed: number;
+  readonly earned: number;
+  readonly spent: number;
+  readonly assets: readonly GameAssetView[];
+  readonly stock: readonly GameItemView[];
+}
+
+export interface GameTownView {
+  readonly name: string;
+  readonly employers: readonly GameEmployerView[];
+}
+
+export interface GameLairView {
+  readonly name: string;
+  readonly status: Lair['status'];
+  readonly level: number;
+  readonly themeLabel: string;
+  readonly boss: string;
+  readonly place: string;
+  readonly strength: number;
+  readonly raids: number;
+  readonly raidsWon: number;
+  readonly nextRaidIn: number;
+  readonly raidInterval: number;
+  readonly hoardGold: number;
+  readonly hoardItems: readonly string[];
+  readonly bountyPosted: boolean;
+}
+
+export interface GamePartyView {
+  readonly id: string;
+  readonly name: string;
+  readonly level: number;
+  readonly gold: number;
+  readonly statusText: string;
+  readonly questsDone: number;
+  readonly questsFailed: number;
+  readonly members: readonly GameHeroView[];
+  readonly templeBill: number;
+  readonly potions: number;
+  readonly blessed: boolean;
+  readonly guildMember: boolean;
+  readonly renown: number;
+  readonly earned: number;
+  readonly spent: number;
+  readonly stash: readonly string[];
+}
+
+export interface GameHeroView {
+  readonly name: string;
+  readonly heroClass: string;
+  readonly level: number;
+  readonly alive: boolean;
+  readonly hp: number;
+  readonly maxHp: number;
+  readonly hpPercent: number;
+  readonly kills: number;
+  readonly xpText: string;
+  readonly armorTier: number;
+  readonly items: readonly GameItemView[];
+}
+
+export interface GameEncounterView {
+  readonly number: number;
+  readonly difficulty: Difficulty | null;
+  readonly description: string | null;
+}
+
+export interface GameQuestView {
+  readonly id: string;
+  readonly kind: Quest['kind'];
+  readonly title: string;
+  readonly level: number;
+  readonly difficultyCode: string;
+  readonly giverName: string;
+  readonly themeLabel: string;
+  readonly guildOnly: boolean;
+  readonly reward: number;
+  readonly itemReward: GameItemView | null;
+  readonly encounterCountKnown: boolean;
+  readonly partyName: string | null;
+  readonly lair: Readonly<{
+    name: string;
+    strength: number;
+    hoardGold: number;
+  }> | null;
+  readonly encounters: readonly GameEncounterView[];
 }
 
 export const DEFAULT_CONFIG: GameConfig = {
@@ -180,6 +319,14 @@ export class Game {
     for (const theme of themes) this.spawnLair(theme, this.rng.int(...LAIR_LEVELS));
   }
 
+  static seedFrom(value: string): number {
+    return Number.isFinite(Number(value)) ? Number(value) : hashString(value);
+  }
+
+  static formatTime(tick: number): string {
+    return formatTime(tick);
+  }
+
   lairById(id: string | null): Lair | undefined {
     return id ? this.lairs.find((l) => l.id === id) : undefined;
   }
@@ -209,6 +356,144 @@ export class Game {
 
   get activeParties(): Party[] {
     return this.parties.filter((p) => p.status !== 'disbanded');
+  }
+
+  /** A fresh, immutable snapshot for renderers. */
+  view(): GameView {
+    const partyNames = new Map(this.parties.map((party) => [party.id, party.name]));
+    const lairs = new Map(this.lairs.map((lair) => [lair.id, lair]));
+    return Object.freeze({
+      time: formatTime(this.tick),
+      difficultyScale: this.config.difficultyScale,
+      town: Object.freeze({
+        name: this.town.name,
+        employers: Object.freeze(
+          [...this.town.employers]
+            .sort((a, b) => Number(a.ruined) - Number(b.ruined) || b.treasury - a.treasury)
+            .map((employer) => this.employerView(employer)),
+        ),
+      }),
+      parties: Object.freeze(
+        this.activeParties.map((party) => Object.freeze({
+          id: party.id,
+          name: party.name,
+          level: partyLevel(party),
+          gold: party.gold,
+          statusText: this.partyStatusText(party),
+          questsDone: party.questsDone,
+          questsFailed: party.questsFailed,
+          members: Object.freeze(party.members.map(heroView)),
+          templeBill: deadMembers(party).reduce((total, hero) => total + resurrectionCost(hero.level), 0),
+          potions: party.potions,
+          blessed: party.blessed,
+          guildMember: party.guildMember,
+          renown: party.renown,
+          earned: party.earned,
+          spent: party.spent,
+          stash: Object.freeze(party.stash.map((item) => item.name)),
+        })),
+      ),
+      board: Object.freeze({
+        open: Object.freeze(this.openQuests.map((quest) => this.questView(quest, partyNames, lairs))),
+        taken: Object.freeze(this.quests.filter((quest) => quest.status === 'taken').map((quest) => this.questView(quest, partyNames, lairs))),
+      }),
+      lairs: Object.freeze(
+        [...this.lairs]
+          .sort((a, b) => Number(a.status !== 'active') - Number(b.status !== 'active'))
+          .map((lair) => this.lairView(lair)),
+      ),
+      stats: Object.freeze({ ...this.stats }),
+      events: Object.freeze(this.events.map(eventView)),
+      chronicle: Object.freeze(this.chronicle.map(eventView)),
+    });
+  }
+
+  private employerView(employer: Employer): GameEmployerView {
+    return Object.freeze({
+      name: employer.name,
+      title: employer.title,
+      service: employer.service,
+      treasury: employer.treasury,
+      dailyNet: dailyIncome(employer) - employer.upkeepPerDay,
+      ruined: employer.ruined,
+      reputation: employer.reputation,
+      generosity: employer.generosity,
+      questsPosted: employer.questsPosted,
+      questsCompleted: employer.questsCompleted,
+      questsFailed: employer.questsFailed,
+      earned: employer.earned,
+      spent: employer.spent,
+      assets: Object.freeze(employer.assets.map((asset) => Object.freeze({
+        name: asset.name,
+        kindLabel: ASSET_KINDS[asset.kind].label,
+        incomePerDay: asset.incomePerDay,
+        status: asset.status,
+        statusLabel: assetStatusLabel(asset),
+        hasLoot: asset.loot.gold > 0 || asset.loot.items.length > 0,
+      }))),
+      stock: Object.freeze(employer.stock.map(itemView)),
+    });
+  }
+
+  private lairView(lair: Lair): GameLairView {
+    return Object.freeze({
+      name: lair.name,
+      status: lair.status,
+      level: lair.level,
+      themeLabel: THEMES[lair.theme].label,
+      boss: lair.boss,
+      place: lair.place,
+      strength: lair.strength,
+      raids: lair.raids,
+      raidsWon: lair.raidsWon,
+      nextRaidIn: Math.max(0, lair.raidCooldown),
+      raidInterval: raidInterval(lair),
+      hoardGold: lair.hoard.gold,
+      hoardItems: Object.freeze(lair.hoard.items.map((item) => item.name)),
+      bountyPosted: lair.questId !== null,
+    });
+  }
+
+  private questView(quest: Quest, partyNames: ReadonlyMap<string, string>, lairs: ReadonlyMap<string, Lair>): GameQuestView {
+    const lair = quest.lairId ? lairs.get(quest.lairId) : undefined;
+    return Object.freeze({
+      id: quest.id,
+      kind: quest.kind,
+      title: quest.title,
+      level: quest.level,
+      difficultyCode: difficultyCode(quest),
+      giverName: this.employerById(quest.giverId)?.name ?? '?',
+      themeLabel: THEMES[quest.theme].label,
+      guildOnly: quest.guildOnly,
+      reward: quest.reward,
+      itemReward: quest.itemReward ? itemView(quest.itemReward) : null,
+      encounterCountKnown: quest.countRevealed,
+      partyName: quest.partyId ? partyNames.get(quest.partyId) ?? null : null,
+      lair: lair ? Object.freeze({ name: lair.name, strength: lair.strength, hoardGold: lair.hoard.gold }) : null,
+      encounters: Object.freeze(quest.encounters.map((encounter, index) => Object.freeze({
+        number: index + 1,
+        difficulty: index < quest.revealed ? encounter.difficulty : null,
+        description: index < quest.revealed ? describeEncounter(encounter) : null,
+      }))),
+    });
+  }
+
+  private partyStatusText(party: Party): string {
+    const quest = this.questById(party.questId);
+    switch (party.status) {
+      case 'idle':
+        return aliveMembers(party).length < PARTY_SIZE ? `waiting for recruits (${party.idleTicks}h)` : 'looking at the board';
+      case 'traveling':
+        return `on the road to ${quest?.place ?? '?'} (${party.ticksLeft}h)`;
+      case 'questing':
+        return `fighting at ${quest?.place ?? '?'} (${party.progress}/${quest?.encounters.length ?? '?'})`;
+      case 'returning':
+        return `returning (${party.ticksLeft}h)`;
+      case 'resting':
+        return `resting at the inn (${party.ticksLeft}h)`;
+      default:
+        return party.status;
+    }
   }
 
   questById(id: string | null): Quest | undefined {
@@ -1042,6 +1327,36 @@ export class Game {
 
 function capitalize(text: string): string {
   return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+function itemView(item: MagicItem): GameItemView {
+  return Object.freeze({ name: item.name, effect: describeEffect(item.effect), price: item.price });
+}
+
+function heroView(hero: Hero): GameHeroView {
+  const nextLevel = xpToNextLevel(hero.level);
+  return Object.freeze({
+    name: hero.name,
+    heroClass: hero.heroClass,
+    level: hero.level,
+    alive: hero.alive,
+    hp: hero.hp,
+    maxHp: hero.maxHp,
+    hpPercent: Math.round((100 * hero.hp) / hero.maxHp),
+    kills: hero.kills,
+    xpText: nextLevel ? `${hero.xp}/${nextLevel} xp` : 'max',
+    armorTier: hero.armorTier,
+    items: Object.freeze(hero.items.map(itemView)),
+  });
+}
+
+function eventView(event: GameEvent): GameEventView {
+  return Object.freeze({
+    tick: event.tick,
+    kind: event.kind,
+    text: event.text,
+    ...(event.detail ? { detail: Object.freeze([...event.detail]) } : {}),
+  });
 }
 
 export function formatTime(tick: number): string {
