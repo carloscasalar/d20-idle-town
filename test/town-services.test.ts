@@ -4,12 +4,10 @@ import { createParty } from '../src/adventurers/party';
 import { armorUpgradeCost, createHero, MAX_ARMOR_TIER, potionCost, resurrectionCost } from '../src/adventurers/hero';
 import { Rng } from '../src/core/rng';
 import { instantiate, ITEM_CATALOGUE } from '../src/items/items';
-import { MAX_STOCK, RETIREMENT_PRICE, serviceOf } from '../src/town/town';
+import { MAX_STOCK, RETIREMENT_PRICE, type Employer } from '../src/town/town';
 
 // Exercise the public hourly tick, with unrelated arrivals, raids and restocking disabled.
-function setup(level = 1) {
-  const game = new Game({ seed: 42, maxParties: 1, maxOpenQuests: 0 });
-  game.lairs = [];
+function setup(level = 1, tick = 0) {
   const rng = new Rng(8);
   const party = createParty(rng, level, 4, 0);
   party.members = Array.from({ length: 4 }, () => createHero(rng, level, 'Fighter'));
@@ -18,12 +16,18 @@ function setup(level = 1) {
   party.guildMember = true;
   party.duesPaidDay = 1;
   for (const hero of party.members) hero.armorTier = MAX_ARMOR_TIER;
-  game.parties = [party];
-  for (const employer of game.town.employers) {
-    employer.stock = [];
-    employer.restockIn = 1000;
-  }
-  return { game, party, reserve: resurrectionCost(level), shop: (service: Parameters<typeof serviceOf>[1]) => serviceOf(game.town, service) };
+  const shops = new Map<NonNullable<Employer['service']>, Employer>();
+  const game = Game.forTesting({ seed: 42, maxParties: 1, maxOpenQuests: 0 }, (scenario) => {
+    scenario.tick = tick;
+    scenario.lairs = [];
+    scenario.parties = [party];
+    for (const employer of scenario.town.employers) {
+      employer.stock = [];
+      employer.restockIn = 1000;
+      if (employer.service) shops.set(employer.service, employer);
+    }
+  });
+  return { game, party, reserve: resurrectionCost(level), shop: (service: NonNullable<Employer['service']>) => shops.get(service)! };
 }
 const item = (name: string) => instantiate(ITEM_CATALOGUE.find((i) => i.name === name)!);
 
@@ -41,7 +45,7 @@ describe('town services through an hourly tick', () => {
     expect(party.potions).toBe(2);
     expect(party.gold).toBe(reserve);
     expect(party.spent).toBe(potionCost(1) * 2);
-    expect(game.stats.goldSpentByHeroes).toBe(party.spent);
+    expect(game.view().stats.goldSpentByHeroes).toBe(party.spent);
     expect(apothecary.treasury).toBe(treasury + party.spent);
     expect(apothecary.earned).toBe(earned + party.spent);
     expect(party.guildMember).toBe(false);
@@ -97,8 +101,8 @@ describe('town services through an hourly tick', () => {
     expect(enchanter.spent).toBe(spent + 17);
     expect(party.gold).toBe(17);
     expect(party.earned).toBe(17);
-    expect(game.stats.itemsSold).toBe(1);
-    expect(game.stats.goldSpentByHeroes).toBe(0);
+    expect(game.view().stats.itemsSold).toBe(1);
+    expect(game.view().stats.goldSpentByHeroes).toBe(0);
   });
 
   it.each(['ruined', 'full', 'poor'] as const)('keeps unwanted loot when the enchanter is %s', (reason) => {
@@ -113,7 +117,7 @@ describe('town services through an hourly tick', () => {
     if (reason === 'full') enchanter.stock = Array.from({ length: MAX_STOCK }, () => item('Longsword +1'));
     game.step();
     expect(party.stash).toEqual([unwanted]);
-    expect(game.stats.itemsSold).toBe(0);
+    expect(game.view().stats.itemsSold).toBe(0);
   });
 
   it('buys the most expensive usable affordable item and credits its seller', () => {
@@ -133,8 +137,8 @@ describe('town services through an hourly tick', () => {
     expect(seller.stock).toEqual([cheap, expensive]);
     expect(seller.treasury).toBe(treasury + best.price);
     expect(seller.earned).toBe(earned + best.price);
-    expect(game.stats.goldSpentByHeroes).toBe(best.price);
-    expect(game.chronicle.at(-1)?.kind).toBe('shop');
+    expect(game.view().stats.goldSpentByHeroes).toBe(best.price);
+    expect(game.view().chronicle.at(-1)?.kind).toBe('shop');
   });
 
   it('gives a purchased item to the least-equipped living member who can use it', () => {
@@ -165,8 +169,7 @@ describe('town services through an hourly tick', () => {
   });
 
   it.each([true, false])('renews weekly dues only when affordable (%s)', (affordable) => {
-    const { game, party, reserve, shop } = setup();
-    game.tick = 7 * 24;
+    const { game, party, reserve, shop } = setup(1, 7 * 24);
     party.gold = reserve + (affordable ? 60 : 59);
     const treasury = shop('guild').treasury;
     game.step();
@@ -199,7 +202,7 @@ describe('town services through an hourly tick', () => {
     expect(party.members[1]!.goldSpent).toBe(cost);
     expect(party.gold).toBe(reserve);
     expect(shop('smith').treasury).toBe(treasury + cost);
-    expect(game.stats.goldSpentByHeroes).toBe(cost);
+    expect(game.view().stats.goldSpentByHeroes).toBe(cost);
   });
 
   it('fits multiple members in one hour, upgrading each only once', () => {
@@ -216,14 +219,14 @@ describe('town services through an hourly tick', () => {
     for (const hero of party.members) hero.armorTier = 0;
     const veteran = party.members[0]!;
     party.gold = RETIREMENT_PRICE + reserve;
-    const employers = game.town.employers.length;
+    const employers = game.view().town.employers.length;
     game.step();
     expect(party.members).not.toContain(veteran);
     expect(party.members.map((h) => h.armorTier)).toEqual([0, 0, 0]);
     expect(party.gold).toBe(reserve);
     expect(party.spent).toBe(RETIREMENT_PRICE);
     expect(veteran.goldSpent).toBe(0);
-    expect(game.stats.retirements).toBe(1);
-    expect(game.town.employers).toHaveLength(employers + 1);
+    expect(game.view().stats.retirements).toBe(1);
+    expect(game.view().town.employers).toHaveLength(employers + 1);
   });
 });

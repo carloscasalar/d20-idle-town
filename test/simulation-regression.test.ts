@@ -10,17 +10,7 @@ it.each([7, 42, 20260907])('preserves state and event history at every tick for 
   const history = createHash('sha256');
   for (let tick = 0; tick < 400; tick++) {
     game.step();
-    history.update(JSON.stringify({
-      tick: game.tick,
-      town: game.town,
-      parties: game.parties,
-      quests: game.quests,
-      lairs: game.lairs,
-      stats: game.stats,
-      events: game.events,
-      chronicle: game.chronicle,
-      rng: game.rng,
-    }));
+    history.update(game.regressionState());
   }
   expect(history.digest('hex')).toMatchSnapshot();
 }, 20_000);

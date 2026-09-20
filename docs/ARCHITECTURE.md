@@ -190,8 +190,9 @@ Renderers cross two seams: `onEvent(listener)` pushes each log event as it
 happens, and `view()` returns a fresh immutable snapshot for the current frame.
 The view resolves the relationships and derived values a renderer needs — party
 status, board links, holding labels and net income, and lair timing — without
-making the renderer import domain modules. The mutable state remains public for
-scripts and scenario tests during the first migration step.
+making the renderer import domain modules. `Game` keeps its mutable world
+private: scripts read `view()` or a narrow immutable calibration query, and
+scenario tests configure a world only within `Game.forTesting()`.
 
 ### `src/ui` — one subscriber
 
@@ -245,6 +246,7 @@ checks repeatability; `simulation-regression.test.ts` additionally compares each
 | --- | --- |
 | `test/smoke.test.ts` | A deterministic 400-hour run: no crashes, and the world produces contracts, deaths and coin |
 | `test/town-services.test.ts` | Public hourly ticks: purchase priorities, reserve thresholds, ledgers, stock, equipment allocation, guild renewal, blessings and retirement ordering |
+| `test/game-access.test.ts` | State boundary: scenario setup expires before the game runs, and event subscribers receive immutable data |
 | `test/game-view.test.ts` | Immutable renderer snapshots: party states, linked board data, town economy, lairs, counters and chronicle |
 | `test/simulation-regression.test.ts` | Three seeds, 400 hours each: SHA-256 references over every tick’s domain state, RNG state and event history |
 | `test/party.test.ts` | Hero progression on the 5e thresholds, death and resurrection, merging, party levels |
@@ -276,6 +278,9 @@ touching `difficultyScale` or the XP bands.
   the immutable snapshot from `game.view()`. If a renderer needs a relationship
   or derived value that is absent from the view, add it there rather than
   importing the domain modules.
+- **A scenario test** — build the world in a `Game.forTesting(config, setup)`
+  callback. The mutable scenario expires before `step()` can run; assert the
+  outcome through `view()` or a purpose-built query.
 - **Tuning difficulty** — `difficultyScale` in `GameConfig` (or `?difficulty=`)
   multiplies every encounter's XP budget. Measure with `scripts/tune.ts` before
   and after.

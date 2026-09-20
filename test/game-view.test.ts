@@ -8,21 +8,23 @@ import { createLair } from '../src/town/lairs';
 
 describe('Game.view', () => {
   it('gives a renderer an immutable snapshot of the clock and visible town settings', () => {
-    const game = new Game({ seed: 11, difficultyScale: 1.4 });
+    let townName = '';
+    const game = Game.forTesting({ seed: 11, difficultyScale: 1.4 }, (scenario) => {
+      townName = scenario.town.name;
+    });
 
     const view = game.view();
 
     expect(view.time).toBe('Day 1, 00:00');
-    expect(view.town.name).toBe(game.town.name);
+    expect(view.town.name).toBe(townName);
     expect(view.difficultyScale).toBe(1.4);
     expect(() => {
       (view.town as { name: string }).name = 'Changed by a renderer';
     }).toThrow();
-    expect(game.town.name).not.toBe('Changed by a renderer');
+    expect(game.view().town.name).toBe(townName);
   });
 
   it('summarises each active company state without exposing party state to the renderer', () => {
-    const game = new Game({ seed: 12 });
     const rng = new Rng(12);
     const quest: Quest = {
       id: 'quest-1', kind: 'contract', title: 'Clear Stonebridge', place: 'Stonebridge', giverId: 'employer-1', assetId: null, lairId: null,
@@ -55,8 +57,10 @@ describe('Game.view', () => {
     resting.ticksLeft = 4;
     const disbanded = createParty(rng, 2, 4, 0);
     disbanded.status = 'disbanded';
-    game.quests = [quest];
-    game.parties = [incomplete, traveling, questing, returning, resting, disbanded];
+    const game = Game.forTesting({ seed: 12 }, (scenario) => {
+      scenario.quests = [quest];
+      scenario.parties = [incomplete, traveling, questing, returning, resting, disbanded];
+    });
 
     expect(game.view().parties.map((party) => [party.id, party.statusText, party.level])).toEqual([
       ['incomplete', 'waiting for recruits (6h)', 1],
@@ -68,9 +72,7 @@ describe('Game.view', () => {
   });
 
   it('resolves the board’s employers, companies, lairs and hidden encounters', () => {
-    const game = new Game({ seed: 13 });
     const rng = new Rng(13);
-    const employer = game.town.employers[0]!;
     const party = createParty(rng, 2, 4, 0);
     party.id = 'party-1';
     party.name = 'The Lanterns';
@@ -80,24 +82,29 @@ describe('Game.view', () => {
     lair.strength = 3;
     lair.hoard.gold = 250;
     const reward = instantiate(ITEM_CATALOGUE[0]!);
-    const open: Quest = {
-      id: 'open', kind: 'contract', title: 'Clear Stonebridge', place: 'Stonebridge', giverId: employer.id, assetId: null, lairId: lair.id,
-      theme: 'goblins', level: 2, encounters: [
-        { difficulty: 'easy', monsters: [{ name: 'Goblin Warrior', count: 2, xpEach: 50 }], totalXp: 100, tier: 'Low' },
-        { difficulty: 'hard', monsters: [{ name: 'Goblin Boss', count: 1, xpEach: 200 }], totalXp: 200, tier: 'High' },
-      ],
-      revealed: 1, countRevealed: true, reward: 300, itemReward: reward, guildOnly: true, status: 'open', partyId: null, postedAt: 0,
-    };
-    const taken: Quest = { ...open, id: 'taken', title: 'Break the warcamp', kind: 'assault', status: 'taken', partyId: party.id, revealed: 2, guildOnly: false };
-    game.parties = [party];
-    game.lairs = [lair];
-    game.quests = [open, taken];
+    let employerName = '';
+    const game = Game.forTesting({ seed: 13 }, (scenario) => {
+      const employer = scenario.town.employers[0]!;
+      employerName = employer.name;
+      const open: Quest = {
+        id: 'open', kind: 'contract', title: 'Clear Stonebridge', place: 'Stonebridge', giverId: employer.id, assetId: null, lairId: lair.id,
+        theme: 'goblins', level: 2, encounters: [
+          { difficulty: 'easy', monsters: [{ name: 'Goblin Warrior', count: 2, xpEach: 50 }], totalXp: 100, tier: 'Low' },
+          { difficulty: 'hard', monsters: [{ name: 'Goblin Boss', count: 1, xpEach: 200 }], totalXp: 200, tier: 'High' },
+        ],
+        revealed: 1, countRevealed: true, reward: 300, itemReward: reward, guildOnly: true, status: 'open', partyId: null, postedAt: 0,
+      };
+      const taken: Quest = { ...open, id: 'taken', title: 'Break the warcamp', kind: 'assault', status: 'taken', partyId: party.id, revealed: 2, guildOnly: false };
+      scenario.parties = [party];
+      scenario.lairs = [lair];
+      scenario.quests = [open, taken];
+    });
 
     const board = game.view().board;
 
     expect(board.open).toMatchObject([
       {
-        id: 'open', title: 'Clear Stonebridge', difficultyCode: 'E/?', giverName: employer.name, themeLabel: 'Goblinoids', partyName: null,
+        id: 'open', title: 'Clear Stonebridge', difficultyCode: 'E/?', giverName: employerName, themeLabel: 'Goblinoids', partyName: null,
         lair: { name: 'Cragmaw warcamp', strength: 3, hoardGold: 250 },
         encounters: [
           { number: 1, difficulty: 'easy', description: '2x Goblin Warrior' },
@@ -112,32 +119,37 @@ describe('Game.view', () => {
   });
 
   it('summarises the town economy, holdings, lairs, counters and chronicle as immutable read data', () => {
-    const game = new Game({ seed: 14 });
     const rng = new Rng(14);
-    const employer = game.town.employers[0]!;
-    const asset = employer.assets[0]!;
-    employer.assets = [asset];
-    employer.upkeepPerDay = 12;
-    employer.treasury = 700;
-    employer.stock = [instantiate(ITEM_CATALOGUE[0]!)];
-    asset.name = 'The Salt Mine';
-    asset.incomePerDay = 50;
-    asset.status = 'ravaged';
-    asset.loot.gold = 35;
     const lair = createLair(rng, 'goblins', 4, 0);
     lair.name = 'The Broken Fang';
     lair.strength = 3;
     lair.raidCooldown = 47;
     lair.hoard.gold = 250;
-    game.lairs = [lair];
-    game.stats.itemsFound = 2;
-    game.stats.itemsSold = 1;
-    game.stats.raids = 4;
-    game.chronicle = [{ tick: 3, kind: 'town', text: 'A remembered event.' }];
+    let employerName = '';
+    let assetStatus: 'safe' | 'threatened' | 'ravaged' = 'safe';
+    const game = Game.forTesting({ seed: 14 }, (scenario) => {
+      const employer = scenario.town.employers[0]!;
+      const asset = employer.assets[0]!;
+      employerName = employer.name;
+      employer.assets = [asset];
+      employer.upkeepPerDay = 12;
+      employer.treasury = 700;
+      employer.stock = [instantiate(ITEM_CATALOGUE[0]!)];
+      asset.name = 'The Salt Mine';
+      asset.incomePerDay = 50;
+      asset.status = 'ravaged';
+      asset.loot.gold = 35;
+      assetStatus = asset.status;
+      scenario.lairs = [lair];
+      scenario.stats.itemsFound = 2;
+      scenario.stats.itemsSold = 1;
+      scenario.stats.raids = 4;
+      scenario.chronicle = [{ tick: 3, kind: 'town', text: 'A remembered event.' }];
+    });
 
     const view = game.view();
 
-    expect(view.town.employers.find((candidate) => candidate.name === employer.name)).toMatchObject({
+    expect(view.town.employers.find((candidate) => candidate.name === employerName)).toMatchObject({
       treasury: 700,
       dailyNet: -12,
       assets: [{ name: 'The Salt Mine', kindLabel: 'hunting lodge', status: 'ravaged', statusLabel: 'overrun', hasLoot: true }],
@@ -149,6 +161,6 @@ describe('Game.view', () => {
     expect(() => {
       (view.town.employers[0]!.assets[0]! as { status: string }).status = 'safe';
     }).toThrow();
-    expect(asset.status).toBe('ravaged');
+    expect(game.view().town.employers.find((candidate) => candidate.name === employerName)?.assets[0]?.status).toBe(assetStatus);
   });
 });

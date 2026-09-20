@@ -97,6 +97,26 @@ export interface GameConfig {
   difficultyScale: number;
 }
 
+/**
+ * Mutable setup available only while creating a controlled scenario in a test.
+ * A scenario expires as soon as its setup callback returns.
+ */
+export interface GameScenario {
+  tick: number;
+  readonly town: Town;
+  parties: Party[];
+  quests: Quest[];
+  lairs: Lair[];
+  readonly stats: GameStats;
+  events: GameEvent[];
+  chronicle: GameEvent[];
+}
+
+/** A read-only encounter composition for calibration scripts. */
+export interface GameEncounterSample {
+  readonly monsters: readonly Readonly<{ name: string; count: number }>[];
+}
+
 /** Immutable information a renderer can read without reaching into the simulation. */
 export interface GameView {
   readonly time: string;
@@ -274,15 +294,15 @@ const ASSAULT_APPETITE = 0.35;
 const DISBAND_AFTER_DAYS = 3;
 
 export class Game {
-  readonly config: GameConfig;
-  readonly rng: Rng;
-  readonly town: Town;
-  tick = 0;
-  quests: Quest[] = [];
-  parties: Party[] = [];
-  events: GameEvent[] = [];
-  chronicle: GameEvent[] = [];
-  stats: GameStats = {
+  private readonly config: GameConfig;
+  private readonly rng: Rng;
+  private readonly town: Town;
+  private tick = 0;
+  private quests: Quest[] = [];
+  private parties: Party[] = [];
+  private events: GameEvent[] = [];
+  private chronicle: GameEvent[] = [];
+  private stats: GameStats = {
     questsCompleted: 0,
     questsFailed: 0,
     questsExpired: 0,
@@ -299,10 +319,10 @@ export class Game {
     raids: 0,
     lairsCleared: 0,
   };
-  lairs: Lair[] = [];
+  private lairs: Lair[] = [];
   private nextArrival: number;
   private debtDays = new Map<string, number>();
-  private listeners: ((e: GameEvent) => void)[] = [];
+  private listeners: ((event: GameEventView) => void)[] = [];
 
   constructor(config: Partial<GameConfig> = {}) {
     this.config = { ...DEFAULT_CONFIG, ...config };
@@ -327,11 +347,65 @@ export class Game {
     return formatTime(tick);
   }
 
-  lairById(id: string | null): Lair | undefined {
+  /** Build a controlled world for a scenario test without exposing runtime state. */
+  static forTesting(config: Partial<GameConfig>, configure: (scenario: GameScenario) => void): Game {
+    const game = new Game(config);
+    let configuring = true;
+    const duringSetup = <Value>(read: () => Value): Value => {
+      if (!configuring) throw new Error('A GameScenario is only available while its setup callback runs.');
+      return read();
+    };
+    const scenario: GameScenario = {
+      get tick() { return duringSetup(() => game.tick); },
+      set tick(value) { duringSetup(() => { game.tick = value; }); },
+      get town() { return duringSetup(() => game.town); },
+      get parties() { return duringSetup(() => game.parties); },
+      set parties(value) { duringSetup(() => { game.parties = value; }); },
+      get quests() { return duringSetup(() => game.quests); },
+      set quests(value) { duringSetup(() => { game.quests = value; }); },
+      get lairs() { return duringSetup(() => game.lairs); },
+      set lairs(value) { duringSetup(() => { game.lairs = value; }); },
+      get stats() { return duringSetup(() => game.stats); },
+      get events() { return duringSetup(() => game.events); },
+      set events(value) { duringSetup(() => { game.events = value; }); },
+      get chronicle() { return duringSetup(() => game.chronicle); },
+      set chronicle(value) { duringSetup(() => { game.chronicle = value; }); },
+    };
+    try {
+      configure(scenario);
+    } finally {
+      configuring = false;
+    }
+    return game;
+  }
+
+  /** A stable serialized state for the deterministic regression test. */
+  regressionState(): string {
+    return JSON.stringify({
+      tick: this.tick,
+      town: this.town,
+      parties: this.parties,
+      quests: this.quests,
+      lairs: this.lairs,
+      stats: this.stats,
+      events: this.events,
+      chronicle: this.chronicle,
+      rng: this.rng,
+    });
+  }
+
+  /** Encounter compositions accumulated in the world, for calibration scripts. */
+  encounterSamples(): readonly GameEncounterSample[] {
+    return Object.freeze(this.quests.flatMap((quest) => quest.encounters.map((encounter) => Object.freeze({
+      monsters: Object.freeze(encounter.monsters.map((monster) => Object.freeze({ name: monster.name, count: monster.count }))),
+    }))));
+  }
+
+  private lairById(id: string | null): Lair | undefined {
     return id ? this.lairs.find((l) => l.id === id) : undefined;
   }
 
-  get activeLairs(): Lair[] {
+  private get activeLairs(): Lair[] {
     return this.lairs.filter((l) => l.status === 'active');
   }
 
@@ -342,19 +416,19 @@ export class Game {
     return lair;
   }
 
-  onEvent(listener: (e: GameEvent) => void): void {
+  onEvent(listener: (event: GameEventView) => void): void {
     this.listeners.push(listener);
   }
 
-  get day(): number {
+  private get day(): number {
     return Math.floor(this.tick / TICKS_PER_DAY) + 1;
   }
 
-  get openQuests(): Quest[] {
+  private get openQuests(): Quest[] {
     return this.quests.filter((q) => q.status === 'open');
   }
 
-  get activeParties(): Party[] {
+  private get activeParties(): Party[] {
     return this.parties.filter((p) => p.status !== 'disbanded');
   }
 
@@ -496,11 +570,11 @@ export class Game {
     }
   }
 
-  questById(id: string | null): Quest | undefined {
+  private questById(id: string | null): Quest | undefined {
     return id ? this.quests.find((q) => q.id === id) : undefined;
   }
 
-  employerById(id: string): Employer | undefined {
+  private employerById(id: string): Employer | undefined {
     return this.town.employers.find((g) => g.id === id);
   }
 
@@ -1314,7 +1388,7 @@ export class Game {
     const e: GameEvent = { tick: this.tick, kind, text, detail };
     this.events.push(e);
     if (this.events.length > 600) this.events.splice(0, this.events.length - 600);
-    for (const l of this.listeners) l(e);
+    for (const listener of this.listeners) listener(eventView(e));
     return e;
   }
 
