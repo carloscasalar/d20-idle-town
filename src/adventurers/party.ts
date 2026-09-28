@@ -51,8 +51,6 @@ export interface Party {
   investigations: Record<string, number>;
 }
 
-let partyCounter = 0;
-
 /** A full company covers the classic roles; smaller bands are whoever survived. */
 const ROLES: HeroClassName[][] = [
   ['Fighter', 'Barbarian', 'Paladin', 'Monk'],
@@ -74,7 +72,7 @@ export function rollClasses(rng: Rng, size: number): HeroClassName[] {
 export function createParty(rng: Rng, level: number, size: number, tick: number): Party {
   const members: Hero[] = rollClasses(rng, size).map((cls) => createHero(rng, level, cls));
   return {
-    id: `party-${++partyCounter}`,
+    id: rng.id('party'),
     name: partyName(rng),
     members,
     gold: 20 * level,

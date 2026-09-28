@@ -53,13 +53,19 @@ Dependencies point downward only. Nothing below imports from anything above it.
 
 | File | What it holds |
 | --- | --- |
-| `rng.ts` | `Rng`, a mulberry32 PRNG. `int`, `chance`, `pick`, `weighted`, `shuffle`, and `seed()` which forks a child seed for one combat. `hashString` turns a `?seed=` URL string into a number. |
+| `rng.ts` | `Rng`, a mulberry32 PRNG. `int`, `chance`, `pick`, `weighted`, `shuffle`, and `seed()` which forks a child seed for one combat. It also allocates namespaced IDs from counters owned by that RNG, without consuming random values. `hashString` turns a `?seed=` URL string into a number. |
 | `xp.ts` | The 5e XP-to-level table, `levelForXp`, `xpToNextLevel`. |
 | `names.ts` | Syllable-based generators for heroes, nobles, merchants, factions, deities, towns and companies. |
 
 Everything random in the game draws from a single `Rng` instance owned by
 `Game`, in a fixed order. That order is the determinism contract: inserting a
 roll anywhere shifts every subsequent roll in the run.
+
+Entity IDs use per-kind sequences owned by the same `Rng`. Creating another
+`Game` therefore starts its own hero, party, item, asset, employer, lair and
+quest IDs at the same values for the same seed. ID allocation does not draw
+random values, and factories within one world share the sequence through their
+RNG argument. Interleaving two worlds cannot change either world's IDs.
 
 ### `src/adventurers` — the people
 
@@ -228,6 +234,10 @@ fight badly hurt abandons the contract and walks home.
 
 - `Game` holds one `Rng`, seeded from `config.seed` (or `?seed=` hashed with
   `hashString`).
+- That `Rng` owns a separate sequence for each entity ID kind; counters are
+  scoped to the world and do not advance the random stream. `regressionState()`
+  includes a sorted, serializable snapshot of those counters so changes that
+  affect future IDs are part of the deterministic regression contract.
 - Every combat gets a child seed from `this.rng.seed()`, so a fight is
   reproducible on its own and the engine's internal rolls never disturb the
   world stream.

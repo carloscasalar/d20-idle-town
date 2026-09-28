@@ -2,9 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { createHero, equipItem, heroAc, wantsItem } from '../src/adventurers/hero';
 import { heroOverrides, runCombat } from '../src/combat/battlecast';
 import { Rng } from '../src/core/rng';
-import { instantiate, ITEM_CATALOGUE, rollStockItem } from '../src/items/items';
+import { instantiate, ITEM_CATALOGUE, rollLootItem, rollStockItem } from '../src/items/items';
 
-const byName = (name: string) => instantiate(ITEM_CATALOGUE.find((t) => t.name === name)!);
+const itemRng = new Rng(90);
+const byName = (name: string) => instantiate(itemRng, ITEM_CATALOGUE.find((t) => t.name === name)!);
 
 describe('magic items', () => {
   it('translate into engine overrides', () => {
@@ -47,5 +48,17 @@ describe('magic items', () => {
       const item = rollStockItem(rng, 'temple');
       expect(item?.sources).toContain('temple');
     }
+  });
+
+  it('allocates unique item IDs from the supplied world RNG', () => {
+    const rng = new Rng(5);
+    const items = [
+      instantiate(rng, ITEM_CATALOGUE[0]!),
+      rollStockItem(rng, 'smith')!,
+      rollStockItem(rng, 'temple')!,
+      ...Array.from({ length: 4 }, () => rollLootItem(rng, 3)),
+    ];
+    const ids = items.map((item) => item.id);
+    expect(new Set(ids).size).toBe(ids.length);
   });
 });

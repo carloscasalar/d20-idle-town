@@ -82,8 +82,6 @@ export const RETIREMENT_LEVEL = 8;
 
 const TAVERNS = ['The Prancing Owlbear', 'The Rusty Flagon', 'The Drunken Dragon', 'The Last Ember', 'The Broken Lantern'];
 
-let employerCounter = 0;
-
 function makeEmployer(rng: Rng, kind: EmployerKind, service: ServiceKind | null, deity: string, tavernName: string): Employer {
   let name: string;
   let title: string;
@@ -121,7 +119,7 @@ function makeEmployer(rng: Rng, kind: EmployerKind, service: ServiceKind | null,
   if (service === 'tavern') name = tavernName;
   if (service === 'guild') name = 'The Adventurers’ Guild';
   if (service === 'enchanter') name = `${name}’s Curiosities`;
-  const id = `employer-${++employerCounter}`;
+  const id = rng.id('employer');
   const pool = service ? SERVICE_ASSETS[service] : EMPLOYER_ASSETS[kind];
   const assetCount = kind === 'noble' ? rng.int(2, 3) : rng.int(1, 2);
   const kinds = rng.shuffle(pool).slice(0, assetCount);
@@ -153,7 +151,7 @@ function makeEmployer(rng: Rng, kind: EmployerKind, service: ServiceKind | null,
 
 /** A high-level adventurer buys a business and becomes an employer in their own right. */
 export function retiredEmployer(rng: Rng, heroName: string, partyId: string, gold: number): Employer {
-  const id = `employer-${++employerCounter}`;
+  const id = rng.id('employer');
   const kind: AssetKind = rng.pick(['vineyard', 'warehouse', 'trade-route', 'hunting-lodge', 'farmland']);
   const asset = createAsset(rng, kind, id);
   return {

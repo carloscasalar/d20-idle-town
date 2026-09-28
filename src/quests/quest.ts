@@ -39,8 +39,6 @@ export interface Quest {
   postedAt: number;
 }
 
-let questCounter = 0;
-
 const DIFFICULTY_WEIGHTS: { item: Difficulty; weight: number }[] = [
   { item: 'easy', weight: 4 },
   { item: 'intermediate', weight: 4 },
@@ -103,7 +101,7 @@ export function generateQuest(rng: Rng, terms: QuestTerms): Quest {
   // Noble houses and factions deal through the guild, but even they post the small jobs in public.
   const guildOnly = (employer.kind === 'noble' || employer.kind === 'faction') && level >= 2;
   return {
-    id: `quest-${++questCounter}`,
+    id: rng.id('quest'),
     kind: 'contract',
     title,
     place: asset.name,
@@ -144,7 +142,7 @@ export function generateAssault(rng: Rng, lair: Lair, guild: Employer, partySize
   const bounty = Math.min(guild.treasury, 150 * lair.level);
   const title = rng.pick(ASSAULT_TITLES).replace('{lair}', lair.name).replace('{boss}', lair.boss).replace('{place}', lair.place);
   return {
-    id: `quest-${++questCounter}`,
+    id: rng.id('quest'),
     kind: 'assault',
     title: title.charAt(0).toUpperCase() + title.slice(1),
     place: lair.place,

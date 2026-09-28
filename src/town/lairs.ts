@@ -53,8 +53,6 @@ const KINDS: Record<ThemeId, LairKind> = {
 
 const DRAGON_NAMES = ['Vermithrax', 'Ashkarra', 'Nyrlaxeth', 'Old Greyscale', 'Karzûl the Patient', 'Ilthiriax', 'Morrgath'];
 
-let lairCounter = 0;
-
 function fill(rng: Rng, template: string): string {
   return template
     .replace('{name}', rng.pick(LANDMARKS))
@@ -73,7 +71,7 @@ export function pickBoss(theme: ThemeId, level: number): MonsterData {
 export function createLair(rng: Rng, theme: ThemeId, level: number, tick: number): Lair {
   const kind = KINDS[theme];
   return {
-    id: `lair-${++lairCounter}`,
+    id: rng.id('lair'),
     name: fill(rng, rng.pick(kind.names)),
     place: fill(rng, rng.pick(kind.places)),
     theme,

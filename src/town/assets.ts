@@ -158,14 +158,12 @@ export const ASSET_KINDS: Record<AssetKind, AssetKindDef> = {
   },
 };
 
-let assetCounter = 0;
-
 export function createAsset(rng: Rng, kind: AssetKind, ownerId: string): Asset {
   const def = ASSET_KINDS[kind];
   const name = rng.pick(def.names).replace('{name}', rng.pick(def.nameParts));
   const spread = 0.7 + rng.next() * 0.6;
   return {
-    id: `asset-${++assetCounter}`,
+    id: rng.id('asset'),
     kind,
     name,
     ownerId,

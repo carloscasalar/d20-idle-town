@@ -1,11 +1,8 @@
 import { createHash } from 'node:crypto';
-import { expect, it, vi } from 'vitest';
+import { expect, it } from 'vitest';
+import { Game } from '../src/sim/game';
 
-// Capture the pre-refactor trajectory, not just two runs of the same implementation.
-// Reset module-local ID counters before each world so snapshots do not depend on test order.
-it.each([7, 42, 20260907])('preserves state and event history at every tick for seed %s', async (seed) => {
-  vi.resetModules();
-  const { Game } = await import('../src/sim/game');
+it.each([7, 42, 20260907])('preserves state and event history at every tick for seed %s', (seed) => {
   const game = new Game({ seed });
   const history = createHash('sha256');
   for (let tick = 0; tick < 400; tick++) {

@@ -391,6 +391,7 @@ export class Game {
       events: this.events,
       chronicle: this.chronicle,
       rng: this.rng,
+      idSequences: this.rng.idState(),
     });
   }
 

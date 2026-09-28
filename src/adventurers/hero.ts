@@ -69,8 +69,6 @@ export function heroAc(hero: Hero): number {
   return buildHero(hero.heroClass, hero.level).ac + hero.armorTier + combinedEffect(hero).ac;
 }
 
-let heroCounter = 0;
-
 /** Fixed hit points for a class/level, the way the engine's hero builder computes them. */
 export function fixedHp(heroClass: HeroClassName, level: number): number {
   return buildHero(heroClass, level).hp;
@@ -80,7 +78,7 @@ export function createHero(rng: Rng, level: number, heroClass?: HeroClassName): 
   const cls = heroClass ?? rng.pick(HERO_CLASS_NAMES);
   const maxHp = fixedHp(cls, level);
   return {
-    id: `hero-${++heroCounter}`,
+    id: rng.id('hero'),
     name: heroName(rng),
     heroClass: cls,
     level,

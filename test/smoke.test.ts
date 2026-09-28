@@ -29,4 +29,57 @@ describe('simulation smoke run', () => {
     }
     expect(a.view().events.map((event) => event.text)).toEqual(b.view().events.map((event) => event.text));
   });
+
+  it('keeps complete same-seed worlds identical when their steps are interleaved', () => {
+    const a = new Game({ seed: 20260928 });
+    const b = new Game({ seed: 20260928 });
+    for (let i = 0; i < 120; i++) {
+      a.step();
+      b.step();
+      expect(a.regressionState()).toBe(b.regressionState());
+      b.step();
+      a.step();
+      expect(a.regressionState()).toBe(b.regressionState());
+    }
+  });
+
+  it('allocates unique entity IDs and preserves world references', () => {
+    const game = new Game({ seed: 20260928 });
+    for (let i = 0; i < 120; i++) game.step();
+    const { town, parties, quests, lairs, idSequences } = JSON.parse(game.regressionState()) as {
+      town: { employers: { id: string; assets: { id: string; ownerId: string; questId: string | null }[] }[] };
+      parties: { id: string; members: { id: string }[]; questId: string | null }[];
+      quests: { id: string; giverId: string; assetId: string | null; lairId: string | null; partyId: string | null }[];
+      lairs: { id: string; questId: string | null }[];
+      idSequences: Record<string, number>;
+    };
+    const employers = town.employers;
+    const assets = employers.flatMap((employer) => employer.assets);
+    const heroes = parties.flatMap((party) => party.members);
+    const ids = [
+      ...employers.map((employer) => employer.id),
+      ...assets.map((asset) => asset.id),
+      ...parties.map((party) => party.id),
+      ...heroes.map((hero) => hero.id),
+      ...quests.map((quest) => quest.id),
+      ...lairs.map((lair) => lair.id),
+    ];
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(Object.keys(idSequences).length).toBeGreaterThan(0);
+    expect(Object.values(idSequences).every((count) => count > 0)).toBe(true);
+
+    const employerIds = new Set(employers.map((employer) => employer.id));
+    const assetIds = new Set(assets.map((asset) => asset.id));
+    const partyIds = new Set(parties.map((party) => party.id));
+    const questIds = new Set(quests.map((quest) => quest.id));
+    const lairIds = new Set(lairs.map((lair) => lair.id));
+    expect(assets.every((asset) => employerIds.has(asset.ownerId))).toBe(true);
+    expect(assets.every((asset) => asset.questId === null || questIds.has(asset.questId))).toBe(true);
+    expect(parties.every((party) => party.questId === null || questIds.has(party.questId))).toBe(true);
+    expect(lairs.every((lair) => lair.questId === null || questIds.has(lair.questId))).toBe(true);
+    expect(quests.every((quest) => employerIds.has(quest.giverId))).toBe(true);
+    expect(quests.every((quest) => quest.assetId === null || assetIds.has(quest.assetId))).toBe(true);
+    expect(quests.every((quest) => quest.lairId === null || lairIds.has(quest.lairId))).toBe(true);
+    expect(quests.every((quest) => quest.partyId === null || partyIds.has(quest.partyId))).toBe(true);
+  });
 });

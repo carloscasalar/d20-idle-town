@@ -29,7 +29,8 @@ function setup(level = 1, tick = 0) {
   });
   return { game, party, reserve: resurrectionCost(level), shop: (service: NonNullable<Employer['service']>) => shops.get(service)! };
 }
-const item = (name: string) => instantiate(ITEM_CATALOGUE.find((i) => i.name === name)!);
+const itemRng = new Rng(9);
+const item = (name: string) => instantiate(itemRng, ITEM_CATALOGUE.find((i) => i.name === name)!);
 
 describe('town services through an hourly tick', () => {
   it('buys affordable potions, preserves the reserve and spends the hour before guild dues', () => {

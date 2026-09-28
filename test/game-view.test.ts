@@ -81,7 +81,7 @@ describe('Game.view', () => {
     lair.name = 'Cragmaw warcamp';
     lair.strength = 3;
     lair.hoard.gold = 250;
-    const reward = instantiate(ITEM_CATALOGUE[0]!);
+    const reward = instantiate(rng, ITEM_CATALOGUE[0]!);
     let employerName = '';
     const game = Game.forTesting({ seed: 13 }, (scenario) => {
       const employer = scenario.town.employers[0]!;
@@ -134,7 +134,7 @@ describe('Game.view', () => {
       employer.assets = [asset];
       employer.upkeepPerDay = 12;
       employer.treasury = 700;
-      employer.stock = [instantiate(ITEM_CATALOGUE[0]!)];
+      employer.stock = [instantiate(new Rng(15), ITEM_CATALOGUE[0]!)];
       asset.name = 'The Salt Mine';
       asset.incomePerDay = 50;
       asset.status = 'ravaged';
