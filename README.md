@@ -163,6 +163,8 @@ snapshot returned by `game.view()` exactly as the text UI does.
 diagram and the dependency rules, what each file owns, the tick loop and the party
 state machine, the exact engine API the adapter uses, how seeding keeps a run
 reproducible, and where to add a new theme, holding, item or renderer.
+**[docs/ARCHITECTURE-INTERFACES.md](docs/ARCHITECTURE-INTERFACES.md)** maps the
+current modules and their callable interfaces, state changes and usage contracts.
 **[CHANGELOG.md](CHANGELOG.md)** lists what landed, by day.
 
 ## Credits and licence
