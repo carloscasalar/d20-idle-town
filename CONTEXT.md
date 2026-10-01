@@ -24,14 +24,29 @@ _Avoid_: Asset in prose; `Asset` remains the code type.
 **Lair**:
 A threat's stronghold that sends raids, grows stronger when unanswered and can hold lost loot.
 
+**Bloodied**:
+An adventurer at half or less of their maximum hit points.
+
+**Short rest**:
+The recovery a company takes between two encounters of an expedition.
+_Avoid_: Breather in prose; `breather` remains the code name.
+
+**Healing potion**:
+A draught from the company's shared supply that restores hit points to the adventurer who drinks it.
+
 ## Relationships
 
 - A **Company** accepts one **Contract** or **Bounty** at a time.
 - An accepted **Contract** or **Bounty** starts one **Expedition**.
 - A **Contract** concerns one **Holding**; a **Bounty** concerns one **Lair**.
 - A **Lair** may threaten multiple **Holdings**.
+- During an encounter, a **Bloodied** adventurer drinks a **Healing potion** if the **Company** has one.
+- After a **Short rest**, an adventurer who is still **Bloodied** drinks a **Healing potion** if the **Company** has one.
 
 ## Example dialogue
 
 > **Dev:** "Does the **Expedition** end when the **Company** wins the last encounter?"
 > **Domain expert:** "No. The company must return, collect the **Contract** reward or **Bounty**, and rest. A wipe ends the expedition in the field."
+
+> **Dev:** "Does an adventurer drink a **Healing potion** as soon as they are hurt?"
+> **Domain expert:** "Only when **Bloodied**. In an encounter they drink right then; between encounters they take the **Short rest** first and drink only if they are still **Bloodied** afterwards."
