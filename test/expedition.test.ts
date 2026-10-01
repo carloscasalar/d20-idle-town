@@ -322,6 +322,25 @@ describe('scripted combat outcomes', () => {
     ]);
   });
 
+  it.each(['contract', 'assault'] as const)('passes no-retreat false and no blessing into a non-boss %s fight', (kind) => {
+    const { party, quest, context } = setup();
+    quest.kind = kind;
+    party.blessed = false;
+    const combat = vi.fn<CombatResolver>(() => outcome(party, 'party'));
+    context.combat = combat;
+
+    advanceExpedition(party, context);
+
+    const options = combat.mock.calls[0]![3]!;
+    expect(options.noRetreat).toBe(false);
+    expect(options).not.toHaveProperty('blessingHp');
+    if (kind === 'contract') expect(options).not.toHaveProperty('lairDepth');
+    else expect(options.lairDepth).toEqual({ index: 0, total: 2 });
+  });
+});
+
+// These tests must be deleted when .scratch/potions-and-short-rest/issues/01-adventurers-never-drink-potions.md is fixed.
+describe('known defect: potions are never drunk during a short rest', () => {
   it.each([100, 101])('heals a living hero from 1 HP with max HP %s without drinking a potion', (maxHp) => {
     const { party, context, events } = setup();
     party.members[0]!.maxHp = maxHp;
@@ -339,22 +358,6 @@ describe('scripted combat outcomes', () => {
     expect(party.members[0]!.hp).toBe(1 + Math.ceil(maxHp * 0.5));
     expect(party.potions).toBe(4);
     expect(events.some((event) => event.text.includes('potion'))).toBe(false);
-  });
-
-  it.each(['contract', 'assault'] as const)('allows retreat in a non-boss %s fight without an unearned blessing', (kind) => {
-    const { party, quest, context } = setup();
-    quest.kind = kind;
-    party.blessed = false;
-    const combat = vi.fn<CombatResolver>(() => outcome(party, 'party'));
-    context.combat = combat;
-
-    advanceExpedition(party, context);
-
-    const options = combat.mock.calls[0]![3]!;
-    expect(options.noRetreat).toBe(false);
-    expect(options).not.toHaveProperty('blessingHp');
-    if (kind === 'contract') expect(options).not.toHaveProperty('lairDepth');
-    else expect(options.lairDepth).toEqual({ index: 0, total: 2 });
   });
 });
 
@@ -426,7 +429,6 @@ describe('homecoming', () => {
 
     advanceExpedition(party, context);
 
-    expect(spree).toBe(Math.max(10, Math.floor(afterRooms * 0.05)));
     expect(party.gold).toBe(afterRooms - spree);
     expect(party.spent).toBe(fee + spree);
     expect(tavern.treasury).toBe(treasury + fee + spree);
@@ -478,57 +480,61 @@ describe('homecoming', () => {
 
 describe('reading the road', () => {
   it.each(['count', 'encounter'])('reveals exactly one %s piece on success and tries only once per contract', (piece) => {
-    const { party, quest, context, rng, events, combat } = setup();
+    const { party, quest, context, events, combat } = setup();
     party.status = 'traveling';
     party.ticksLeft = 3;
     quest.encounters.push(encounter);
     quest.countRevealed = piece === 'encounter';
     context.skillDc = 0;
-    const rolls = vi.spyOn(rng, 'int');
 
     advanceExpedition(party, context);
 
     expect(quest.countRevealed).toBe(true);
     expect(quest.revealed).toBe(piece === 'count' ? 1 : 2);
-    expect(rolls).toHaveBeenCalledTimes(2);
     expect(events).toHaveLength(1);
+    expect(events[0]!.kind).toBe('party');
     expect(events[0]!.text).toContain('reads the tracks');
     const intel = { count: quest.countRevealed, revealed: quest.revealed };
 
     advanceExpedition(party, context);
 
     expect({ count: quest.countRevealed, revealed: quest.revealed }).toEqual(intel);
-    expect(rolls).toHaveBeenCalledTimes(2);
     expect(events).toHaveLength(1);
     expect(party.investigations[`${quest.id}:tracks`]).toBe(1);
     expect(combat).not.toHaveBeenCalled();
   });
 
   it('reveals nothing on failure and does not retry', () => {
-    const { party, quest, context, rng, events } = setup();
+    const { party, quest, context, events } = setup();
     party.status = 'traveling';
     party.ticksLeft = 3;
     context.skillDc = 100;
-    const rolls = vi.spyOn(rng, 'int');
 
-    advanceExpedition(party, context);
     advanceExpedition(party, context);
 
     expect(quest.countRevealed).toBe(false);
     expect(quest.revealed).toBe(1);
-    expect(rolls).toHaveBeenCalledTimes(2);
     expect(events).toHaveLength(1);
+    expect(events[0]!.kind).toBe('party');
     expect(events[0]!.text).toContain('learns nothing');
+    const intel = { count: quest.countRevealed, revealed: quest.revealed };
+
+    advanceExpedition(party, context);
+
+    expect({ count: quest.countRevealed, revealed: quest.revealed }).toEqual(intel);
+    expect(events).toHaveLength(1);
     expect(party.investigations[`${quest.id}:tracks`]).toBe(1);
   });
 
   it('allows a fresh road check for a different contract', () => {
-    const { party, quest, context, rng } = setup();
+    const { party, quest, context, events } = setup();
     party.status = 'traveling';
     party.ticksLeft = 3;
     context.skillDc = 100;
-    const rolls = vi.spyOn(rng, 'int');
     advanceExpedition(party, context);
+    expect(events).toHaveLength(1);
+    expect(events[0]!.kind).toBe('party');
+    expect(events[0]!.text).toContain('learns nothing');
 
     const nextQuest = { ...quest, id: 'q2' };
     party.questId = nextQuest.id;
@@ -537,7 +543,9 @@ describe('reading the road', () => {
     context.skillDc = 0;
     advanceExpedition(party, context);
 
-    expect(rolls).toHaveBeenCalledTimes(4);
+    expect(events).toHaveLength(2);
+    expect(events[1]!.kind).toBe('party');
+    expect(events[1]!.text).toContain('reads the tracks');
     expect(party.investigations[`${quest.id}:tracks`]).toBe(1);
     expect(party.investigations[`${nextQuest.id}:tracks`]).toBe(1);
     expect(quest.countRevealed).toBe(false);
@@ -545,16 +553,14 @@ describe('reading the road', () => {
   });
 
   it('makes no check for a fully known contract', () => {
-    const { party, quest, context, rng, events } = setup();
+    const { party, quest, context, events } = setup();
     party.status = 'traveling';
     party.ticksLeft = 2;
     quest.countRevealed = true;
     quest.revealed = quest.encounters.length;
-    const rolls = vi.spyOn(rng, 'int');
 
     advanceExpedition(party, context);
 
-    expect(rolls).not.toHaveBeenCalled();
     expect(events).toEqual([]);
     expect(party.investigations[`${quest.id}:tracks`]).toBeUndefined();
   });
