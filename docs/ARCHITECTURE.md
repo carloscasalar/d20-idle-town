@@ -176,7 +176,9 @@ step()
  └─ expireQuests()   nobody answered; looters move in
 ```
 
-Each company runs a state machine inside `updateParty`:
+`updateParty` handles idle companies and sends active ones to
+`advanceExpedition` in `expedition.ts`. The Expedition module owns this state
+machine for one company and one hour:
 
 ```
 idle ──accept──► traveling ──arrive──► questing ──cleared/retreat──► returning ──► resting ──► idle
@@ -188,9 +190,12 @@ idle ──accept──► traveling ──arrive──► questing ──cleare
 `idle` is where most of the economy happens: recruiting or merging, buying
 potions, armour, items and blessings, paying guild dues and selling loot
 through `visitTownServices`,
-investigating a contract, and finally accepting one. `questing` calls `fight`
-once per tick until the contract is finished, the company retreats or it is
-wiped out.
+investigating a contract, and finally accepting one. During `questing`, the
+Expedition module resolves one fight per tick, applies casualties and XP,
+handles retreat and recovery, and reports events synchronously. It takes a
+combat resolver through an interface: `runCombat` is the production adapter,
+while tests supply scripted outcomes. Contract settlement and lost-loot storage
+still belong to `Game` and are called at the same points in the journey.
 
 Renderers cross two seams: `onEvent(listener)` pushes each log event as it
 happens, and `view()` returns a fresh immutable snapshot for the current frame.

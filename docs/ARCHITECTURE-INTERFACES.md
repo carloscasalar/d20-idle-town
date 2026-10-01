@@ -11,7 +11,8 @@ flowchart TD
   GAME --> QUESTS["quests · contracts and encounters"]
   GAME --> TOWN["town · assets, lairs, and services"]
   GAME --> ITEMS["items · magic items"]
-  GAME --> COMBAT["combat/battlecast.ts · combat adapter"]
+  GAME --> EXPEDITION["sim/expedition.ts · company journey"]
+  EXPEDITION --> COMBAT["combat/battlecast.ts · combat adapter"]
   PEOPLE --> CORE["core · randomness, names, and experience"]
   QUESTS --> CORE
   TOWN --> CORE
@@ -28,7 +29,7 @@ The arrows show the main dependencies. Domain modules also depend on each other:
 
 On each step, `Game` increments the clock and runs these operations in order: daily bookkeeping and lair respawn every 24 hours; shop restocking; raids; contract and assault posting; party arrivals; active party updates in descending renown order; and quest expiration. Each party follows `idle → traveling → questing → returning → resting → idle`, with `disbanded` when the party is lost. This order is part of reproducible behavior.
 
-`Game` runs fights through the `battlecast-engine` adapter. Some domain modules also read data or calculations from the engine to create heroes, encounters, and bosses. Combat execution itself stays in `combat/battlecast.ts`.
+`Game` supplies the `battlecast-engine` adapter to the Expedition module, which runs fights through it. Some domain modules also read data or calculations from the engine to create heroes, encounters, and bosses. Combat execution itself stays in `combat/battlecast.ts`.
 
 ## Cross-cutting contracts
 
@@ -54,7 +55,7 @@ The paths below link to implementations. Names in code font identify the main ex
 | Module | Interface and usage contract |
 | --- | --- |
 | [`hero.ts`](../src/adventurers/hero.ts) | `Hero`; `createHero(rng, level, heroClass?)`; progression and life-cycle functions `gainXp`, `healHero`, `killHero`, `resurrectHero`; prices and attributes `resurrectionCost`, `potionCost`, `potionHeal`, `armorUpgradeCost`, `heroAc`, `fixedHp`; equipment functions `itemInSlot`, `wantsItem`, `equipItem`, `combinedEffect`; skills `skillBonus`, `rollSkill`, and `SkillRoll`; plus `describeHero`. `WEAPON_CLASSES`, `MAX_ARMOR_TIER`, and `SKILL_ADVANTAGE` are shared tables. `gainXp` returns levels gained and does not advance a dead hero. `equipItem` replaces the item in a slot and returns the former item; the caller decides suitability with `wantsItem` first. `rollSkill` returns `null` when no hero is alive. |
-| [`party.ts`](../src/adventurers/party.ts) | `Party` and `PartyStatus`; `createParty(rng, level, size, tick)`, `rollClasses`, `aliveMembers`, `deadMembers`, `isFull`, `hasRoom`, `partyLevel`, `mergeParties`, `buryDead`, and `describeParty`. `PARTY_SIZE` is 4 and `MAX_PARTY_SIZE` is 6. `partyLevel` uses living members and returns 1 if none remain. `mergeParties` changes both parties and returns living donor members who did not fit; `buryDead` removes dead members. |
+| [`party.ts`](../src/adventurers/party.ts) | `Party` and `PartyStatus`; `createParty(rng, level, size, tick)`, `rollClasses`, `aliveMembers`, `deadMembers`, `isFull`, `hasRoom`, `partyLevel`, `mergeParties`, `buryDead`, and `describeParty`. `PARTY_SIZE` is 4, `MAX_PARTY_SIZE` is 6, and `MAX_RENOWN` is 10. `partyLevel` uses living members and returns 1 if none remain. `mergeParties` changes both parties and returns living donor members who did not fit; `buryDead` removes dead members. |
 | [`items.ts`](../src/items/items.ts) | `ItemSlot`, `ItemRarity`, `ItemEffect`, `ItemTemplate`, `ItemSource`, `MagicItem`, and `ITEM_CATALOGUE`. `instantiate(rng, template)` creates an item with an ID; `rollStockItem(rng, source)` may return `null`; `rollLootItem(rng, level)` creates loot. `describeEffect` renders an effect, and `resalePrice` returns half the price, rounded down. `combinedEffect` sums equipped effects; `heroOverrides` translates them for the engine. |
 
 ### Jobs: `src/quests`
@@ -63,7 +64,7 @@ The paths below link to implementations. Names in code font identify the main ex
 | --- | --- |
 | [`themes.ts`](../src/quests/themes.ts) | `ThemeId`, `Theme`, `THEMES`, `THEME_IDS`, and `themeMonsters(id)`. Each theme defines a curated roster plus related SRD creature types. The returned monster data is used to build encounters and select bosses. The list is cached; callers should treat it as read-only. |
 | [`encounters.ts`](../src/quests/encounters.ts) | `Difficulty`, `DIFFICULTIES`, `MonsterGroup`, and `EncounterSpec`. `xpBand(partySize, level, difficulty, scale?)` calculates a budget range; `buildEncounter(rng, theme, partySize, level, difficulty, scale?)` composes at most six monsters; `scaleEncounter(spec, partySize, baseSize?)` adjusts for larger parties; `describeEncounter` summarizes the composition. The builder aims for the band but may return the closest composition or a fallback monster. `scaleEncounter` returns the original object if the party does not exceed the base size. |
-| [`quest.ts`](../src/quests/quest.ts) | `Quest`, `QuestStatus`, `QuestKind`, `QuestTerms`, `MIN_ENCOUNTERS`, `MAX_ENCOUNTERS`; `rollEncounterCount`, `rollDifficulties`, `generateQuest(rng, terms)`, and `generateAssault(rng, lair, guild, partySize, tick, difficultyScale?)`; queries `questXp`, `isFullyKnown`, `difficultyCode`; mutations `revealNext` and `revealAll`. Ordinary contracts have 2–6 encounters; assaults have 3–5 with a final boss. The first encounter is public when created. `revealNext` reveals the encounter count first, then one encounter per call; it returns `null` when nothing remains hidden. `Game` owns acceptance, completion, and payment. |
+| [`quest.ts`](../src/quests/quest.ts) | `Quest`, `QuestStatus`, `QuestKind`, `QuestTerms`, `MIN_ENCOUNTERS`, `MAX_ENCOUNTERS`; `rollEncounterCount`, `rollDifficulties`, `generateQuest(rng, terms)`, and `generateAssault(rng, lair, guild, partySize, tick, difficultyScale?)`; queries `questXp`, `isFullyKnown`, `difficultyCode`; mutations `revealNext`, `revealAll`, and `learnQuestIntel`. Ordinary contracts have 2–6 encounters; assaults have 3–5 with a final boss. The first encounter is public when created. `revealNext` reveals the encounter count first, then one encounter per call; it returns `null` when nothing remains hidden. `learnQuestIntel` reveals and describes one piece. `Game` owns acceptance, completion, and payment. |
 
 ### Town: `src/town`
 
@@ -85,6 +86,7 @@ The paths below link to implementations. Names in code font identify the main ex
 | Module | Interface and usage contract |
 | --- | --- |
 | [`game.ts`](../src/sim/game.ts) | `Game`, `GameConfig`, `DEFAULT_CONFIG`, `TICKS_PER_DAY`, `GameView` and its view types, `GameEvent`/`GameEventView`, and `GameStats`. `new Game(config?)` creates the world, `step()` advances one hour, `view()` returns an immutable snapshot, and `onEvent(listener)` adds an observer. `Game.seedFrom(text)` accepts a numeric seed or derives one from text; `formatTime`, `heroStatusLine`, and `assetStatusLabel` help display data. `Game.forTesting(config, configure)` permits mutable scenario setup **only during** the configuration callback; later scenario access throws. `regressionState()` serializes state for determinism tests, and `encounterSamples()` returns immutable compositions for calibration. |
+| [`expedition.ts`](../src/sim/expedition.ts) | `advanceExpedition(party, context)` advances one non-idle company by one hour through travel, combat, return and rest. Traveling, questing and returning require the matching quest; resting needs none. The context supplies the world RNG, town, timing, ledger, a combat resolver, synchronous event reporter, and settlement and lost-loot callbacks. Combat uses exactly one child seed per fight. `runCombat` is the production adapter; tests can supply scripted outcomes through the same interface. |
 | [`main.ts`](../src/ui/main.ts) | Browser entry point with no exports. It reads `?seed` and `?difficulty`, creates `Game`, subscribes to events, controls the timer, and renders the views. [`style.css`](../src/ui/style.css) is its stylesheet and has no TypeScript interface. |
 
 ## Working across boundaries

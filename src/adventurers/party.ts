@@ -7,6 +7,7 @@ import { createHero, type Hero } from './hero';
 /** A company sets out with at least this many and never more than MAX_PARTY_SIZE. */
 export const PARTY_SIZE = 4;
 export const MAX_PARTY_SIZE = 6;
+export const MAX_RENOWN = 10;
 
 export type PartyStatus =
   | 'idle'

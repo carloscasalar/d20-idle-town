@@ -3,7 +3,7 @@ import { rollLootItem, type MagicItem } from '../items/items';
 import { ASSET_KINDS, type Asset } from '../town/assets';
 import type { Lair } from '../town/lairs';
 import type { Employer } from '../town/town';
-import { buildEncounter, type Difficulty, type EncounterSpec } from './encounters';
+import { buildEncounter, describeEncounter, type Difficulty, type EncounterSpec } from './encounters';
 import { THEMES, themeMonsters, type ThemeId } from './themes';
 
 export type QuestStatus = 'open' | 'taken' | 'done' | 'failed';
@@ -49,6 +49,14 @@ const DIFFICULTY_PAY: Record<Difficulty, number> = { easy: 1, intermediate: 1.5,
 
 export const MIN_ENCOUNTERS = 2;
 export const MAX_ENCOUNTERS = 6;
+
+/** Reveal the next piece of contract intelligence and describe it for the log. */
+export function learnQuestIntel(quest: Quest): string {
+  const learned = revealNext(quest);
+  if (learned === 'count') return `it means ${quest.encounters.length} fights`;
+  const next = quest.encounters[quest.revealed - 1]!;
+  return `the next fight will be ${describeEncounter(next)} (${next.difficulty})`;
+}
 
 /** Short jobs are common, long ones rare. */
 export function rollEncounterCount(rng: Rng): number {

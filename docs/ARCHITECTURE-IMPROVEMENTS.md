@@ -36,3 +36,46 @@ uniqueness checks for world entities and item factories. The three snapshot
 hashes were intentionally refreshed because `regressionState()` now includes
 the allocator counters. The random trajectories and serialized world values
 remain the same; the updated hashes now also detect changes to future ID state.
+
+## 2. Give expeditions one module and a combat seam
+
+**Problem.** Travel, fighting, retreat, homecoming and rest were interleaved in
+`Game`. Combat outcomes came directly from `runCombat`, so tests could not
+script a defeat or wipe and exercise the surrounding company rules directly.
+
+**Change.** `advanceExpedition` now owns the non-idle hourly state machine for
+one company. Its interface accepts a combat resolver: `runCombat` in production
+and scripted outcomes in tests. `Game` still owns settlement and lost-loot
+storage and supplies those operations as callbacks. Events remain synchronous,
+and the world RNG still draws one child seed at the same point in each fight.
+The shared contract-intelligence wording moved to `learnQuestIntel` so travel
+and tavern investigation use the same rule. Private travel, fight-resolution,
+breather and homecoming functions keep the hourly dispatcher small without
+changing the Expedition context or its callbacks.
+
+**Files.** `src/sim/expedition.ts`, `src/sim/game.ts`,
+`src/quests/quest.ts`, `src/adventurers/party.ts`, `test/expedition.test.ts`,
+`CONTEXT.md`, and the architecture references.
+
+**Evidence.** All 44 Expedition tests call `advanceExpedition` with a scripted
+combat resolver. They cover exact breather healing; victory, defeat, retreat,
+stalemate and wipe; retreat by survivor count and the 35% average-HP boundary;
+survivor XP shares and both company and individual level-up events; successful
+and failed homecoming, exact room fees, stables, carousing and its exclusions;
+temple costs and blessing removal; successful, failed, repeated and fully-known
+road checks; boss and non-boss combat options; invalid company/quest guards;
+synchronous casualty visibility and combat-before-loot event ordering; and rest.
+The settlement and lost-loot callbacks remain an interim dependency until the
+board and coin-transfer modules are deepened.
+
+**Potion finding.** The current breather never drinks a potion for a living
+combat result: `runCombat` clamps living HP to at least 1, then the breather
+heals `ceil(maxHp * 0.5)` before testing whether HP is below half. Tests with
+even and odd maximum HP pin the resulting healing and unchanged potion count.
+This behavior is preserved; changing the potion rule is a separate decision.
+
+**Verification.** `pnpm typecheck` and `pnpm test` passed all 97 tests across
+11 files, including the unchanged three-seed, 400-hour per-tick trajectory
+snapshots. The regression snapshot file has no diff against `HEAD`, and its
+SHA-256 checksum before and after these edits is identical. `git diff --check`
+passed.

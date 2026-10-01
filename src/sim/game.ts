@@ -1,11 +1,7 @@
 import { listNames } from '../core/names';
-import { BLESSING_HP_PER_LEVEL, payForService, visitTownServices } from '../town/services';
+import { payForService, visitTownServices } from '../town/services';
 import {
   describeHero,
-  gainXp,
-  healHero,
-  killHero,
-  potionHeal,
   resurrectHero,
   resurrectionCost,
   rollSkill,
@@ -19,6 +15,7 @@ import {
   describeParty,
   hasRoom,
   isFull,
+  MAX_RENOWN,
   mergeParties,
   partyLevel,
   PARTY_SIZE,
@@ -28,8 +25,8 @@ import { runCombat } from '../combat/battlecast';
 import { describeEffect, rollStockItem, type MagicItem } from '../items/items';
 import { hashString, Rng } from '../core/rng';
 import { xpToNextLevel } from '../core/xp';
-import { describeEncounter, scaleEncounter, type Difficulty } from '../quests/encounters';
-import { difficultyCode, generateAssault, generateQuest, isFullyKnown, revealAll, revealNext, type Quest } from '../quests/quest';
+import { describeEncounter, type Difficulty } from '../quests/encounters';
+import { difficultyCode, generateAssault, generateQuest, isFullyKnown, learnQuestIntel, revealAll, type Quest } from '../quests/quest';
 import { THEMES, type ThemeId } from '../quests/themes';
 import { ASSET_KINDS, rollThreat, type Asset } from '../town/assets';
 import { createLair, describeLair, LAIR_THEMES, MAX_STRENGTH, raidInterval, type Lair } from '../town/lairs';
@@ -46,6 +43,7 @@ import {
   type Employer,
   type Town,
 } from '../town/town';
+import { advanceExpedition } from './expedition';
 
 export type EventKind = 'town' | 'quest' | 'party' | 'combat' | 'death' | 'levelup' | 'temple' | 'reward' | 'economy' | 'shop';
 
@@ -274,9 +272,6 @@ export const TICKS_PER_DAY = 24;
 const WINDFALL_DAYS = 4;
 /** Days of income lost to looters when nobody answers the call. */
 const LOOTING_DAYS = 2;
-/** Share of the purse a company drinks through after a job well done. */
-const CAROUSING_SHARE = 0.05;
-const MAX_RENOWN = 10;
 /** Asking around about a job costs this much per company level, and a company asks at most this many times. */
 const INVESTIGATION_COST_PER_LEVEL = 15;
 const MAX_INVESTIGATIONS = 2;
@@ -945,37 +940,23 @@ export class Game {
   // ---------------------------------------------------------------- parties
 
   private updateParty(p: Party): void {
-    switch (p.status) {
-      case 'idle':
-        this.idle(p);
-        break;
-      case 'traveling':
-        this.readTheLand(p);
-        if (--p.ticksLeft <= 0) {
-          p.status = 'questing';
-          p.progress = 0;
-          const q = this.questById(p.questId)!;
-          const surprise = !isFullyKnown(q);
-          revealAll(q);
-          this.log('party', `${p.name} reach ${q.place}${surprise ? ` and take stock: ${q.encounters.length} fights ahead [${difficultyCode(q)}]` : ''}.`);
-        }
-        break;
-      case 'questing':
-        this.fight(p);
-        break;
-      case 'returning':
-        if (--p.ticksLeft <= 0) this.arriveHome(p);
-        break;
-      case 'resting':
-        if (--p.ticksLeft <= 0) {
-          for (const h of aliveMembers(p)) healHero(h, h.maxHp);
-          p.status = 'idle';
-          p.idleTicks = 0;
-        }
-        break;
-      case 'disbanded':
-        break;
-    }
+    if (p.status === 'idle') return this.idle(p);
+    advanceExpedition(p, {
+      quest: this.questById(p.questId),
+      town: this.town,
+      rng: this.rng,
+      ledger: this.stats,
+      travelTicks: this.config.travelTicks,
+      restTicks: this.config.restTicks,
+      skillDc: SKILL_DC,
+      combat: runCombat,
+      report: ({ kind, text, detail, chronicle }) => {
+        if (chronicle) this.chronicleLog(kind, text);
+        else this.log(kind, text, detail);
+      },
+      settleQuest: (quest, party, success) => this.settleQuest(quest, party, success),
+      leaveLoot: (quest, party, fallen) => this.leaveLoot(quest, party, fallen),
+    });
   }
 
   private idle(p: Party): void {
@@ -1044,7 +1025,7 @@ export class Game {
       if (check) {
         const dice = `${check.roll}${check.bonus >= 0 ? '+' : ''}${check.bonus} = ${check.total}${check.advantage ? ', with advantage' : ''}`;
         if (check.success) {
-          this.log('shop', `${check.hero.name} works the room at ${tavern.name} (Persuasion ${dice} vs DC ${SKILL_DC}): ${this.learn(quest)}.`);
+          this.log('shop', `${check.hero.name} works the room at ${tavern.name} (Persuasion ${dice} vs DC ${SKILL_DC}): ${learnQuestIntel(quest)}.`);
         } else {
           this.log('shop', `${check.hero.name} tries to get the regulars at ${tavern.name} talking about "${quest.title}" (Persuasion ${dice} vs DC ${SKILL_DC}) and gets nowhere.`);
         }
@@ -1069,28 +1050,8 @@ export class Game {
     if (tavern.ruined || p.gold - cost < reserve) return false;
     this.pay(p, tavern, cost);
     p.investigations[quest.id] = done + 1;
-    this.log('shop', `${p.name} buy a round at ${tavern.name} (${cost} gp) and ask about "${quest.title}": ${this.learn(quest)}.`);
+    this.log('shop', `${p.name} buy a round at ${tavern.name} (${cost} gp) and ask about "${quest.title}": ${learnQuestIntel(quest)}.`);
     return true;
-  }
-
-  /** Reveal the next thing about a job and say what it was. */
-  private learn(quest: Quest): string {
-    const learned = revealNext(quest);
-    if (learned === 'count') return `it means ${quest.encounters.length} fights`;
-    const next = quest.encounters[quest.revealed - 1]!;
-    return `the next fight will be ${describeEncounter(next)} (${next.difficulty})`;
-  }
-
-  /** On the road, whoever reads tracks best gets one look at what lies ahead. One try per job. */
-  private readTheLand(p: Party): void {
-    const quest = this.questById(p.questId);
-    if (!quest || isFullyKnown(quest) || p.investigations[`${quest.id}:tracks`]) return;
-    p.investigations[`${quest.id}:tracks`] = 1;
-    const check = rollSkill(this.rng, aliveMembers(p), 'Survival', SKILL_DC);
-    if (!check) return;
-    const dice = `${check.roll}${check.bonus >= 0 ? '+' : ''}${check.bonus} = ${check.total}${check.advantage ? ', with advantage' : ''}`;
-    if (check.success) this.log('party', `On the road, ${check.hero.name} reads the tracks (Survival ${dice} vs DC ${SKILL_DC}): ${this.learn(quest)}.`);
-    else this.log('party', `${check.hero.name} tries to read the tracks along the road (Survival ${dice} vs DC ${SKILL_DC}) and learns nothing.`);
   }
 
   /** A retired adventurer's contracts are held a day for their old company. */
@@ -1194,104 +1155,6 @@ export class Game {
     }
   }
 
-  private fight(p: Party): void {
-    const quest = this.questById(p.questId)!;
-    const fighters = aliveMembers(p);
-    const spec = scaleEncounter(quest.encounters[p.progress]!, fighters.length);
-    const n = p.progress + 1;
-    const bossFight = quest.kind === 'assault' && p.progress === quest.encounters.length - 1;
-    const outcome = runCombat(fighters, spec, this.rng.seed(), {
-      ...(p.blessed ? { blessingHp: BLESSING_HP_PER_LEVEL * partyLevel(p) } : {}),
-      noRetreat: bossFight,
-      ...(quest.kind === 'assault' ? { lairDepth: { index: p.progress, total: quest.encounters.length } } : {}),
-    });
-
-    for (const r of outcome.heroes) {
-      const hero = p.members.find((h) => h.id === r.heroId)!;
-      hero.kills += r.kills;
-      if (r.alive) {
-        hero.hp = r.hp;
-      } else {
-        killHero(hero);
-        this.stats.heroesDied += 1;
-      }
-    }
-    const fallen = fighters.filter((h) => !h.alive);
-    const survivors = aliveMembers(p);
-    const ambushNote = outcome.ambush === 'monsters' ? ' Ambushed!' : outcome.ambush === 'party' ? ' They strike first.' : '';
-    const summary = `Encounter ${n}/${quest.encounters.length} (${spec.difficulty}): ${describeEncounter(spec)}.${ambushNote}`;
-    const deathNotes = (verb = 'dies') => {
-      if (fallen.length === 0) return;
-      const plural = verb === 'dies' ? 'die' : 'are left for dead';
-      const who = fallen.length === 1 ? `${describeHero(fallen[0]!)} of ${p.name} ${verb}` : `${listNames(fallen.map(describeHero))} of ${p.name} ${plural}`;
-      this.chronicleLog('death', `${who} at ${quest.place} (${describeEncounter(spec)}).`);
-    };
-
-    if (outcome.winner === 'party') {
-      const share = Math.floor(outcome.xpEarned / Math.max(1, survivors.length));
-      const levelled: Hero[] = [];
-      for (const h of survivors) if (gainXp(h, share) > 0) levelled.push(h);
-      const losses = fallen.length > 0 ? ` Fallen: ${fallen.map((h) => h.name).join(', ')}.` : '';
-      this.log('combat', `${p.name}: ${summary} Victory in ${outcome.rounds} rounds, ${share} XP each.${losses}`, outcome.lines);
-      deathNotes();
-      if (levelled.length > 0) {
-        const levels = new Set(levelled.map((h) => h.level));
-        if (levelled.length === survivors.length && levels.size === 1) this.chronicleLog('levelup', `${p.name} reach level ${levelled[0]!.level}.`);
-        else this.chronicleLog('levelup', `${listNames(levelled.map((h) => `${h.name} (${h.level})`))} of ${p.name} level up.`);
-      }
-
-      p.progress += 1;
-      if (p.progress < quest.encounters.length && this.shouldRetreat(p, fighters.length)) {
-        this.log('party', `${p.name} are too battered to go on. They abandon ${quest.place} and turn back.`);
-        this.headHome(p);
-        return;
-      }
-      if (p.progress >= quest.encounters.length) {
-        this.log('quest', `${p.name} have cleared ${quest.place} and head back to ${this.town.name}.`);
-        this.headHome(p);
-      } else {
-        this.breather(p);
-      }
-      return;
-    }
-
-    if (outcome.winner === 'monsters') {
-      if (survivors.length === 0) {
-        this.log('combat', `${p.name}: ${summary} Defeat. Nobody comes back from ${quest.place}.`, outcome.lines);
-        deathNotes();
-        this.chronicleLog('death', `${p.name} are wiped out at ${quest.place}.`);
-        p.status = 'disbanded';
-        this.stats.partiesWiped += 1;
-        this.leaveLoot(quest, p, p.members);
-        this.settleQuest(quest, p, false);
-      } else {
-        this.log(
-          'combat',
-          `${p.name}: ${summary} Defeat. ${listNames(survivors.map((h) => h.name))} flee with the bodies of ${listNames(fallen.map((h) => h.name))}.`,
-          outcome.lines,
-        );
-        deathNotes();
-        this.headHome(p);
-      }
-      return;
-    }
-
-    if (outcome.winner === 'retreat') {
-      this.log(
-        'combat',
-        `${p.name}: ${summary} The line breaks. ${listNames(survivors.map((h) => h.name))} ${survivors.length === 1 ? 'runs' : 'run'} for it, leaving ${listNames(fallen.map((h) => h.name))} behind.`,
-        outcome.lines,
-      );
-      deathNotes('is left for dead');
-      this.leaveLoot(quest, p, fallen);
-      this.headHome(p);
-      return;
-    }
-
-    this.log('combat', `${p.name}: ${summary} Neither side can finish it; the party withdraws.`, outcome.lines);
-    this.headHome(p);
-  }
-
   /**
    * Whatever the fallen carried is lost to the field. If a lair is behind the
    * job, its hoard swells with it; otherwise the next company to clear the
@@ -1318,69 +1181,6 @@ export class Game {
     const what = [items.length > 0 ? items.map((i) => i.name).join(', ') : '', gold > 0 ? `${gold} gp` : ''].filter(Boolean).join(' and ');
     if (lair) this.log('death', `${what} go${items.length + (gold > 0 ? 1 : 0) === 1 ? 'es' : ''} to the hoard of ${lair.name} (now ${lair.hoard.gold} gp and ${lair.hoard.items.length} item${lair.hoard.items.length === 1 ? '' : 's'}).`);
     else this.log('death', `${what} lie${items.length + (gold > 0 ? 1 : 0) === 1 ? 's' : ''} among the dead at ${quest.place}.`);
-  }
-
-  /** A short rest between fights, and a potion for anyone still badly hurt. */
-  private breather(p: Party): void {
-    let drunk = 0;
-    for (const h of aliveMembers(p)) {
-      healHero(h, Math.ceil(h.maxHp * 0.5));
-      if (p.potions > 0 && h.hp < h.maxHp * 0.5) {
-        p.potions -= 1;
-        drunk += 1;
-        healHero(h, potionHeal(h));
-      }
-    }
-    if (drunk > 0) this.log('party', `${p.name} catch their breath. ${drunk} potion${drunk > 1 ? 's' : ''} drunk; ${p.potions} left.`);
-  }
-
-  private headHome(p: Party): void {
-    p.status = 'returning';
-    p.ticksLeft = this.config.travelTicks;
-  }
-
-  /** Adventurers who lost half the company, or are mostly out of hit points, go home. */
-  private shouldRetreat(p: Party, startedWith: number): boolean {
-    const alive = aliveMembers(p);
-    if (alive.length <= startedWith / 2) return true;
-    const hpFraction = alive.reduce((s, h) => s + h.hp / h.maxHp, 0) / alive.length;
-    return hpFraction < 0.35;
-  }
-
-  private arriveHome(p: Party): void {
-    const quest = this.questById(p.questId)!;
-    const success = p.progress >= quest.encounters.length && aliveMembers(p).length > 0;
-    p.questId = null;
-    p.progress = 0;
-    this.settleQuest(quest, p, success);
-
-    const dead = deadMembers(p);
-    if (dead.length > 0) {
-      const temple = serviceOf(this.town, 'temple');
-      const bill = dead.map((h) => `${h.name}: ${resurrectionCost(h.level)} gp`).join(', ');
-      this.log('temple', `${p.name} carry their dead to the ${temple.name}. The priests ask ${bill}. Purse: ${p.gold} gp.`);
-    }
-
-    p.blessed = false;
-    const tavern = serviceOf(this.town, 'tavern');
-    const fee = 3 * partyLevel(p) * aliveMembers(p).length;
-    if (!tavern.ruined && p.gold >= fee) {
-      this.pay(p, tavern, fee);
-      let line = `${p.name} take rooms at ${tavern.name} for ${fee} gp.`;
-      if (success && dead.length === 0 && p.renown < MAX_RENOWN) {
-        const spree = Math.max(10, Math.floor(p.gold * CAROUSING_SHARE));
-        if (p.gold - spree >= resurrectionCost(partyLevel(p))) {
-          this.pay(p, tavern, spree);
-          p.renown = Math.min(MAX_RENOWN, p.renown + 1);
-          line += ` They drink ${spree} gp away telling the tale (renown ${p.renown}).`;
-        }
-      }
-      this.log('shop', line);
-    } else {
-      this.log('party', `${p.name} cannot afford rooms and bed down in the stables.`);
-    }
-    p.status = 'resting';
-    p.ticksLeft = this.config.restTicks;
   }
 
   // ---------------------------------------------------------------- logging
