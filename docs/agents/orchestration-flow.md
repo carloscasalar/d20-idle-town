@@ -38,6 +38,22 @@ prints only the session id, the exit code and the agent's final message.
 
 - New task, new session. Corrections to the same task resume its session.
 - The model and effort are passed per call; the user's Codex config is not edited.
+- `codex exec resume` takes its options before the `resume` subcommand.
+
+### Fallback implementer: Cursor
+
+When Codex reports its usage limit, the same turn prompts go to Cursor:
+
+```bash
+scripts/agents/cursor-turn.sh new .scratch/architecture-flow/turns/NN-<slug>.md
+scripts/agents/cursor-turn.sh resume <session-id> .scratch/architecture-flow/turns/NN-<slug>-fix1.md
+```
+
+The wrapper creates a chat with `cursor-agent create-chat` and runs
+`cursor-agent -p --trust --force --resume <id> --model grok-4.7-high "<prompt>"`.
+`grok-4.7-high` is high effort and not the fast variant. This CLI version
+(2026.10.01) rejects the bracket form `grok-4.7[context=500k,effort=high,fast=false]`
+and lists no 500k-context variant.
 
 ## The loop for one task
 
