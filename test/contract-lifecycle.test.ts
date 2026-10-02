@@ -4,7 +4,7 @@ import { Rng } from '../src/core/rng';
 import { ITEM_CATALOGUE, type MagicItem } from '../src/items/items';
 import type { Quest } from '../src/quests/quest';
 import type { ThemeId } from '../src/quests/themes';
-import { Game, type GameConfig, type GameScenario } from '../src/sim/game';
+import { Game, type GameConfig, type GameEventView, type GameScenario } from '../src/sim/game';
 import { ASSET_KINDS, createAsset, type Asset } from '../src/town/assets';
 import { createLair, type Lair } from '../src/town/lairs';
 import { serviceOf, type Employer, type Town } from '../src/town/town';
@@ -40,6 +40,13 @@ function holding(rng: Rng, employer: Employer, name = 'Holding'): Asset {
   Object.assign(asset, { name, incomePerDay: 10 });
   employer.assets.push(asset);
   return asset;
+}
+
+function postingEmployer(scenario: GameScenario, rng: Rng, overrides: Partial<Employer> = {}): Employer {
+  const employer = scenario.town.employers[0]!;
+  holding(rng, employer);
+  Object.assign(employer, { cooldown: 0, ...overrides });
+  return employer;
 }
 
 function company(rng: Rng, level = 5): Party {
@@ -100,9 +107,7 @@ describe('posting Contracts', () => {
     { treasury: 24, posted: 0 }, { treasury: 25, posted: 1 },
   ])('an employer with $treasury gold posts $posted Contract', ({ treasury, posted }) => {
     const game = scene((scenario, rng) => {
-      const employer = scenario.town.employers[0]!;
-      holding(rng, employer);
-      Object.assign(employer, { treasury, cooldown: 0 });
+      postingEmployer(scenario, rng, { treasury });
     }, { maxOpenQuests: 1 });
     game.step();
     expect(game.view().board.open).toHaveLength(posted);
@@ -111,9 +116,7 @@ describe('posting Contracts', () => {
 
   it('a ruined employer cannot post a Contract', () => {
     const game = scene((scenario, rng) => {
-      const employer = scenario.town.employers[0]!;
-      holding(rng, employer);
-      Object.assign(employer, { ruined: true, cooldown: 0 });
+      postingEmployer(scenario, rng, { ruined: true });
     }, { maxOpenQuests: 1 });
     game.step();
     expect(game.view().board.open).toHaveLength(0);
@@ -122,17 +125,28 @@ describe('posting Contracts', () => {
 
   it('an employer waits the entire last hour of its posting cooldown', () => {
     const game = scene((scenario, rng) => {
-      const employer = scenario.town.employers[0]!;
-      holding(rng, employer);
-      employer.cooldown = 1;
+      postingEmployer(scenario, rng, { cooldown: 1 });
     }, { maxOpenQuests: 1 });
     game.step();
     expect(game.view().board.open).toHaveLength(0);
     expect(hidden(game).town.employers[0]!.cooldown).toBe(0);
     game.step();
     expect(game.view().board.open).toHaveLength(1);
-    expect(hidden(game).town.employers[0]!.cooldown).toBeGreaterThanOrEqual(12);
-    expect(hidden(game).town.employers[0]!.cooldown).toBeLessThanOrEqual(30);
+  });
+
+  it('posting a Contract sets a cooldown from twelve to thirty hours, including both limits', () => {
+    const cooldowns = new Set<number>();
+    for (let seed = 101; seed <= 140; seed++) {
+      const game = scene((scenario, rng) => { postingEmployer(scenario, rng); }, { seed, maxOpenQuests: 1 });
+      game.step();
+      expect(game.view().board.open).toHaveLength(1);
+      const cooldown = hidden(game).town.employers[0]!.cooldown;
+      expect(cooldown).toBeGreaterThanOrEqual(12);
+      expect(cooldown).toBeLessThanOrEqual(30);
+      cooldowns.add(cooldown);
+    }
+    expect(cooldowns.has(12)).toBe(true);
+    expect(cooldowns.has(30)).toBe(true);
   });
 
   it.each(['no Holdings', 'all Holdings committed'])('an employer with %s cannot post another Contract', (reason) => {
@@ -163,16 +177,14 @@ describe('posting Contracts', () => {
 
   it('a newly posted Contract threatens its Holding and links it to the work', () => {
     const game = scene((scenario, rng) => {
-      const employer = scenario.town.employers[0]!;
-      holding(rng, employer);
-      employer.cooldown = 0;
+      postingEmployer(scenario, rng);
     }, { maxOpenQuests: 1 });
     game.step();
     const quest = game.view().board.open[0]!;
     expect(employerView(game).assets[0]!.status).toBe('threatened');
     expect(hidden(game).town.employers[0]!.assets[0]!.questId).toBe(quest.id);
     expect(employerView(game).questsPosted).toBe(1);
-    expect(game.view().events.some((event) => event.kind === 'quest' && event.text.includes('post a level 1 contract'))).toBe(true);
+    expect(game.view().events.some((event) => event.kind === 'quest' && event.text.includes(quest.title))).toBe(true);
   });
 
   it.each(['contract', 'assault'] as const)('an open %s fills the board’s Contract cap', (kind) => {
@@ -196,9 +208,7 @@ describe('posting Contracts', () => {
 
   it('taken work does not fill the board’s open-Contract cap', () => {
     const game = scene((scenario, rng) => {
-      const employer = scenario.town.employers[0]!;
-      holding(rng, employer);
-      employer.cooldown = 0;
+      postingEmployer(scenario, rng);
       const other = scenario.town.employers[1]!;
       scenario.quests = [contract(other, holding(rng, other), 'existing', { status: 'taken' })];
     }, { maxOpenQuests: 1 });
@@ -221,9 +231,8 @@ describe('posting Contracts', () => {
 
   it('trouble belongs to the active Lair of the same theme and counts as its raid', () => {
     const game = scene((scenario, rng) => {
-      const employer = scenario.town.employers[0]!;
-      const asset = holding(rng, employer);
-      employer.cooldown = 0;
+      const employer = postingEmployer(scenario, rng);
+      const asset = employer.assets[0]!;
       // Every possible threat has an origin, so no particular draw is required.
       scenario.lairs = ASSET_KINDS[asset.kind].threats.map((threat) => lair(rng, threat.item));
     }, { maxOpenQuests: 1 });
@@ -240,9 +249,8 @@ describe('posting Contracts', () => {
 
   it('a cleared Lair cannot become the origin of new trouble', () => {
     const game = scene((scenario, rng) => {
-      const employer = scenario.town.employers[0]!;
-      const asset = holding(rng, employer);
-      employer.cooldown = 0;
+      const employer = postingEmployer(scenario, rng);
+      const asset = employer.assets[0]!;
       scenario.lairs = ASSET_KINDS[asset.kind].threats.map((threat) => ({ ...lair(rng, threat.item), status: 'cleared' as const, clearedAt: 100 }));
     }, { maxOpenQuests: 1 });
     game.step();
@@ -252,11 +260,23 @@ describe('posting Contracts', () => {
 });
 
 describe('Contract levels', () => {
+  it('an employer with reputation two never posts above the strongest company', () => {
+    for (let seed = 1; seed <= 40; seed++) {
+      const game = scene((scenario, rng) => {
+        postingEmployer(scenario, rng, { reputation: 2 });
+        const party = company(rng, 7);
+        Object.assign(party, { status: 'resting', ticksLeft: 100 });
+        scenario.parties = [party];
+      }, { seed, maxOpenQuests: 1 });
+      game.step();
+      expect(game.view().board.open).toHaveLength(1);
+      expect(game.view().board.open[0]!.level).toBe(7);
+    }
+  });
+
   it('without an active company the employer posts level-one work', () => {
     const game = scene((scenario, rng) => {
-      const employer = scenario.town.employers[0]!;
-      holding(rng, employer);
-      employer.cooldown = 0;
+      postingEmployer(scenario, rng);
       const gone = company(rng, 8);
       gone.status = 'disbanded';
       scenario.parties = [gone];
@@ -267,9 +287,7 @@ describe('Contract levels', () => {
 
   it.each(['idle', 'resting'] as const)('the employer posts work at its sole %s company’s level', (status) => {
     const game = scene((scenario, rng) => {
-      const employer = scenario.town.employers[0]!;
-      holding(rng, employer);
-      employer.cooldown = 0;
+      postingEmployer(scenario, rng);
       const party = company(rng, 7);
       Object.assign(party, { status, ticksLeft: 100 });
       scenario.parties = [party];
@@ -284,9 +302,7 @@ describe('Contract levels', () => {
     const levels = new Set<number>();
     for (let seed = 1; seed <= 40; seed++) {
       const game = scene((scenario, rng) => {
-        const employer = scenario.town.employers[0]!;
-        holding(rng, employer);
-        employer.cooldown = 0;
+        postingEmployer(scenario, rng);
         scenario.parties = [company(rng, 3), company(rng, 7)];
         for (const party of scenario.parties) Object.assign(party, { status: 'resting', ticksLeft: 100 });
       }, { seed, maxOpenQuests: 1 });
@@ -302,9 +318,7 @@ describe('Contract levels', () => {
     const levels = new Set<number>();
     for (let seed = 1; seed <= 80; seed++) {
       const game = scene((scenario, rng) => {
-        const employer = scenario.town.employers[0]!;
-        holding(rng, employer);
-        Object.assign(employer, { cooldown: 0, reputation: 3 });
+        postingEmployer(scenario, rng, { reputation: 3 });
         scenario.parties = [company(rng, 3), company(rng, 7)];
         for (const party of scenario.parties) Object.assign(party, { status: 'resting', ticksLeft: 100 });
       }, { seed, maxOpenQuests: 1 });
@@ -320,9 +334,7 @@ describe('Contract levels', () => {
     let availableJobs = 0;
     for (let seed = 1; seed <= 160; seed++) {
       const game = scene((scenario, rng) => {
-        const employer = scenario.town.employers[0]!;
-        holding(rng, employer);
-        employer.cooldown = 0;
+        postingEmployer(scenario, rng);
         const available = company(rng, 3);
         Object.assign(available, { status, ticksLeft: 100 });
         const busy = company(rng, 7);
@@ -344,6 +356,23 @@ describe('Contract levels', () => {
 });
 
 describe('Lair raids', () => {
+  it('the Contract belongs to the Lair that raided when two active Lairs share a theme', () => {
+    const game = scene((scenario, rng) => {
+      holding(rng, scenario.town.employers[0]!);
+      const quiet = lair(rng);
+      quiet.name = 'Quiet goblin warren';
+      const raider = lair(rng);
+      Object.assign(raider, { name: 'Raiding goblin warcamp', raidCooldown: 1 });
+      // The first matching theme is deliberately not the Lair whose raid is due.
+      scenario.lairs = [quiet, raider];
+    }, { maxOpenQuests: 1 });
+    game.step();
+    expect(game.view().board.open).toHaveLength(1);
+    expect(game.view().board.open[0]!.lair!.name).toBe('Raiding goblin warcamp');
+    expect(hidden(game).quests[0]!.lairId).toBe(hidden(game).lairs[1]!.id);
+    expect(game.view().lairs.map((target) => target.raids)).toEqual([0, 1]);
+  });
+
   it('a Lair may raid an employer at the twenty-five-gold treasury threshold', () => {
     const game = scene((scenario, rng) => {
       const employer = scenario.town.employers[0]!;
@@ -451,7 +480,7 @@ describe('posting Bounties', () => {
       const quest = game.view().board.open[0]!;
       expect(quest).toMatchObject({ kind: 'assault', level: 5 });
       expect(hidden(game).lairs[0]!.questId).toBe(quest.id);
-      expect(game.view().chronicle.some((event) => event.text.includes('posts a bounty'))).toBe(true);
+      expect(game.view().chronicle.some((event) => event.kind === 'quest' && event.text.includes(quest.lair!.name))).toBe(true);
     }
   });
 
@@ -486,6 +515,24 @@ describe('posting Bounties', () => {
 });
 
 describe('choosing Contracts', () => {
+  it('accepting a Contract from a Lair produces an ordinary quest event rather than a Bounty chronicle entry', () => {
+    const game = scene((scenario, rng) => {
+      const employer = scenario.town.employers[0]!;
+      const target = lair(rng, 'goblins', 8);
+      scenario.lairs = [target];
+      scenario.quests = [contract(employer, holding(rng, employer), 'Lair-backed Contract', { lairId: target.id })];
+      scenario.parties = [company(rng)];
+    });
+    game.step();
+    const view = game.view();
+    expect(view.board.taken.map((quest) => quest.id)).toEqual(['Lair-backed Contract']);
+    const acceptance = view.events.filter((event) => event.kind === 'quest');
+    expect(acceptance).toHaveLength(1);
+    expect(acceptance[0]!.text).toContain('Lair-backed Contract');
+    expect(acceptance[0]!.text).toContain(employerView(game).name);
+    expect(view.chronicle.filter((event) => event.kind === 'quest')).toHaveLength(0);
+  });
+
   it.each([
     { level: 4, waited: 0, taken: false }, { level: 5, waited: 0, taken: true },
     { level: 6, waited: 0, taken: false }, { level: 4, waited: 22, taken: false },
@@ -555,15 +602,16 @@ describe('choosing Contracts', () => {
       party.idleTicks = 12;
       scenario.parties = [party];
     }, { travelTicks: 7 });
-    const events: string[] = [];
-    game.onEvent((event) => { if (event.kind === 'quest') events.push(event.text); });
+    const events: GameEventView[] = [];
+    game.onEvent((event) => { events.push(event); });
     game.step();
     const view = game.view();
     expect(view.board.taken[0]!.partyName).toBe(view.parties[0]!.name);
     expect(hidden(game).quests[0]!.partyId).toBe(view.parties[0]!.id);
     expect(hidden(game).parties[0]).toMatchObject({ questId: 'contract', status: 'traveling', ticksLeft: 7, idleTicks: 0 });
     expect(events).toHaveLength(1);
-    expect(events[0]).toContain('accept "contract"');
+    expect(events[0]!.kind).toBe('quest');
+    expect(events[0]!.text).toContain(view.board.taken[0]!.title);
   });
 });
 
@@ -656,7 +704,7 @@ describe('choosing Bounties', () => {
       if (chosen.kind === 'assault') {
         accepted++;
         expect(game.view().board.open.map((quest) => quest.id)).toEqual(['ordinary']);
-        expect(game.view().chronicle.some((event) => event.text.includes('take the guild’s bounty'))).toBe(true);
+        expect(game.view().chronicle.some((event) => event.kind === 'quest' && event.text.includes(chosen.lair!.name))).toBe(true);
       } else {
         declined++;
         expect(chosen.id).toBe('ordinary');
@@ -669,6 +717,29 @@ describe('choosing Bounties', () => {
 });
 
 describe('Contract expiry', () => {
+  it('the first overrun of a Holding is recorded in the chronicle', () => {
+    const game = scene((scenario, rng) => {
+      const employer = scenario.town.employers[0]!;
+      scenario.quests = [contract(employer, holding(rng, employer), 'unanswered', { postedAt: 0 })];
+    });
+    game.step();
+    const name = employerView(game).assets[0]!.name;
+    expect(game.view().chronicle.filter((event) => event.kind === 'economy' && event.text.includes(name))).toHaveLength(1);
+  });
+
+  it('a repeated overrun of a Holding is logged without another chronicle entry', () => {
+    const game = scene((scenario, rng) => {
+      const employer = scenario.town.employers[0]!;
+      const asset = holding(rng, employer);
+      scenario.quests = [contract(employer, asset, 'unanswered again', { postedAt: 0 })];
+      Object.assign(asset, { status: 'ravaged', timesRavaged: 1 });
+    });
+    game.step();
+    const name = employerView(game).assets[0]!.name;
+    expect(game.view().events.filter((event) => event.kind === 'economy' && event.text.includes(name))).toHaveLength(1);
+    expect(game.view().chronicle.filter((event) => event.kind === 'economy' && event.text.includes(name))).toHaveLength(0);
+  });
+
   it.each(['employer', 'Holding'] as const)('an expired Contract missing its %s is still closed and counted', (missing) => {
     const game = scene((scenario, rng) => {
       const employer = scenario.town.employers[0]!;
@@ -733,7 +804,7 @@ describe('Contract expiry', () => {
     game.step();
     expect(employerView(game).assets[0]!.status).toBe('ravaged');
     expect(hidden(game).town.employers[0]!.assets[0]).toMatchObject({ questId: null, timesRavaged: after });
-    expect(game.view().events.some((event) => event.kind === 'economy' && event.text.includes('Nobody answered'))).toBe(true);
+    expect(game.view().events.some((event) => event.kind === 'economy' && event.text.includes('unanswered'))).toBe(true);
   });
 
   it.each([
@@ -751,13 +822,20 @@ describe('Contract expiry', () => {
   });
 
   it('an unanswered Contract shortens a long employer cooldown to four through ten hours', () => {
-    const game = scene((scenario, rng) => {
-      const employer = scenario.town.employers[0]!;
-      scenario.quests = [contract(employer, holding(rng, employer), 'unanswered', { postedAt: 0 })];
-    });
-    game.step();
-    expect(hidden(game).town.employers[0]!.cooldown).toBeGreaterThanOrEqual(4);
-    expect(hidden(game).town.employers[0]!.cooldown).toBeLessThanOrEqual(10);
+    const cooldowns = new Set<number>();
+    for (let seed = 1; seed <= 40; seed++) {
+      const game = scene((scenario, rng) => {
+        const employer = scenario.town.employers[0]!;
+        scenario.quests = [contract(employer, holding(rng, employer), 'unanswered', { postedAt: 0 })];
+      }, { seed });
+      game.step();
+      const cooldown = hidden(game).town.employers[0]!.cooldown;
+      expect(cooldown).toBeGreaterThanOrEqual(4);
+      expect(cooldown).toBeLessThanOrEqual(10);
+      cooldowns.add(cooldown);
+    }
+    expect(cooldowns.has(4)).toBe(true);
+    expect(cooldowns.has(10)).toBe(true);
   });
 
   it('an unanswered Contract does not lengthen an already short cooldown', () => {
@@ -821,6 +899,28 @@ function homecoming(
 }
 
 describe('successful Contracts', () => {
+  it('a company collects gold-only loot left at a Holding', () => {
+    const game = homecoming('contract', true, (_scenario, _employer, asset) => {
+      asset.loot = { gold: 37, items: [] };
+    });
+    game.step();
+    expect(game.view().parties[0]).toMatchObject({ gold: 97, earned: 87, stash: [] });
+    expect(hidden(game).town.employers[0]!.assets[0]!.loot).toEqual({ gold: 0, items: [] });
+    expect(employerView(game).assets[0]!.hasLoot).toBe(false);
+    expect(game.view().stats).toMatchObject({ itemsFound: 0, goldPaid: 50 });
+  });
+
+  it('a company collects items-only loot left at a Holding', () => {
+    const game = homecoming('contract', true, (_scenario, _employer, asset) => {
+      asset.loot = { gold: 0, items: [item('Lost sword'), item('Lost shield')] };
+    });
+    game.step();
+    expect(game.view().parties[0]).toMatchObject({ gold: 60, earned: 50, stash: ['Lost sword', 'Lost shield'] });
+    expect(hidden(game).town.employers[0]!.assets[0]!.loot).toEqual({ gold: 0, items: [] });
+    expect(employerView(game).assets[0]!.hasLoot).toBe(false);
+    expect(game.view().stats).toMatchObject({ itemsFound: 2, goldPaid: 50 });
+  });
+
   it('a Contract without a Holding pays the company without granting a windfall', () => {
     const game = homecoming('contract', true, (_scenario, _employer, _asset, _target, _party, quest) => {
       quest.assetId = null;
@@ -828,7 +928,7 @@ describe('successful Contracts', () => {
     game.step();
     expect(employerView(game)).toMatchObject({ treasury: 950, earned: 0, spent: 50 });
     expect(game.view().parties[0]).toMatchObject({ gold: 60, earned: 50 });
-    expect(game.view().events.some((event) => event.kind === 'reward' && event.text.includes('the client is grateful'))).toBe(true);
+    expect(game.view().events.some((event) => event.kind === 'reward' && event.text.includes('50 gp'))).toBe(true);
   });
 
   it('returning companies receive the exact reward and both ledgers record the payment', () => {
@@ -839,7 +939,7 @@ describe('successful Contracts', () => {
     expect(game.view().stats).toMatchObject({ questsCompleted: 1, questsFailed: 0, goldPaid: 50 });
     expect(hidden(game).quests[0]!.status).toBe('done');
     expect(game.view().board.taken).toHaveLength(0);
-    expect(game.view().events.some((event) => event.kind === 'reward' && event.text.includes('pay 50 gp'))).toBe(true);
+    expect(game.view().events.some((event) => event.kind === 'reward' && event.text.includes('50 gp'))).toBe(true);
   });
 
   it('recovering a Holding returns forty gold in windfall to its employer', () => {
@@ -893,7 +993,7 @@ describe('successful Contracts', () => {
     expect(employerView(game).assets[0]!.hasLoot).toBe(false);
     expect(hidden(game).town.employers[0]!.assets[0]!.loot).toEqual({ gold: 0, items: [] });
     expect(game.view().stats).toMatchObject({ itemsFound: 2, goldPaid: 50 });
-    expect(game.view().chronicle.some((event) => event.text.includes('last company'))).toBe(true);
+    expect(game.view().chronicle.some((event) => event.kind === 'reward' && event.text.includes('Lost sword'))).toBe(true);
   });
 });
 
@@ -1023,7 +1123,7 @@ describe('successful Bounties', () => {
     expect(hidden(game).lairs[0]!.clearedAt).toBe(101);
     expect(game.view().lairs[0]).toMatchObject({ status: 'cleared', bountyPosted: false });
     expect(game.view().stats.lairsCleared).toBe(1);
-    expect(game.view().chronicle.some((event) => event.kind === 'reward' && event.text.includes('break '))).toBe(true);
+    expect(game.view().chronicle.some((event) => event.kind === 'reward' && event.text.includes(game.view().lairs[0]!.name))).toBe(true);
   });
 
   it('breaking a Lair withdraws every open Contract from it and frees those Holdings', () => {
@@ -1162,7 +1262,7 @@ describe('employer ruin', () => {
     expect(game.view().board.taken.map((quest) => quest.id)).toEqual(['taken']);
     expect(hidden(game).town.employers[0]!.assets[0]!.questId).toBe('taken');
     expect(game.view().stats).toMatchObject({ employersRuined: 1, questsFailed: 0, questsExpired: 0 });
-    expect(game.view().chronicle.some((event) => event.kind === 'economy' && event.text.includes('are ruined'))).toBe(true);
+    expect(game.view().chronicle.some((event) => event.kind === 'economy' && event.text.includes(employerView(game).name))).toBe(true);
   });
 
   it('a ruined employer is counted only once across later days', () => {
@@ -1175,7 +1275,7 @@ describe('employer ruin', () => {
     expect(game.view().stats.employersRuined).toBe(1);
     for (let hour = 0; hour < 24; hour++) game.step();
     expect(game.view().stats.employersRuined).toBe(1);
-    expect(game.view().chronicle.filter((event) => event.kind === 'economy' && event.text.includes('are ruined'))).toHaveLength(1);
+    expect(game.view().chronicle.filter((event) => event.kind === 'economy' && event.text.includes(employerView(game).name))).toHaveLength(1);
   });
 
   it.each([
@@ -1218,7 +1318,7 @@ describe('Lair respawn', () => {
     expect(game.view().lairs.map((target) => target.status)).toEqual(['active', 'cleared']);
     expect(hidden(game).lairs[0]!.clearedAt).toBeNull();
     expect(hidden(game).lairs[1]!.spawnedAt).toBe(288);
-    expect(game.view().chronicle.some((event) => event.kind === 'town' && event.text.includes('Word spreads'))).toBe(true);
+    expect(game.view().chronicle.some((event) => event.kind === 'town' && event.text.includes(game.view().lairs[0]!.name))).toBe(true);
     for (let hour = 0; hour < 24; hour++) game.step();
     expect(game.view().lairs).toHaveLength(2);
   });
@@ -1241,17 +1341,23 @@ describe('Lair respawn', () => {
     { level: 5, minimum: 6, maximum: 7 }, { level: 19, minimum: 20, maximum: 20 },
     { level: 20, minimum: 20, maximum: 20 },
   ])('a respawned level-$level Lair is stronger, up to level twenty', ({ level, minimum, maximum }) => {
-    const game = scene((scenario, rng) => {
-      scenario.tick = 287;
-      const target = lair(rng, 'goblins', level);
-      Object.assign(target, { status: 'cleared', clearedAt: 0 });
-      scenario.lairs = [target];
-    });
-    game.step();
-    const spawned = game.view().lairs[0]!;
-    expect(spawned.level).toBeGreaterThanOrEqual(minimum);
-    expect(spawned.level).toBeLessThanOrEqual(maximum);
-    expect(spawned).toMatchObject({ strength: 1, raids: 0, raidsWon: 0, bountyPosted: false });
+    const levels = new Set<number>();
+    for (let seed = 1; seed <= 40; seed++) {
+      const game = scene((scenario, rng) => {
+        scenario.tick = 287;
+        const target = lair(rng, 'goblins', level);
+        Object.assign(target, { status: 'cleared', clearedAt: 0 });
+        scenario.lairs = [target];
+      }, { seed });
+      game.step();
+      const spawned = game.view().lairs[0]!;
+      expect(spawned.level).toBeGreaterThanOrEqual(minimum);
+      expect(spawned.level).toBeLessThanOrEqual(maximum);
+      expect(spawned).toMatchObject({ strength: 1, raids: 0, raidsWon: 0, bountyPosted: false });
+      levels.add(spawned.level);
+    }
+    expect(levels.has(minimum)).toBe(true);
+    expect(levels.has(maximum)).toBe(true);
   });
 
   it('a cleared Lair without a fall date does not respawn', () => {
