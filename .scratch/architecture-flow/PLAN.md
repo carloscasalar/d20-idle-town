@@ -13,8 +13,8 @@ Status values: `todo`, `in-progress`, `done`, `blocked`.
 | 03c | The smoke test times out in CI | fix | done | f8f00a0 (Cursor; reviewed by the orchestrator, 3-file diff) |
 | 04 | Board: the Board owns the lifecycle and is the single writer of the references | refactor | done | f7e9e4a (Cursor; passed review, two small corrections folded into 04b) |
 | 04b | Board: configuration, behaviour per kind of work by data, and three interface leaks | refactor | done | 091a2c8, 37cb0ca, db154f6 (Codex; 1 correction round) |
-| 05 | Coin transfers: audit and characterisation tests, plus two counter bugs they exposed | tests + bug fix | in-progress | f78a95f, e2ad6f4 (Codex); boundary-test correction handed to Cursor |
-| 06 | Coin transfers: one module for gold movements | refactor | todo | |
+| 05 | Coin transfers: audit and characterisation tests, plus two counter bugs they exposed | tests + bug fix | done | f78a95f, e2ad6f4, 3e02d62 (Codex, then Cursor; 1 correction round) |
+| 06 | Coin transfers: one module moves gold, with reasons as data | refactor | in-progress | Cursor |
 | 07 | Company roster: characterisation tests (arrivals, recruiting, merging, retirement) | tests | todo | |
 | 08 | Company roster: deepen the module, remove the `tryRetire` callback | refactor | todo | |
 | 09 | Job intel: characterisation tests (investigation, divination, reading the road) | tests | todo | |
@@ -44,3 +44,4 @@ Bugs found during a task get a new row inserted before the task continues.
 - Lesson: the orchestrator's staging pattern missed `scripts/`; stage by `git status`, not by a fixed list of directories.
 - Turn 05: conservation holds on all 1,200 seeded ticks; the per-holder rule exposed two bugs (a wiped purse and a merge were not recorded in `earned`/`spent`), fixed in e2ad6f4. The reviewer's 76 mutations left six boundary survivors; the tests-only correction was cut off by Codex's usage limit (retry after 4:26 AM on 2026-10-03) with partial edits in the working tree, and was handed to Cursor in a new session.
 - Lesson: a usage limit can land mid-turn. The handover prompt points the next implementer at the task file and at `git diff`, and tells it to verify every item rather than trust the partial work.
+- Turn 05 correction: Codex had in fact finished all nine items before its limit cut it off; Cursor verified each against the payment code and kept the diff unchanged (3e02d62).
