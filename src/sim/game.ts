@@ -894,6 +894,7 @@ export class Game {
     const lair = this.lairById(quest.lairId);
     if (!lair) return;
     if (success) {
+      lair.questId = null;
       quest.status = 'done';
       guild.treasury -= quest.reward;
       guild.spent += quest.reward;

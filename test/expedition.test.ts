@@ -131,6 +131,25 @@ describe('an expedition hour', () => {
     expect(calls.slice(-2)).toEqual([`loot:${party.members.length}`, 'settle:false']);
   });
 
+  it.each(['contract', 'assault'] as const)('releases the company’s %s and encounter progress when it is wiped out', (kind) => {
+    const { party, quest, context } = setup();
+    quest.kind = kind;
+    party.progress = 1;
+    context.combat = () => outcome(party, 'monsters', party.members.map(() => false));
+    let companyAtSettlement: { questId: string | null; progress: number } | undefined;
+    context.settleQuest = (contract, company, success) => {
+      expect(success).toBe(false);
+      companyAtSettlement = { questId: company.questId, progress: company.progress };
+      contract.status = 'failed';
+    };
+
+    advanceExpedition(party, context);
+
+    expect(quest.status).toBe('failed');
+    expect(party).toMatchObject({ status: 'disbanded', questId: null, progress: 0 });
+    expect(companyAtSettlement).toEqual({ questId: null, progress: 0 });
+  });
+
   it('passes a blessing and the no-retreat rule into the final lair fight', () => {
     const { party, quest, context } = setup();
     quest.kind = 'assault';

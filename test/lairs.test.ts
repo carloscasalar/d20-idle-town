@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createHero, rollSkill, skillBonus } from '../src/adventurers/hero';
-import { rollClasses } from '../src/adventurers/party';
+import { createParty, rollClasses } from '../src/adventurers/party';
 import { Rng } from '../src/core/rng';
 import { generateAssault } from '../src/quests/quest';
 import { createLair, pickBoss } from '../src/town/lairs';
@@ -30,6 +30,36 @@ describe('lairs', () => {
     expect(view.stats.raids).toBeGreaterThan(0);
     expect(view.board.open.some((quest) => quest.lair !== null)).toBe(true);
   }, 20_000);
+
+  it('removes the posted bounty when a successful company returns and clears the lair', () => {
+    const game = Game.forTesting({ seed: 23, maxOpenQuests: 0, maxParties: 1 }, (scenario) => {
+      const rng = new Rng(23);
+      const lair = createLair(rng, 'goblins', 5, 0);
+      lair.raidCooldown = 100;
+      const bounty = generateAssault(rng, lair, serviceOf(scenario.town, 'guild'), 4, 0);
+      const company = createParty(rng, 5, 4, 0);
+      bounty.status = 'taken';
+      bounty.partyId = company.id;
+      lair.questId = bounty.id;
+      company.questId = bounty.id;
+      company.status = 'returning';
+      company.progress = bounty.encounters.length;
+      company.ticksLeft = 1;
+      scenario.lairs = [lair];
+      scenario.quests = [bounty];
+      scenario.parties = [company];
+    });
+
+    expect(game.view().lairs[0]).toMatchObject({ status: 'active', bountyPosted: true });
+    expect(game.view().board.taken).toHaveLength(1);
+
+    game.step();
+
+    const view = game.view();
+    expect(view.lairs[0]).toMatchObject({ status: 'cleared', bountyPosted: false });
+    expect(view.board.taken).toHaveLength(0);
+    expect(view.stats).toMatchObject({ questsCompleted: 1, lairsCleared: 1 });
+  });
 });
 
 describe('skill checks', () => {

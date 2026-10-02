@@ -175,6 +175,8 @@ function resolveFight(p: Party, q: Quest, context: ExpeditionContext): void {
       p.status = 'disbanded';
       ledger.partiesWiped += 1;
       leaveLoot(q, p, p.members);
+      p.questId = null;
+      p.progress = 0;
       settleQuest(q, p, false);
     } else {
       log(context, 'combat', `${p.name}: ${summary} Defeat. ${listNames(survivors.map((h) => h.name))} flee with the bodies of ${listNames(fallen.map((h) => h.name))}.`, outcome.lines);
