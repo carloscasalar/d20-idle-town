@@ -98,6 +98,11 @@ The paths below link to implementations. Names in code font identify the main ex
 Every field is a number, except the inclusive `[min, max]` cooldown pairs.
 Game uses these fields directly from `GameConfig`, with `contractDays` converted
 to `contractOpenTicks`; `travelTicks` and `difficultyScale` keep their names.
+`renownCap`, `encounterPartySize` and `lairStrengthCap` default from the shared
+`MAX_RENOWN`, `PARTY_SIZE` and `MAX_STRENGTH` constants. Other modules use those
+same constants; explicit Board overrides remain local tuning. Encounter
+scaling, lair boss budgets and calibration scripts also read `PARTY_SIZE`
+rather than maintaining separate copies of its default.
 
 | Field | Default | Meaning |
 | --- | --- | --- |
@@ -118,13 +123,24 @@ to `contractOpenTicks`; `travelTicks` and `difficultyScale` keep their names.
 | `lairStrengthGain` | 1 | Strength gained after unanswered raids or failed Bounties |
 | `lairStrengthCap` | 10 | Cap applied to those strength gains |
 
-A kind entry supplies `create`, `post`, `success`, `failure`, and `acceptance`.
-An `expire` callback means the kind expires; its absence means it does not.
+A kind entry supplies `create(kind, terms, context)`,
+`post(work, terms, context)`, `success`, `failure`, and `acceptance`. Creators
+receive the selected kind; post rules use the supplied employer, holding and
+lair objects. Consequence rules receive read-only work and cannot assign its
+terminal status or company link. Settlement rules can still transfer the
+original item reward into the company's stash.
+
+The Board writes terminal status and releases holding/lair links before
+settlement or withdrawal consequences run. An `expire` callback means the kind
+expires; its absence means it does not. Expiry first prepares a consequence
+function and validates its targets; the Board then closes/unlinks the work,
+counts expiry, and applies the consequences. Refusals therefore happen before
+closing/counting, while expiry events observe the finished state.
 `withdrawOnLairBreak` says how open work reacts when its lair falls; its absence
 leaves that work open. `Contract` and `Bounty` name the existing entries, keyed
 by `contract` and `assault`. Pass an extended table to the constructor to add a
-kind; tests register an Escort and use the ordinary posting and settlement
-operations. `WorkContext` adds the read-only configuration and a Board-owned
+kind; tests define an Escort from scratch and use the ordinary posting,
+settlement, expiry and withdrawal operations. `WorkContext` adds the read-only configuration and a Board-owned
 `breakLair` operation to the ordinary context for these trusted behaviors.
 
 ## Working across boundaries

@@ -171,7 +171,13 @@ configuration (including inclusive cooldown ranges), built by Game from
 selects small, named Contract and Bounty behaviors for creation, posting,
 acceptance wording, success, failure, expiry and withdrawal after a lair falls.
 An injected table can add a kind through `Board.post` without changing Board
-operations. Query results are deeply read-only TypeScript views, including
+operations. Creators receive the kind, and posting rules receive the original
+posting terms. Entries apply consequences; Board operations write terminal
+status and release references. Expiry prepares and validates its consequences
+before the Board closes work, then applies them after closure. The three
+shared defaults for renown cap, encounter company size and lair strength cap
+come from `MAX_RENOWN`, `PARTY_SIZE` and `MAX_STRENGTH`; other users read those
+same constants. Query results are deeply read-only TypeScript views, including
 encounters and rewards. Intelligence changes go through `learnIntel` and
 `revealAll`. Only scenario setup uses `recordsForScenario` and
 `replaceForScenario`; regression serialization uses `all()`.

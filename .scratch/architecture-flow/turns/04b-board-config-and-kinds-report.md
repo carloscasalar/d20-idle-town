@@ -3,7 +3,10 @@
 The Board now takes plain configuration and dispatches behavior through an
 injectable kind table. Contract and Bounty rules retain the same accounting,
 random draw order and narrative. A test registers an Escort without changing
-Board operations. Settlement alone releases companies. Expedition starts the
+Board operations. The Escort entry is defined from scratch and does not write
+terminal status or clear references. The Board closes work and releases its
+holding/lair links for settlement, expiry and withdrawal; kind entries apply
+consequences. Settlement alone releases companies. Expedition starts the
 journey; Game takes work, starts the journey, then publishes acceptance in its
 single `acceptQuest` method. Subscribers still see the same traveling company
 and linked work, including the existing timing of the chronicle append.
@@ -52,6 +55,22 @@ The kind table supplies `create`, `post`, `success`, `failure`, `acceptance`,
 optional `expire`, and optional `withdrawOnLairBreak`. No `expire` means the work
 does not expire; no withdrawal rule means breaking a lair leaves it open.
 
+`create(kind, terms, context)` receives the selected kind and returns the new
+work. `Board.post` does not overwrite it. `post(work, terms, context)` receives
+the original posting terms, and Contract/Bounty rules use those exact objects
+without re-fetching employers or holdings with non-null assertions. Kind
+consequence callbacks receive read-only work, so they cannot assign terminal
+status or the company link. Settlement callbacks retain access to mutable item
+rewards for the existing transfer to company stashes; query results remain
+deeply read-only.
+
+Expiry is prepared in two steps within the Board: the entry validates its
+targets and returns a consequence function; the Board closes work, clears its
+links and counts expiry, then applies the function. Missing-target refusals
+still happen before closure/counting, and event subscribers see the finished
+state. The same Board-owned finish operation ends settlement and withdrawal;
+terminal state is never an entry's responsibility.
+
 ## BoardConfig fields
 
 Only numbers and inclusive `[min, max]` cooldown pairs appear in this object.
@@ -80,6 +99,24 @@ Only numbers and inclusive `[min, max]` cooldown pairs appear in this object.
 construction. Existing `travelTicks` and `difficultyScale` retain their names
 and meaning.
 
+### One definition for each shared default
+
+For each of these three values, the chosen option is **defaults built from the
+existing constant, with other users reading that constant**:
+
+- `renownCap` defaults from `MAX_RENOWN` in `src/adventurers/party.ts`.
+  Expedition's carousing uses the same `MAX_RENOWN` constant.
+- `encounterPartySize` defaults from `PARTY_SIZE` in `src/adventurers/party.ts`.
+  Game and company helpers already use it; encounter scaling, lair boss
+  budgets, and the assault/calibration scripts now use it instead of literal
+  copies of 4.
+- `lairStrengthCap` defaults from `MAX_STRENGTH` in `src/town/lairs.ts`.
+  Lair raid timing uses that same constant.
+
+No two default numbers must be kept equal by hand. Explicit Board overrides
+remain local tuning, as permitted by the chosen option. GameConfig structure,
+job intelligence ownership and coin movements were not restructured.
+
 ## Exact test edit inventory
 
 ### test/board.test.ts
@@ -105,9 +142,10 @@ remain in place:
 
 The `world` fixture now accepts non-default configuration and an injected kind
 table. It uses `all()` instead of the mutable scenario records. The invariant
-helper still verifies the four links and their live/terminal states; it now
-allows registered kinds to link holdings rather than assuming every such job
-has the literal kind `contract`. The existing test template “holds after every
+helper verifies the four links and their live/terminal states. A holding's
+work must not be a Bounty (`assault`), allowing registered kinds such as Escort;
+a lair's work must be a Bounty. A raid Contract's incidental `lairId` cannot
+make it a valid lair bounty link. The existing test template “holds after every
 tick for seed %s” retains its three 400-hour runs for 7, 42 and 20260907.
 
 Added test templates (parameterized cases cover each kind/outcome where shown):
@@ -131,6 +169,31 @@ Added test templates (parameterized cases cover each kind/outcome where shown):
 - reveals intelligence through Board operations and exposes deeply read-only work
 - publishes %s acceptance after linking work and starting the journey
 - settlement releases the company after $kind $end through Game
+
+Correction 1 adds these test templates in `test/board.test.ts`:
+
+- “rejects a %s” (Lair naming a raid Contract; Holding naming a Bounty): proves
+  the restored kind checks reject both invalid relationships.
+- “posts a Contract using the supplied employer and Holding objects”: proves
+  the posting rule uses the original objects rather than canonical ID lookups.
+- “posts a Bounty using the supplied guild and Lair objects”: the corresponding
+  Bounty posting check.
+- “closes and unlinks an expired Escort even when its expiry consequences do
+  nothing”: proves the Board owns status, reference release and expiry count.
+- “releases a Lair link when an independent Bounty entry omits release
+  consequences”: proves common Board settlement releases a lair even without
+  that action in the entry.
+
+Correction 1 also edits “posts, takes and settles an Escort with success %s”
+and “withdraws an Escort through its registered rule when its lair is broken”
+through their shared entry: it now defines creation, posting, success, failure,
+acceptance, optional expiry and withdrawal from scratch. It never spreads or
+calls a built-in Contract/Bounty entry. Its settlement and withdrawal rules
+apply only consequences and omit terminal status and link release, so these
+checks exercise Board ownership. The read-only intelligence/query test also
+checks at compile time that kind consequences cannot assign work status or
+company links. The invariant helper runs after every operation and every tick
+of the existing three 400-hour runs. No tests were deleted in this correction.
 
 These additions cover every configuration field, a third kind's ordinary
 lifecycle and lair withdrawal, expiry refusals, compile-time query immutability,
@@ -166,10 +229,12 @@ regression snapshot are unchanged.
 ## Verification and remaining work
 
 - `pnpm typecheck`: passed.
-- `pnpm test`: passed, 318 tests across 15 files.
+- `pnpm test`: passed, 324 tests across 15 files.
 - `git diff --check`: passed.
 - Regression snapshot: no diff; byte-for-byte identical SHA-256 before/after:
   `76b408738e20921bb37d66952cabe61799593c2be08aabf314f3775ffae3a468`.
-- Requested refactor, tests and documents: complete. No commit or push made.
+- Requested refactor and all four correction items: complete. No commit or
+  push made by the implementing agent. The previous turn was committed by the
+  orchestrator as `091a2c8`.
 - The supplied `@RTK.md` reference was absent from the repository root and the
   checked parent/home locations, so that ancillary file could not be read.

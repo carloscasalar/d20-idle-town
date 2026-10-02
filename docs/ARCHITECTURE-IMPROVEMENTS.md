@@ -92,7 +92,13 @@ Game builds it from `GameConfig`, retaining the existing fields and converting
 Bounty entries. Each supplies creation/posting, success/failure, acceptance
 wording, and optional expiry and withdrawal after a lair falls. A third kind
 can be registered in an injected table and posted through `post` without
-editing the Board's operations.
+editing the Board's operations. Creators receive the kind; posting rules use
+the supplied terms without looking up the employer or holding again. Entries
+apply consequences to read-only work; the Board writes terminal status and
+releases references for settlement, expiry and withdrawal. Expiry validates
+and prepares its consequences before the Board closes work, then applies them
+after closure. Shared defaults come from `MAX_RENOWN`, `PARTY_SIZE` and
+`MAX_STRENGTH`, and other users read the same constants.
 
 `take` links the work and company and returns travel time and an acceptance
 event. The single `Game.acceptQuest` operation takes work, calls Expedition's
@@ -118,8 +124,11 @@ draw order, settlement accounting and narrative text are preserved.
 one removed lifecycle test, and the architecture references.
 
 **Evidence.** Direct Board tests exercise every configuration field, a
-registered Escort's posting, acceptance, both settlement outcomes, non-expiry
-and withdrawal after a lair falls, and refusal of orphaned Contract expiry.
+registered Escort defined from scratch, its posting, acceptance, both
+settlement outcomes, expiry/non-expiry and withdrawal after a lair falls, and
+refusal of orphaned Contract expiry. The invariant rejects a lair linked to a
+raid Contract and a holding linked to a Bounty. Posting tests verify the
+supplied objects are used.
 Compile-time checks prohibit assignments through every work query, including
 nested encounters and rewards. Game tests check acceptance subscriber state
 and company release after Contract and Bounty wipes and homecomings. The link
@@ -128,7 +137,7 @@ seeds 7, 42 and 20260907. Existing lifecycle, ruin and lair tests remain intact
 except deletion of “an expired Contract missing its %s is still closed and
 counted”, replaced by the Board refusal test.
 
-**Verification.** `pnpm typecheck` passed. `pnpm test` passed all 318 tests
+**Verification.** `pnpm typecheck` passed. `pnpm test` passed all 324 tests
 across 15 files, including the unchanged three-seed, 400-hour trajectory
 snapshots. `git diff --check` passed. The regression snapshot has no diff and
 its SHA-256 checksum is identical before and after the refactor. The final

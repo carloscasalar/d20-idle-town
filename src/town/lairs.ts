@@ -1,3 +1,4 @@
+import { PARTY_SIZE } from '../adventurers/party';
 import { calculateDifficulty, type MonsterData } from 'battlecast-engine';
 import { heroName } from '../core/names';
 import type { Rng } from '../core/rng';
@@ -63,7 +64,7 @@ function fill(rng: Rng, template: string): string {
 /** The strongest monster of the theme that a party of four at this level could face alone in a "high" fight. */
 export function pickBoss(theme: ThemeId, level: number): MonsterData {
   const roster = themeMonsters(theme);
-  const cap = calculateDifficulty(4, level, 0).thresholds.high;
+  const cap = calculateDifficulty(PARTY_SIZE, level, 0).thresholds.high;
   const fits = roster.filter((m) => m.xp <= cap).sort((a, b) => b.xp - a.xp);
   return fits[0] ?? roster.sort((a, b) => a.xp - b.xp)[0]!;
 }

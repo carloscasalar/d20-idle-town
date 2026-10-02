@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createParty, type Party } from '../src/adventurers/party';
 import { Rng } from '../src/core/rng';
 import { generateAssault, generateQuest } from '../src/quests/quest';
-import { Board, Contract, WORK_KINDS, DEFAULT_BOARD_CONFIG, type BoardConfig, type BoardContext, type BoardLedger, type WorkKinds, type WorkBehavior } from '../src/sim/board';
+import { Board, WORK_KINDS, DEFAULT_BOARD_CONFIG, type BoardConfig, type BoardContext, type BoardLedger, type WorkKinds, type WorkBehavior } from '../src/sim/board';
 import { Game } from '../src/sim/game';
 import { createAsset, type Asset } from '../src/town/assets';
 import { createLair, type Lair } from '../src/town/lairs';
@@ -32,6 +32,7 @@ export function assertBoardInvariant(world: BoardWorld): void {
       expect(contract, `holding ${holding.id}`).toMatchObject({
         assetId: holding.id,
       });
+      expect(contract!.kind, `holding ${holding.id}`).not.toBe('assault');
       expect(['open', 'taken']).toContain(contract!.status);
     }
   }
@@ -39,6 +40,7 @@ export function assertBoardInvariant(world: BoardWorld): void {
     if (lair.questId === null) continue;
     const bounty = quests.get(lair.questId);
     expect(bounty, `lair ${lair.id}`).toMatchObject({
+      kind: 'assault',
       lairId: lair.id,
     });
     expect(['open', 'taken']).toContain(bounty!.status);
@@ -132,6 +134,18 @@ function lairOf(rng: Rng, lairs: Lair[]): Lair {
   return lair;
 }
 
+describe('Board invariant kind checks', () => {
+  it.each(['Lair naming a raid Contract', 'Holding naming a Bounty'] as const)('rejects a %s', (invalid) => {
+    const state: BoardWorld = {
+      quests: [{ id: 'work', kind: invalid.startsWith('Lair') ? 'contract' : 'assault', status: 'open', assetId: 'holding', lairId: 'lair', partyId: null }],
+      parties: [],
+      lairs: [{ id: 'lair', questId: invalid.startsWith('Lair') ? 'work' : null }],
+      town: { employers: [{ assets: [{ id: 'holding', questId: invalid.startsWith('Holding') ? 'work' : null }] }] },
+    };
+    expect(() => assertBoardInvariant(state)).toThrow();
+  });
+});
+
 describe('the Board', () => {
   it('posts a contract and links it to the holding', () => {
     const { board, patron, holding, context, check } = world();
@@ -144,6 +158,38 @@ describe('the Board', () => {
     expect(board.byId(contract.id)).toBe(contract);
     expect(Object.isFrozen(board.open())).toBe(true);
     check();
+  });
+
+  it('posts a Contract using the supplied employer and Holding objects', () => {
+    const { board, patron, holding, context, check } = world();
+    const suppliedEmployer: Employer = { ...patron, name: 'The supplied patron' };
+    const suppliedHolding: Asset = { ...holding, name: 'The supplied holding' };
+    const events: string[] = [];
+    context.report = (event) => events.push(event.text);
+    const work = board.postContract(suppliedEmployer, suppliedHolding, 'goblins', 5, null, context);
+    check();
+    expect(suppliedHolding.questId).toBe(work.id);
+    expect(suppliedEmployer.questsPosted).toBe(1);
+    expect(holding.questId).toBeNull();
+    expect(patron.questsPosted).toBe(0);
+    expect(events[0]).toContain(suppliedEmployer.name);
+    expect(events[0]).toContain(suppliedHolding.name);
+  });
+
+  it('posts a Bounty using the supplied guild and Lair objects', () => {
+    const { board, guild, rng, lairs, context, check } = world();
+    const lair = lairOf(rng, lairs);
+    const suppliedGuild: Employer = { ...guild };
+    const suppliedLair: Lair = { ...lair, name: 'The supplied lair' };
+    const events: string[] = [];
+    context.report = (event) => events.push(event.text);
+    const work = board.post('assault', { employer: suppliedGuild, lair: suppliedLair }, context);
+    check();
+    expect(suppliedLair.questId).toBe(work.id);
+    expect(suppliedGuild.questsPosted).toBe(1);
+    expect(lair.questId).toBeNull();
+    expect(guild.questsPosted).toBe(0);
+    expect(events[0]).toContain(suppliedLair.name);
   });
 
   it('refuses a second contract for a holding that has one', () => {
@@ -558,22 +604,51 @@ describe('Board configuration', () => {
   });
 });
 
-const Escort: WorkBehavior = {
-  ...Contract,
-  acceptance: (work, company) => ({ kind: 'quest', text: `${company.name} escort the caravan for "${work.title}".` }),
-  success: (work, company, employer, holding, context) => {
-    Contract.success(work, company, employer, holding, context);
-    company.gold += 11;
-  },
-  failure: (work, company, employer, holding, context) => {
-    Contract.failure(work, company, employer, holding, context);
-    company.gold -= 11;
-  },
-  expire: undefined,
-};
+function escortBehavior(expires = false): WorkBehavior {
+  return {
+    create: (kind, { employer, holding, lair }, context) => {
+      if (!holding) throw new Error('An Escort needs a holding.');
+      if (holding.questId !== null) throw new Error('The holding already has work.');
+      return {
+        id: context.rng.id('quest'),
+        kind,
+        title: 'Escort the caravan',
+        place: holding.name,
+        giverId: employer.id,
+        assetId: holding.id,
+        lairId: lair?.id ?? null,
+        theme: 'goblins',
+        level: 5,
+        encounters: [],
+        revealed: 0,
+        countRevealed: true,
+        reward: 11,
+        itemReward: null,
+        guildOnly: false,
+        status: 'open',
+        partyId: null,
+        postedAt: context.tick,
+      };
+    },
+    post: (work, { holding }) => {
+      if (holding) holding.questId = work.id;
+    },
+    acceptance: (work, company) => ({ kind: 'quest', text: `${company.name} escort the caravan for "${work.title}".` }),
+    success: (work, company, _employer, holding) => {
+      company.gold += work.reward + 11;
+      if (holding) holding.status = 'safe';
+    },
+    failure: (_work, company) => { company.gold -= 11; },
+    expire: expires ? () => () => {} : undefined,
+    withdrawOnLairBreak: (work, context) => {
+      const holding = context.town.employers.flatMap((employer) => employer.assets).find((holding) => holding.id === work.assetId);
+      if (holding) holding.status = 'safe';
+    },
+  };
+}
 
-// A third kind needs one entry, including any reused Contract or Bounty rules.
-const escortKinds: WorkKinds = { ...WORK_KINDS, escort: Escort };
+// The third kind defines all its consequences without reusing a built-in entry.
+const escortKinds: WorkKinds = { ...WORK_KINDS, escort: escortBehavior() };
 
 describe('registered kinds of work', () => {
   it.each([true, false])('posts, takes and settles an Escort with success %s', (success) => {
@@ -615,6 +690,47 @@ describe('registered kinds of work', () => {
   });
 });
 
+describe('Board ownership of terminal work', () => {
+  it('closes and unlinks an expired Escort even when its expiry consequences do nothing', () => {
+    const kinds: WorkKinds = { ...WORK_KINDS, escort: escortBehavior(true) };
+    const { board, patron, holding, context, check } = world({}, kinds);
+    const work = board.post('escort', { employer: patron, holding }, context);
+    check();
+    context.tick = 73;
+    board.expireContracts(context);
+    check();
+    expect(work.status).toBe('failed');
+    expect(holding.questId).toBeNull();
+    expect(context.ledger.questsExpired).toBe(1);
+  });
+
+  it('releases a Lair link when an independent Bounty entry omits release consequences', () => {
+    const independent = escortBehavior();
+    independent.create = (kind, { employer, lair }, context) => {
+      if (!lair) throw new Error('A Bounty needs a lair.');
+      return {
+        id: context.rng.id('quest'), kind, title: 'Independent bounty', place: lair.place,
+        giverId: employer.id, assetId: null, lairId: lair.id, theme: lair.theme, level: lair.level,
+        encounters: [], revealed: 0, countRevealed: true, reward: 11, itemReward: null,
+        guildOnly: false, status: 'open', partyId: null, postedAt: context.tick,
+      };
+    };
+    independent.post = (work, { lair }) => { if (lair) lair.questId = work.id; };
+    const { board, guild, rng, lairs, parties, context, check } = world({}, { ...WORK_KINDS, assault: independent });
+    const lair = lairOf(rng, lairs);
+    const work = board.post('assault', { employer: guild, lair }, context);
+    check();
+    const company = companyOf(rng, parties);
+    board.take(company, work, context);
+    check();
+    board.settle(work, company, false, context);
+    check();
+    expect(work.status).toBe('failed');
+    expect(lair.questId).toBeNull();
+    expect(company.questId).toBeNull();
+  });
+});
+
 describe('Board refusals and intelligence', () => {
   it.each(['employer', 'holding'] as const)('refuses to expire a Contract missing its %s', (missing) => {
     const { board, patron, holding, context, check } = world();
@@ -642,6 +758,11 @@ describe('Board refusals and intelligence', () => {
     expect(work.revealed).toBe(work.encounters.length);
     // Compile-time checks: none of the query routes exposes writable work.
     if (false) {
+      const consequence = null as unknown as Parameters<WorkBehavior['success']>[0];
+      // @ts-expect-error Kind consequences cannot assign terminal work status.
+      consequence.status = 'done';
+      // @ts-expect-error Kind consequences cannot assign company links.
+      consequence.partyId = null;
       // @ts-expect-error Board status is read-only.
       board.open()[0]!.status = 'failed';
       // @ts-expect-error Board company links are read-only.

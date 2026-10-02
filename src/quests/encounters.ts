@@ -1,4 +1,5 @@
 import { calculateDifficulty, monsters as ALL_MONSTERS, type MonsterData } from 'battlecast-engine';
+import { PARTY_SIZE } from '../adventurers/party';
 import type { DeepReadonly } from '../core/readonly';
 import type { Rng } from '../core/rng';
 import { themeMonsters, type ThemeId } from './themes';
@@ -146,7 +147,7 @@ function attempt(rng: Rng, usable: MonsterData[], target: number, pattern: Patte
  * Contracts are budgeted for four. A bigger company meets proportionally more
  * of the same monsters (a lone boss stays alone until the count would double).
  */
-export function scaleEncounter(spec: DeepReadonly<EncounterSpec>, partySize: number, baseSize = 4): DeepReadonly<EncounterSpec> {
+export function scaleEncounter(spec: DeepReadonly<EncounterSpec>, partySize: number, baseSize = PARTY_SIZE): DeepReadonly<EncounterSpec> {
   if (partySize <= baseSize) return spec;
   const factor = partySize / baseSize;
   const monsters = spec.monsters.map((g) => ({ ...g, count: Math.max(g.count, Math.floor(g.count * factor + 0.25)) }));
