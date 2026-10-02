@@ -11,8 +11,8 @@ Status values: `todo`, `in-progress`, `done`, `blocked`.
 | 02 | Dangling contract references (ruined employer, cleared lair, wiped company) | bug fix | done | 7eb395b, e4f8ea6 (no correction rounds) |
 | 03 | Board: characterisation tests for the contract lifecycle, plus three bugs they exposed | tests + bug fix | done | 6dd66d2, 762fc66, 5870771 (1 correction round) |
 | 03c | The smoke test times out in CI | fix | done | f8f00a0 (Cursor; reviewed by the orchestrator, 3-file diff) |
-| 04 | Board: the Board owns the lifecycle and is the single writer of the references | refactor | in-progress | Cursor (Codex hit its limit before changing anything) |
-| 04b | Board: constants become configuration; behaviour per kind of work selected by data | refactor | todo | |
+| 04 | Board: the Board owns the lifecycle and is the single writer of the references | refactor | done | f7e9e4a (Cursor; passed review, two small corrections folded into 04b) |
+| 04b | Board: configuration, behaviour per kind of work by data, and three interface leaks | refactor | in-progress | Codex |
 | 05 | Coin transfers: characterisation tests for every gold movement | tests | todo | |
 | 06 | Coin transfers: one module for gold movements | refactor | todo | |
 | 07 | Company roster: characterisation tests (arrivals, recruiting, merging, retirement) | tests | todo | |
@@ -37,3 +37,5 @@ Bugs found during a task get a new row inserted before the task continues.
 - Turn 04: Codex hit its usage limit while still reading the code (session 01a0fd9d-5021-7363-b7b9-eb75e237e0f6, no file changed). The message said to try again at 10:04 PM on 2026-10-02. Flow stopped here by rule. To continue: start turn 04 again in a new session with the same prompt.
 - Fallback implementer added: Cursor with `grok-4.7-high` (`scripts/agents/cursor-turn.sh`). Turn 03c (CI timeout) goes first, then turn 04 restarts on Cursor.
 - Turn 03c: Cursor found the 400-tick run is about 16% slower since potions are drunk in combat (more heroes standing, slightly more rounds), all inside the engine's `runRound`. One project-wide 20 s timeout in `vitest.config.ts` replaces the per-test numbers. A diff this small was reviewed by the orchestrator directly instead of spending a reviewer subagent.
+- Turn 04: two Cursor runs were killed by the orchestrator's 10-minute background limit before any file changed (a large refactor spends that long reading). Fixed with `scripts/agents/detach.sh` (the turn runs in its own session; a monitor waits for a marker file) and by logging Cursor's event stream. The resumed turn took about 18 minutes and passed review: behaviour preserved line for line, single writer confirmed, the invariant helper kills a seeded mutation. Leaks the reviewer named go to 04b: `releaseCompany`, shallow read-only views, `take` writing expedition state, an impossible expiry case kept alive by a test.
+- Lesson: print and record the session id before a turn starts; log the event stream, not only the final message.
