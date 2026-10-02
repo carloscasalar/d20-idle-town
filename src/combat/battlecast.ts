@@ -174,8 +174,9 @@ export function runCombat(heroes: Hero[], spec: EncounterSpec, seed: number, opt
       winner = r.winner;
       break;
     }
-    // Stand-in for the 2024 Bonus Action: one potion per living Bloodied hero
-    // between rounds, before deciding whether the company must flee.
+    // Stand-in for the 2024 Bonus Action: conscious Bloodied heroes drink;
+    // a fallen hero receives a potion from the first conscious companion.
+    // Between rounds, before deciding whether the company must flee.
     const companion = fighters.find((h) => {
       const c = enc.creatures.find((x) => x.id === idByHero.get(h.id));
       return c?.isAlive && c.currentHp > 0 && !c.conditions.includes('unconscious');

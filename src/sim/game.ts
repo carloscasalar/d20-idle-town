@@ -640,7 +640,14 @@ export class Game {
   private ruin(e: Employer): void {
     e.ruined = true;
     this.stats.employersRuined += 1;
-    for (const q of this.quests) if (q.giverId === e.id && q.status === 'open') q.status = 'failed';
+    for (const q of this.quests) {
+      if (q.giverId !== e.id || q.status !== 'open') continue;
+      q.status = 'failed';
+      const asset = q.assetId ? assetById(this.town, q.assetId) : undefined;
+      if (asset?.questId === q.id) asset.questId = null;
+      const lair = this.lairById(q.lairId);
+      if (lair?.questId === q.id) lair.questId = null;
+    }
     this.chronicleLog('economy', `${e.name} are ruined. ${e.title === 'Faction' ? 'The organisation dissolves' : 'Their holdings are sold off'}; no more contracts from them.`);
   }
 
