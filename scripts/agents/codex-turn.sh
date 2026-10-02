@@ -27,7 +27,7 @@ case "$mode" in
   resume)
     session="${2:?session id}"
     prompt="${3:?prompt file}"
-    codex exec resume "${common[@]}" "$session" - < "$prompt" > "$log" 2>&1
+    codex exec "${common[@]}" resume "$session" - < "$prompt" > "$log" 2>&1
     ;;
   *)
     echo "usage: $0 new <prompt-file> | resume <session-id> <prompt-file>" >&2
