@@ -12,8 +12,8 @@ Status values: `todo`, `in-progress`, `done`, `blocked`.
 | 03 | Board: characterisation tests for the contract lifecycle, plus three bugs they exposed | tests + bug fix | done | 6dd66d2, 762fc66, 5870771 (1 correction round) |
 | 03c | The smoke test times out in CI | fix | done | f8f00a0 (Cursor; reviewed by the orchestrator, 3-file diff) |
 | 04 | Board: the Board owns the lifecycle and is the single writer of the references | refactor | done | f7e9e4a (Cursor; passed review, two small corrections folded into 04b) |
-| 04b | Board: configuration, behaviour per kind of work by data, and three interface leaks | refactor | in-progress | Codex |
-| 05 | Coin transfers: characterisation tests for every gold movement | tests | todo | |
+| 04b | Board: configuration, behaviour per kind of work by data, and three interface leaks | refactor | done | 091a2c8, 37cb0ca, db154f6 (Codex; 1 correction round) |
+| 05 | Coin transfers: audit and characterisation tests for every gold movement | tests | in-progress | Codex |
 | 06 | Coin transfers: one module for gold movements | refactor | todo | |
 | 07 | Company roster: characterisation tests (arrivals, recruiting, merging, retirement) | tests | todo | |
 | 08 | Company roster: deepen the module, remove the `tryRetire` callback | refactor | todo | |
@@ -40,3 +40,5 @@ Bugs found during a task get a new row inserted before the task continues.
 - Turn 03c: Cursor found the 400-tick run is about 16% slower since potions are drunk in combat (more heroes standing, slightly more rounds), all inside the engine's `runRound`. One project-wide 20 s timeout in `vitest.config.ts` replaces the per-test numbers. A diff this small was reviewed by the orchestrator directly instead of spending a reviewer subagent.
 - Turn 04: two Cursor runs were killed by the orchestrator's 10-minute background limit before any file changed (a large refactor spends that long reading). Fixed with `scripts/agents/detach.sh` (the turn runs in its own session; a monitor waits for a marker file) and by logging Cursor's event stream. The resumed turn took about 18 minutes and passed review: behaviour preserved line for line, single writer confirmed, the invariant helper kills a seeded mutation. Leaks the reviewer named go to 04b: `releaseCompany`, shallow read-only views, `take` writing expedition state, an impossible expiry case kept alive by a test.
 - Lesson: print and record the session id before a turn starts; log the event stream, not only the final message.
+- Turn 04b: failed review narrowly once (kind entries could break the invariant; the invariant helper had been weakened; posting re-looked-up objects). One correction passed. Reviewer notes carried forward to task 11: `DEFAULT_CONFIG` restates Board defaults (`travelTicks`, `difficultyScale`, `contractDays` vs `contractOpenTicks`), and overriding `renownCap`/`lairStrengthCap` affects only the Board.
+- Lesson: the orchestrator's staging pattern missed `scripts/`; stage by `git status`, not by a fixed list of directories.
