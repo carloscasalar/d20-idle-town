@@ -24,7 +24,7 @@ import {
 import { runCombat } from '../combat/battlecast';
 import { describeEffect, rollStockItem, type MagicItem } from '../items/items';
 import { hashString, Rng } from '../core/rng';
-import { xpToNextLevel } from '../core/xp';
+import { MAX_LEVEL, xpToNextLevel } from '../core/xp';
 import { describeEncounter, type Difficulty } from '../quests/encounters';
 import { difficultyCode, generateAssault, generateQuest, isFullyKnown, learnQuestIntel, revealAll, type Quest } from '../quests/quest';
 import { THEMES, type ThemeId } from '../quests/themes';
@@ -747,6 +747,7 @@ export class Game {
 
   /** Raids that go unanswered make the lair bolder and richer. */
   private raidSucceeded(lair: Lair, gold: number): void {
+    if (lair.status !== 'active') return;
     lair.raidsWon += 1;
     lair.strength = Math.min(MAX_STRENGTH, lair.strength + 1);
     lair.hoard.gold += gold;
@@ -800,7 +801,7 @@ export class Game {
     if (parties.length === 0) return 1;
     const weights = parties.map((p) => ({ item: partyLevel(p), weight: p.status === 'idle' || p.status === 'resting' ? 3 : 1 }));
     const top = Math.max(...weights.map((w) => w.item));
-    if (employer.reputation >= 3 && this.rng.chance(0.1)) return top + 1;
+    if (employer.reputation >= 3 && this.rng.chance(0.1)) return Math.min(MAX_LEVEL, top + 1);
     return this.rng.weighted(weights);
   }
 
@@ -814,7 +815,7 @@ export class Game {
       const asset = q.assetId ? assetById(this.town, q.assetId) : undefined;
       if (!employer || !asset) continue;
       asset.questId = null;
-      const loss = Math.min(employer.treasury, asset.incomePerDay * LOOTING_DAYS);
+      const loss = Math.max(0, Math.min(employer.treasury, asset.incomePerDay * LOOTING_DAYS));
       employer.treasury -= loss;
       employer.spent += loss;
       const lair = this.lairById(q.lairId);

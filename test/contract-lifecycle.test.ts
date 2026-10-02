@@ -260,6 +260,20 @@ describe('posting Contracts', () => {
 });
 
 describe('Contract levels', () => {
+  it('a reputable employer never posts above level twenty for a level-twenty company', () => {
+    for (let seed = 1; seed <= 40; seed++) {
+      const game = scene((scenario, rng) => {
+        postingEmployer(scenario, rng, { reputation: 3 });
+        const party = company(rng, 20);
+        Object.assign(party, { status: 'resting', ticksLeft: 100 });
+        scenario.parties = [party];
+      }, { seed, maxOpenQuests: 1 });
+      game.step();
+      expect(game.view().board.open).toHaveLength(1);
+      expect(game.view().board.open[0]!.level).toBe(20);
+    }
+  });
+
   it('an employer with reputation two never posts above the strongest company', () => {
     for (let seed = 1; seed <= 40; seed++) {
       const game = scene((scenario, rng) => {
@@ -462,6 +476,19 @@ describe('Lair raids', () => {
 });
 
 describe('posting Bounties', () => {
+  it('a Bounty is posted once the strongest company is at least one level below the Lair, with no upper bound', () => {
+    for (const { level, posted } of [{ level: 3, posted: 0 }, { level: 4, posted: 1 }, { level: 20, posted: 1 }]) {
+      const game = scene((scenario, rng) => {
+        scenario.parties = [company(rng, 1), company(rng, level)];
+        for (const party of scenario.parties) Object.assign(party, { status: 'resting', ticksLeft: 100 });
+        scenario.lairs = [lair(rng)];
+      });
+      game.step();
+      expect(game.view().board.open).toHaveLength(posted);
+      expect(game.view().lairs[0]!.bountyPosted).toBe(posted === 1);
+    }
+  });
+
   it.each([
     { level: 3, posted: 0 }, { level: 4, posted: 1 },
     { level: 5, posted: 1 }, { level: 6, posted: 1 },
@@ -717,6 +744,41 @@ describe('choosing Bounties', () => {
 });
 
 describe('Contract expiry', () => {
+  it('an expired Contract cannot strengthen or enrich a cleared Lair', () => {
+    const game = scene((scenario, rng) => {
+      const employer = scenario.town.employers[0]!;
+      const target = lair(rng);
+      Object.assign(target, { status: 'cleared', clearedAt: 100, strength: 3, raidsWon: 2 });
+      target.hoard.gold = 0;
+      scenario.lairs = [target];
+      scenario.quests = [contract(employer, holding(rng, employer), 'old raid', {
+        postedAt: 0, lairId: target.id,
+      })];
+    });
+    game.step();
+    expect(game.view().stats.questsExpired).toBe(1);
+    expect(employerView(game)).toMatchObject({ treasury: 980, spent: 20 });
+    expect(game.view().lairs[0]).toMatchObject({ status: 'cleared', strength: 3, raidsWon: 2, hoardGold: 0 });
+  });
+
+  it('an unanswered Contract takes no gold when its employer’s treasury is empty or in debt', () => {
+    for (const treasury of [-7, 0]) {
+      const game = scene((scenario, rng) => {
+        const employer = scenario.town.employers[0]!;
+        employer.treasury = treasury;
+        const target = lair(rng);
+        scenario.lairs = [target];
+        scenario.quests = [contract(employer, holding(rng, employer), 'unanswered raid', {
+          postedAt: 0, lairId: target.id,
+        })];
+      });
+      game.step();
+      expect(employerView(game)).toMatchObject({ treasury, spent: 0 });
+      expect(game.view().lairs[0]).toMatchObject({ hoardGold: 100, strength: 2, raidsWon: 1 });
+      expect(game.view().stats.questsExpired).toBe(1);
+    }
+  });
+
   it('the first overrun of a Holding is recorded in the chronicle', () => {
     const game = scene((scenario, rng) => {
       const employer = scenario.town.employers[0]!;
@@ -998,6 +1060,26 @@ describe('successful Contracts', () => {
 });
 
 describe('failed Contracts', () => {
+  it('a Contract taken before its Lair was cleared cannot strengthen that Lair when it fails', () => {
+    const game = homecoming('assault', true, (scenario, _guild, _asset, target, _winner, _bounty, rng) => {
+      const employer = scenario.town.employers[1]!;
+      const returning = company(rng);
+      const work = contract(employer, holding(rng, employer), 'unfinished raid', {
+        lairId: target.id, status: 'taken', partyId: returning.id,
+      });
+      Object.assign(returning, { status: 'returning', ticksLeft: 2, questId: work.id, progress: 0 });
+      scenario.parties.push(returning);
+      scenario.quests.push(work);
+    });
+    game.step();
+    expect(game.view().lairs[0]!.status).toBe('cleared');
+    expect(game.view().board.taken.map((quest) => quest.id)).toEqual(['unfinished raid']);
+    game.step();
+    expect(game.view().stats.questsFailed).toBe(1);
+    expect(hidden(game).quests.find((quest) => quest.id === 'unfinished raid')!.status).toBe('failed');
+    expect(game.view().lairs[0]).toMatchObject({ status: 'cleared', strength: 1, raidsWon: 0, hoardGold: 0 });
+  });
+
   it('a failed Contract without a Lair still records failure', () => {
     const game = homecoming('contract', false, (scenario, _employer, _asset, _target, _party, quest) => {
       quest.lairId = null;
