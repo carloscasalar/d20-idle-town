@@ -29,7 +29,7 @@ describe('lairs', () => {
     const view = g.view();
     expect(view.stats.raids).toBeGreaterThan(0);
     expect(view.board.open.some((quest) => quest.lair !== null)).toBe(true);
-  }, 20_000);
+  });
 
   it('removes the posted bounty when a successful company returns and clears the lair', () => {
     const game = Game.forTesting({ seed: 23, maxOpenQuests: 0, maxParties: 1 }, (scenario) => {

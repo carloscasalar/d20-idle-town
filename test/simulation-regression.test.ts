@@ -10,4 +10,4 @@ it.each([7, 42, 20260907])('preserves state and event history at every tick for 
     history.update(game.regressionState());
   }
   expect(history.digest('hex')).toMatchSnapshot();
-}, 20_000);
+});
