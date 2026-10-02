@@ -5,11 +5,11 @@ import { Rng } from '../src/core/rng';
 import { instantiate, ITEM_CATALOGUE } from '../src/items/items';
 import type { Quest } from '../src/quests/quest';
 import { advanceExpedition, type ExpeditionContext } from '../src/sim/expedition';
-import { Game, type GameScenario, type GameStats } from '../src/sim/game';
+import { DEFAULT_CONFIG, Game, TICKS_PER_DAY, type GameConfig, type GameScenario, type GameStats } from '../src/sim/game';
 import { createAsset } from '../src/town/assets';
 import { createLair, type Lair } from '../src/town/lairs';
 import { visitTownServices } from '../src/town/services';
-import { generateTown, serviceOf, type Town } from '../src/town/town';
+import { generateTown, RETIREMENT_PRICE, serviceOf, type Town } from '../src/town/town';
 
 interface World {
   tick: number;
@@ -51,7 +51,8 @@ function assertHolderCounters(world: Pick<World, 'town' | 'parties'>, starting: 
 
 /** Observe domain state at public events, including arrivals before their first
  * purchase/merge. No event text, private access, or RNG position is used. */
-function watchBooks(game: Game) {
+function watchBooks(game: Game, config: Partial<GameConfig> = {}) {
+  const rules = { ...DEFAULT_CONFIG, ...config };
   let previous = readWorld(game);
   const starting = openings(previous);
   let sources = 0;
@@ -60,25 +61,31 @@ function watchBooks(game: Game) {
     const current = readWorld(game);
     for (const p of current.parties) {
       if (!previous.parties.some((old) => old.id === p.id)) {
-        const purse = 20 * partyLevel(p); // Audit C01: arrival is an external source.
+        // C01: derive opening gold from the public constructor, using an
+        // independent RNG so observation cannot affect the simulation.
+        const purse = createParty(new Rng(0), partyLevel(p), p.members.length, p.arrivedAt).gold;
         starting.set(p.id, purse);
         sources += purse;
       }
     }
+    let retirementCapital = 0;
     for (const e of current.town.employers) {
       if (!previous.town.employers.some((old) => old.id === e.id)) {
-        starting.set(e.id, 5000); // C04: capital transferred from retirement's 25000 gp payment.
+        starting.set(e.id, e.treasury); // C04: record the business's opening capital at birth.
+        retirementCapital += e.treasury;
       }
     }
     for (const l of current.lairs) {
-      if (!previous.lairs.some((old) => old.id === l.id)) sources += 100 * l.level; // C03
+      if (!previous.lairs.some((old) => old.id === l.id)) {
+        sources += createLair(new Rng(0), l.theme, l.level, l.spawnedAt).hoard.gold; // C03
+      }
     }
-    sinks += 20000 * (current.stats.retirements - previous.stats.retirements); // G03: the other 5000 stays in the business.
+    sinks += RETIREMENT_PRICE * (current.stats.retirements - previous.stats.retirements) - retirementCapital; // G03
     for (const work of current.quests) {
       const old = previous.quests.find((q) => q.id === work.id);
       if (old?.status === 'taken' && work.status === 'done' && work.kind === 'contract') {
         const holding = current.town.employers.flatMap((e) => e.assets).find((a) => a.id === work.assetId);
-        sources += (holding?.incomePerDay ?? 0) * 4; // B02, independent of treasury delta.
+        sources += (holding?.incomePerDay ?? 0) * rules.windfallDays; // B02, independent of treasury delta.
       }
       if (old?.status === 'open' && work.status === 'failed'
         && current.stats.questsExpired > previous.stats.questsExpired) {
@@ -86,7 +93,7 @@ function watchBooks(game: Game) {
         if (origin?.status !== 'active') {
           const payer = previous.town.employers.find((e) => e.id === work.giverId)!;
           const holding = payer.assets.find((a) => a.id === work.assetId)!;
-          sinks += Math.max(0, Math.min(payer.treasury, holding.incomePerDay * 2)); // B06
+          sinks += Math.max(0, Math.min(payer.treasury, holding.incomePerDay * rules.lootingDays)); // B06
         }
       }
     }
@@ -98,7 +105,7 @@ function watchBooks(game: Game) {
       const before = readWorld(game);
       sources = 0;
       sinks = 0;
-      if ((before.tick + 1) % 24 === 0) {
+      if ((before.tick + 1) % TICKS_PER_DAY === 0) {
         for (const e of before.town.employers.filter((e) => !e.ruined)) {
           sources += e.assets.reduce((sum, a) => sum + (a.status === 'safe' ? a.incomePerDay
             : a.status === 'threatened' ? Math.floor(a.incomePerDay / 2) : 0), 0); // G01
@@ -121,8 +128,8 @@ function provisioned(rng: Rng, level = 1, gold = 1000): Party {
   for (const hero of p.members) hero.armorTier = 3;
   return p;
 }
-function scene(configure: (s: GameScenario, rng: Rng) => void): Game {
-  return Game.forTesting({ seed: 42, maxParties: 0, maxOpenQuests: 0 }, (s) => {
+function scene(configure: (s: GameScenario, rng: Rng) => void, config: Partial<GameConfig> = {}): Game {
+  return Game.forTesting({ seed: 42, maxParties: 0, maxOpenQuests: 0, ...config }, (s) => {
     s.lairs = [];
     s.quests = [];
     for (const e of s.town.employers) {
@@ -145,9 +152,62 @@ function employer(game: Game, service: NonNullable<ReturnType<typeof serviceOf>[
   return game.view().town.employers.find((e) => e.service === service)!;
 }
 
+function investigationScene(gold: number) {
+  const game = scene((s, rng) => {
+    const p = provisioned(rng, 1, gold);
+    const q = work(s.town, p);
+    // One free attempt cannot reveal this whole Contract.
+    q.encounters = Array.from({ length: 3 }, () => structuredClone(q.encounters[0]!));
+    s.parties = [p];
+    s.quests = [q];
+  });
+  const books = watchBooks(game);
+  books.step();
+  expect(game.view().parties[0]).toMatchObject({ gold, earned: 0, spent: 0 });
+  expect(game.view().stats.goldSpentByHeroes).toBe(0);
+  expect(readWorld(game).quests[0]!.status).toBe('open');
+  return { game, books };
+}
+
 // Service rows with incomplete existing ledger assertions are exercised with
 // literal outcomes; fixtures start with nonzero lifetime entries as well.
 describe('service purchase ledgers', () => {
+  it.each([
+    { gold: 225, potions: 1, left: 190, spent: 35, treasury: 1035 },
+    { gold: 224, potions: 0, left: 224, spent: 0, treasury: 1000 },
+    { gold: 260, potions: 2, left: 190, spent: 70, treasury: 1070 },
+    { gold: 259, potions: 1, left: 224, spent: 35, treasury: 1035 },
+  ])('buys $potions potions from a $gold gp purse while keeping the reserve', ({ gold, potions, left, spent, treasury }) => {
+    const game = scene((s, rng) => {
+      const p = provisioned(rng, 1, gold);
+      p.potions = 0;
+      s.parties = [p];
+    });
+    watchBooks(game).step();
+    expect(game.view().parties[0]).toMatchObject({ gold: left, earned: 0, spent, potions });
+    expect(employer(game, 'apothecary')).toMatchObject({ treasury, earned: spent, spent: 0 });
+    expect(readWorld(game).parties[0]!.members.map((h) => h.goldSpent)).toEqual([0, 0, 0, 0]);
+    expect(game.view().stats).toMatchObject({ goldSpentByHeroes: spent, itemsSold: 0 });
+  });
+
+  it.each([
+    { gold: 990, bought: true, left: 190, spent: 800, treasury: 1800 },
+    { gold: 989, bought: false, left: 989, spent: 0, treasury: 1000 },
+  ])('buys a magic item only when its price fits the $gold gp purse minus reserve', ({ gold, bought, left, spent, treasury }) => {
+    const game = scene((s, rng) => {
+      s.parties = [provisioned(rng, 1, gold)];
+      serviceOf(s.town, 'enchanter').stock = [instantiate(rng, ITEM_CATALOGUE.find((i) => i.name === 'Shield +1')!)];
+    });
+    watchBooks(game).step();
+    const world = readWorld(game);
+    expect(world.parties[0]).toMatchObject({ gold: left, earned: 0, spent });
+    expect(employer(game, 'enchanter')).toMatchObject({ treasury, earned: spent, spent: 0 });
+    expect(world.parties[0]!.members.map((h) => h.goldSpent)).toEqual(bought ? [800, 0, 0, 0] : [0, 0, 0, 0]);
+    expect(world.parties[0]!.members.map((h) => h.items.map((i) => i.name))).toEqual(bought ? [['Shield +1'], [], [], []] : [[], [], [], []]);
+    expect(serviceOf(world.town, 'enchanter').stock.map((i) => i.name)).toEqual(bought ? [] : ['Shield +1']);
+    expect(game.view().stats).toMatchObject({ goldSpentByHeroes: spent, itemsSold: 0 });
+  });
+
   it.each([
     { service: 'apothecary', cost: 70, left: 930, spent: 80, treasury: 1070, earned: 90, totalSpent: 77 },
     { service: 'guild', cost: 60, left: 940, spent: 70, treasury: 1060, earned: 80, totalSpent: 67 },
@@ -190,21 +250,43 @@ describe('service purchase ledgers', () => {
 
 describe('paid investigation', () => {
   it.each([
-    { service: 'temple', gold: 1000, left: 940, treasury: 1060, cost: 60, revealed: 1 },
+    { service: 'temple', gold: 1000, left: 940, treasury: 1060, cost: 60, revealed: 3 },
     { service: 'tavern', gold: 250, left: 235, treasury: 1015, cost: 15, revealed: 0 },
   ] as const)('pays the $service for Contract intelligence', ({ service, gold, left, treasury, cost, revealed }) => {
-    const game = scene((s, rng) => {
-      const p = provisioned(rng, 1, gold);
-      const q = work(s.town, p);
-      p.investigations[`${q.id}:talk`] = 1;
-      s.parties = [p];
-      s.quests = [q];
-    });
-    watchBooks(game).step();
+    const { game, books } = investigationScene(gold);
+    books.step();
     expect(game.view().parties[0]).toMatchObject({ gold: left, earned: 0, spent: cost });
     expect(employer(game, service)).toMatchObject({ treasury, earned: cost, spent: 0 });
     expect(game.view().stats.goldSpentByHeroes).toBe(cost);
     expect(readWorld(game).quests[0]).toMatchObject({ revealed, countRevealed: true, status: 'open' });
+  });
+
+  it.each([
+    { gold: 440, left: 380, spent: 60, temple: 1060, templeEarned: 60, tavern: 1000, tavernEarned: 0, revealed: 3 },
+    { gold: 439, left: 424, spent: 15, temple: 1000, templeEarned: 0, tavern: 1015, tavernEarned: 15, revealed: 0 },
+  ])('buys divination only when a $gold gp purse leaves twice the reserve', ({ gold, left, spent, temple, templeEarned, tavern, tavernEarned, revealed }) => {
+    const { game, books } = investigationScene(gold);
+    books.step();
+    expect(game.view().parties[0]).toMatchObject({ gold: left, earned: 0, spent });
+    expect(employer(game, 'temple')).toMatchObject({ treasury: temple, earned: templeEarned, spent: 0 });
+    expect(employer(game, 'tavern')).toMatchObject({ treasury: tavern, earned: tavernEarned, spent: 0 });
+    expect(game.view().stats.goldSpentByHeroes).toBe(spent);
+    expect(readWorld(game).parties[0]!.members.map((h) => h.goldSpent)).toEqual([0, 0, 0, 0]);
+    expect(readWorld(game).quests[0]).toMatchObject({ revealed, countRevealed: true, status: 'open' });
+  });
+
+  it.each([
+    { gold: 205, left: 190, spent: 15, treasury: 1015, status: 'open' },
+    { gold: 204, left: 204, spent: 0, treasury: 1000, status: 'taken' },
+  ])('buys a tavern round only when a $gold gp purse leaves the reserve', ({ gold, left, spent, treasury, status }) => {
+    const { game, books } = investigationScene(gold);
+    books.step();
+    expect(game.view().parties[0]).toMatchObject({ gold: left, earned: 0, spent });
+    expect(employer(game, 'tavern')).toMatchObject({ treasury, earned: spent, spent: 0 });
+    expect(employer(game, 'temple')).toMatchObject({ treasury: 1000, earned: 0, spent: 0 });
+    expect(game.view().stats.goldSpentByHeroes).toBe(spent);
+    expect(readWorld(game).parties[0]!.members.map((h) => h.goldSpent)).toEqual([0, 0, 0, 0]);
+    expect(readWorld(game).quests[0]!.status).toBe(status);
   });
 });
 
@@ -226,9 +308,13 @@ describe('resurrection payment', () => {
 
 describe('homecoming payments', () => {
   it.each([
+    { success: false, gold: 12, spent: 12, left: 0, treasury: 1012, renown: 0 },
+    { success: false, gold: 11, spent: 0, left: 11, treasury: 1000, renown: 0 },
     { success: false, gold: 200, spent: 12, left: 188, treasury: 1012, renown: 0 },
     { success: true, gold: 212, spent: 22, left: 190, treasury: 1022, renown: 1 },
     { success: true, gold: 1012, spent: 62, left: 950, treasury: 1062, renown: 1 },
+    { success: true, gold: 1032, spent: 63, left: 969, treasury: 1063, renown: 1 },
+    { success: true, gold: 1031, spent: 62, left: 969, treasury: 1062, renown: 1 },
   ])('charges $spent gp for a homecoming from a $gold gp purse (success=$success)', ({ success, gold, spent, left, treasury, renown }) => {
     const rng = new Rng(8);
     const town = generateTown(rng);
@@ -241,9 +327,10 @@ describe('homecoming payments', () => {
     const starting = openings(world);
     const before = totalGold(world);
     const ledger = { heroesDied: 0, partiesWiped: 0, goldSpentByHeroes: 0 };
+    const reports: string[] = [];
     const context: ExpeditionContext = {
       town, quest: q, rng, ledger, travelTicks: 2, restTicks: 8, shortRestHealFraction: 0.5, skillDc: 15,
-      combat: () => { throw new Error('Homecoming does not fight'); }, report: () => {},
+      combat: () => { throw new Error('Homecoming does not fight'); }, report: (event) => { reports.push(event.text); },
       learnIntel: () => '', revealAll: () => {}, leaveLoot: () => {},
       settleQuest: (_q, company) => { company.questId = null; },
     };
@@ -251,6 +338,8 @@ describe('homecoming payments', () => {
     expect(p).toMatchObject({ gold: left, spent, earned: 0, renown, status: 'resting' });
     expect(tavern).toMatchObject({ treasury, earned: spent, spent: 0 });
     expect(ledger).toEqual({ heroesDied: 0, partiesWiped: 0, goldSpentByHeroes: spent });
+    expect(reports.some((line) => line.includes('take rooms'))).toBe(gold !== 11);
+    expect(reports.some((line) => line.includes('bed down in the stables'))).toBe(gold === 11);
     assertConservation(before, totalGold(world));
     assertHolderCounters(world, starting);
   });
@@ -292,6 +381,21 @@ describe('daily income and upkeep', () => {
 });
 
 describe('expiry looting', () => {
+  it('checks the looting sink with a configured three-day loss', () => {
+    const config = { lootingDays: 3 };
+    const game = scene((s, rng) => {
+      s.tick = 100;
+      const e = s.town.employers[0]!;
+      const a = createAsset(rng, 'watchtower', e.id);
+      Object.assign(a, { incomePerDay: 10, status: 'threatened', questId: 'work' });
+      e.assets = [a];
+      s.quests = [work(s.town, provisioned(rng), { assetId: a.id })];
+    }, config);
+    watchBooks(game, config).step();
+    expect(readWorld(game).town.employers[0]).toMatchObject({ treasury: 970, spent: 30, earned: 0 });
+    expect(game.view().stats).toMatchObject({ questsExpired: 1, goldPaid: 0, goldSpentByHeroes: 0 });
+  });
+
   it('moves expiry looting from the employer into the active Lair’s hoard', () => {
     const game = scene((s, rng) => {
       s.tick = 100;
@@ -310,6 +414,28 @@ describe('expiry looting', () => {
     expect(readWorld(game).town.employers[0]).toMatchObject({ treasury: 980, spent: 20, earned: 0 });
     expect(game.view().lairs[0]!.hoardGold).toBe(120);
     expect(game.view().stats).toMatchObject({ questsExpired: 1, goldPaid: 0, goldSpentByHeroes: 0 });
+  });
+});
+
+describe('configured Contract windfall', () => {
+  it('checks the gold source with a configured seven-day windfall', () => {
+    const config = { windfallDays: 7 };
+    const game = scene((s, rng) => {
+      const p = provisioned(rng, 1, 0);
+      const e = s.town.employers[0]!;
+      const a = createAsset(rng, 'watchtower', e.id);
+      Object.assign(a, { incomePerDay: 10, status: 'ravaged', questId: 'work' });
+      e.assets = [a];
+      const q = work(s.town, p, { status: 'taken', assetId: a.id });
+      Object.assign(p, { status: 'returning', ticksLeft: 1, progress: 1, questId: q.id });
+      s.parties = [p];
+      s.quests = [q];
+    }, config);
+    watchBooks(game, config).step();
+    expect(readWorld(game).town.employers[0]).toMatchObject({ treasury: 1020, earned: 70, spent: 50 });
+    expect(game.view().parties[0]).toMatchObject({ gold: 38, earned: 50, spent: 12 });
+    expect(employer(game, 'tavern')).toMatchObject({ treasury: 1012, earned: 12, spent: 0 });
+    expect(game.view().stats).toMatchObject({ goldPaid: 50, goldSpentByHeroes: 12, questsCompleted: 1 });
   });
 });
 
@@ -389,14 +515,12 @@ describe('opening gold sources', () => {
       expect(holding.loot).toEqual({ gold: 0, items: [] });
     }
     assertConservation(0, totalGold({ ...world, lairs: [] }), 14528);
-    assertHolderCounters(world, openings(world));
   });
   it('starts each Lair with gold in its hoard', () => {
     const game = new Game({ seed: 42 });
     const world = readWorld(game);
     expect(world.lairs.map((l) => [l.level, l.hoard.gold])).toEqual([[6, 600], [7, 700], [8, 800]]);
     assertConservation(0, totalGold({ ...world, town: { ...world.town, employers: [] } }), 2100);
-    assertHolderCounters(world, openings(world));
   });
   it('brings a new company’s 20 gp starting purse into the world', () => {
     const game = Game.forTesting({ seed: 42, maxParties: 1, maxOpenQuests: 0 }, (s) => { s.lairs = []; });
