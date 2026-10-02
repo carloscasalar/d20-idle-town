@@ -149,7 +149,7 @@ enchanter buys back.
    items become `acOverride`, `hpOverride`, `speedOverride`,
    `additionalResistances`; a +1 weapon is rebuilt from the class's own main
    attack with the bonus folded into attack and damage.
-4. Runs the engine's `Encounter` to a conclusion or a round cap, healing living Bloodied heroes with potions from the supplied pack between unfinished rounds, before checking whether to flee.
+4. Runs the engine's `Encounter` to a conclusion or a round cap, using potions from the supplied pack between unfinished rounds, before checking whether to flee. Conscious Bloodied heroes drink; a fallen hero at 0 HP receives one from the first conscious companion in company order. If nobody is conscious, no potion is used.
 5. Maps the result back to a `CombatOutcome`: winner (`party | monsters |
    retreat | stalemate`), rounds, per-hero HP / alive / kills, XP earned, potions
    drunk, and the engine's narration plus potion-drinking lines.

@@ -1,7 +1,7 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
-exports[`preserves state and event history at every tick for seed 7 1`] = `"3950f9435c08f93e8445f7c891e4e321d7a55e8e26ba2e4441864345756f8065"`;
+exports[`preserves state and event history at every tick for seed 7 1`] = `"583b5c1b76f37ccb6bcc6610b1d5bce48b677f4b971c5bca28642c95b8585bc1"`;
 
-exports[`preserves state and event history at every tick for seed 42 1`] = `"80a23e045ec57805f66c35999adaeea34e96b7311fa409ad103010439a5b475b"`;
+exports[`preserves state and event history at every tick for seed 42 1`] = `"8df3ceff3ff22f6888a08b6b71e1f1d80a9cc7882941cf88e976ccfa282cb6a9"`;
 
-exports[`preserves state and event history at every tick for seed 20260907 1`] = `"01ffab5e9fbb45cd82d7bf7f1086ea6024bb8045fa5f03fa3d8c14708c22bb02"`;
+exports[`preserves state and event history at every tick for seed 20260907 1`] = `"ec485c6e43826683ed0e3368b721709df0303e46819af249d9ce805f9e217632"`;

@@ -355,6 +355,7 @@ describe('expedition potions and short rests', () => {
   });
 
   it.each([
+    { potions: 4, hp: [84, 60, 85, 100], left: 2 },
     { potions: 2, hp: [84, 60, 85, 100], left: 0 },
     { potions: 1, hp: [84, 26, 85, 100], left: 0 },
     { potions: 0, hp: [50, 26, 85, 100], left: 0 },
@@ -377,6 +378,37 @@ describe('expedition potions and short rests', () => {
     expect(party.members.map((hero) => hero.hp)).toEqual(hp);
     expect(party.potions).toBe(left);
     expect(events.some((event) => event.text.includes('potion'))).toBe(potions > 0);
+  });
+
+  it.each([
+    { maxHp: 100, before: [1, 50, 99, 100], after: [51, 100, 100, 100] },
+    { maxHp: 101, before: [1, 51, 100, 101], after: [52, 101, 101, 101] },
+  ])('uses the default half-HP short rest, rounded up and capped at $maxHp', ({ maxHp, before, after }) => {
+    const { party, context } = setup();
+    for (const hero of party.members) hero.maxHp = maxHp;
+    party.potions = 4;
+    context.combat = () => {
+      const result = outcome(party, 'party');
+      result.xpEarned = 0;
+      result.heroes.forEach((hero, i) => { hero.hp = before[i]!; });
+      return result;
+    };
+
+    advanceExpedition(party, context);
+
+    expect(party.status).toBe('questing');
+    expect(party.members.map((hero) => hero.hp)).toEqual(after);
+    expect(party.potions).toBe(4);
+  });
+
+  it('keeps the supply at zero when a scripted resolver reports excessive consumption', () => {
+    const { party, context } = setup();
+    party.potions = 2;
+    context.combat = () => ({ ...outcome(party, 'party'), potionsDrunk: 7 });
+
+    advanceExpedition(party, context);
+
+    expect(party.potions).toBe(0);
   });
 });
 

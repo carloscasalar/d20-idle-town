@@ -13,14 +13,21 @@ Status: needs-triage
    costs `25 + 10 × level` gp.
    **Ideal:** a Potion of Healing restores 2d4 + 2 hit points and costs 50 gp.
 3. **Potion timing in combat.** After every unfinished round, before the flee
-   check, each living Bloodied hero drinks one potion while the shared supply
-   lasts. Bloodied uses the maximum HP in that fight, including blessings and
+   check, each conscious Bloodied hero drinks one potion while the shared supply
+   lasts; a fallen hero at 0 HP receives one from a conscious companion if any
+   remain. Bloodied uses the maximum HP in that fight, including blessings and
    items. `CombatOptions.potions` supplies the pack; `CombatOutcome.potionsDrunk`
    reports consumption for Expedition to subtract. Healing uses the engine's
    public `Encounter.heal` call and the game's existing `potionHeal` amount.
    **Ideal:** drinking or giving the potion to a creature within 5 feet costs a
    Bonus Action on the hero's turn. Between rounds at no action cost remains
    the accepted approximation because the engine cannot model that Bonus Action.
+4. **Administering a potion.** The first conscious companion in company order
+   gives a potion to a living hero at 0 HP. The game checks neither the distance
+   between them nor whether the companion has a Bonus Action available. If no
+   hero is conscious, no potion is used.
+   **Ideal:** the conscious companion must be within 5 feet of the recipient
+   and spend their Bonus Action on their turn to administer the potion.
 
 Hit Dice, potion strength and price, and difficulty retuning are deferred.
 
@@ -59,5 +66,18 @@ and the script's unchanged scales. `tsx` is not installed; the installed
 | `scale 1.25: quests 109  failed 38  deaths 117 (1.07/quest)  wiped 10.3 of 40  raised 15` | `scale 1.25: quests 100  failed 40  deaths 117 (1.17/quest)  wiped 9.7 of 38  raised 15` |
 | `scale 1.5: quests 70  failed 43  deaths 133 (1.90/quest)  wiped 13.7 of 43  raised 13` | `scale 1.5: quests 79  failed 39  deaths 118 (1.49/quest)  wiped 10.3 of 39  raised 9` |
 | `scale 1.75: quests 72  failed 49  deaths 140 (1.94/quest)  wiped 11.0 of 45  raised 14` | `scale 1.75: quests 63  failed 45  deaths 146 (2.31/quest)  wiped 15.7 of 44  raised 13` |
+
+### Correction 1
+
+Measured again with the same runner, 600 ticks, seeds 1, 2, 3 and unchanged
+scales. The reported aggregate balance numbers are identical; potion
+administration narration changes the regression trajectories.
+
+| Before correction 1 | After correction 1 |
+| --- | --- |
+| `scale 1: quests 139  failed 18  deaths 61 (0.44/quest)  wiped 5.0 of 23  raised 11` | `scale 1: quests 139  failed 18  deaths 61 (0.44/quest)  wiped 5.0 of 23  raised 11` |
+| `scale 1.25: quests 100  failed 40  deaths 117 (1.17/quest)  wiped 9.7 of 38  raised 15` | `scale 1.25: quests 100  failed 40  deaths 117 (1.17/quest)  wiped 9.7 of 38  raised 15` |
+| `scale 1.5: quests 79  failed 39  deaths 118 (1.49/quest)  wiped 10.3 of 39  raised 9` | `scale 1.5: quests 79  failed 39  deaths 118 (1.49/quest)  wiped 10.3 of 39  raised 9` |
+| `scale 1.75: quests 63  failed 45  deaths 146 (2.31/quest)  wiped 15.7 of 44  raised 13` | `scale 1.75: quests 63  failed 45  deaths 146 (2.31/quest)  wiped 15.7 of 44  raised 13` |
 
 ## Comments

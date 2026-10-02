@@ -89,7 +89,7 @@ Adventurers spend in real shops, and every coin lands in that shop's treasury:
 - **Innkeeper**: rooms after every contract, and a night of carousing after a clean
   success. Tales told in the tavern raise the company's renown; famous companies get
   first pick of the board.
-- **Apothecary**: healing potions, drunk by Bloodied adventurers between combat rounds, or after a short rest if still Bloodied.
+- **Apothecary**: healing potions, drunk by conscious Bloodied adventurers or given to fallen companions between combat rounds, or drunk after a short rest if still Bloodied.
 - **Smith**: three tiers of armour (+1 AC each, real in combat), and the odd +1 weapon.
 - **Temple**: resurrections, blessings (extra hit points for the next contract), and
   a few holy items.

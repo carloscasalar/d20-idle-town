@@ -176,13 +176,21 @@ export function runCombat(heroes: Hero[], spec: EncounterSpec, seed: number, opt
     }
     // Stand-in for the 2024 Bonus Action: one potion per living Bloodied hero
     // between rounds, before deciding whether the company must flee.
+    const companion = fighters.find((h) => {
+      const c = enc.creatures.find((x) => x.id === idByHero.get(h.id));
+      return c?.isAlive && c.currentHp > 0 && !c.conditions.includes('unconscious');
+    });
     for (const h of fighters) {
-      if (potionsDrunk >= (opts.potions ?? 0)) break;
+      if (!companion || potionsDrunk >= (opts.potions ?? 0)) break;
       const c = enc.creatures.find((x) => x.id === idByHero.get(h.id));
       if (!c?.isAlive || !isBloodied({ hp: c.currentHp, maxHp: c.maxHp })) continue;
+      if (c.currentHp > 0 && c.conditions.includes('unconscious')) continue;
+      const fallen = c.currentHp <= 0;
       enc.heal(c.id, potionHeal(h));
       potionsDrunk += 1;
-      lines.push(`${h.name} drinks a healing potion.`);
+      lines.push(fallen
+        ? `${companion.name} gives ${h.name} a healing potion.`
+        : `${h.name} drinks a healing potion.`);
     }
     if (!opts.noRetreat && shouldFlee(enc.creatures, fighters.length)) {
       retreated = true;

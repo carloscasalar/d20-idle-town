@@ -117,7 +117,7 @@ function resolveFight(p: Party, q: Quest, context: ExpeditionContext): void {
     noRetreat: bossFight,
     ...(q.kind === 'assault' ? { lairDepth: { index: p.progress, total: q.encounters.length } } : {}),
   });
-  p.potions -= outcome.potionsDrunk;
+  p.potions = Math.max(0, p.potions - outcome.potionsDrunk);
 
   for (const r of outcome.heroes) {
     const hero = p.members.find((h) => h.id === r.heroId)!;

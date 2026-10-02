@@ -50,15 +50,17 @@ storage and supplies those operations as callbacks. Events remain synchronous,
 and the world RNG still draws one child seed at the same point in each fight.
 The shared contract-intelligence wording moved to `learnQuestIntel` so travel
 and tavern investigation use the same rule. Private travel, fight-resolution,
-breather and homecoming functions keep the hourly dispatcher small without
+short-rest and homecoming functions keep the hourly dispatcher small without
 changing the Expedition context or its callbacks.
 
 **Files.** `src/sim/expedition.ts`, `src/sim/game.ts`,
 `src/quests/quest.ts`, `src/adventurers/party.ts`, `test/expedition.test.ts`,
 `CONTEXT.md`, and the architecture references.
 
-**Evidence.** All 44 Expedition tests call `advanceExpedition` with a scripted
-combat resolver. They cover exact breather healing; victory, defeat, retreat,
+**Evidence.** Expedition tests call `advanceExpedition` with a scripted
+combat resolver. They cover short-rest healing at the default half-HP fraction
+(rounded up and capped), configurable healing, potion eligibility with supplies
+to spare, and bounded combat potion accounting; victory, defeat, retreat,
 stalemate and wipe; retreat by survivor count and the 35% average-HP boundary;
 survivor XP shares and both company and individual level-up events; successful
 and failed homecoming, exact room fees, stables, carousing and its exclusions;

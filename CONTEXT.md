@@ -32,7 +32,7 @@ The recovery a company takes between two encounters of an expedition.
 Implemented by `shortRest`: heals a configured fraction of maximum hit points (default 0.5), rounded up.
 
 **Healing potion**:
-A draught from the company's shared supply that restores hit points to the adventurer who drinks it.
+A draught from the company's shared supply that restores hit points to the adventurer who drinks it or receives it from a companion.
 
 ## Relationships
 
@@ -40,7 +40,7 @@ A draught from the company's shared supply that restores hit points to the adven
 - An accepted **Contract** or **Bounty** starts one **Expedition**.
 - A **Contract** concerns one **Holding**; a **Bounty** concerns one **Lair**.
 - A **Lair** may threaten multiple **Holdings**.
-- After each encounter round that does not end the fight, before checking whether to flee, each living **Bloodied** adventurer drinks one **Healing potion** if the **Company** has one. **Bloodied** uses the maximum hit points in that fight, including items and blessings; healing uses the game's `potionHeal` amount.
+- After each encounter round that does not end the fight, before checking whether to flee, each conscious **Bloodied** adventurer drinks one **Healing potion** if the **Company** has one. A fallen adventurer at 0 hit points who is not dead is given the potion by a conscious companion, chosen first in company order. If no companion is conscious, nobody uses a potion. **Bloodied** uses the maximum hit points in that fight, including items and blessings; healing uses the game's `potionHeal` amount. The game does not check distance or spend a Bonus Action when administering a potion; D&D 2024 requires the companion to be within 5 feet and spend a Bonus Action.
 - After the healing from a **Short rest**, each living adventurer who is still **Bloodied** drinks one **Healing potion** if the **Company** has one. The default rest fraction brings every living adventurer above half, so this applies only with a smaller configured fraction.
 
 ## Example dialogue
@@ -49,4 +49,4 @@ A draught from the company's shared supply that restores hit points to the adven
 > **Domain expert:** "No. The company must return, collect the **Contract** reward or **Bounty**, and rest. A wipe ends the expedition in the field."
 
 > **Dev:** "Does an adventurer drink a **Healing potion** as soon as they are hurt?"
-> **Domain expert:** "Only when **Bloodied**. In an encounter they drink between rounds before checking whether to flee; between encounters they take the **Short rest** first and drink only if they are still **Bloodied** afterwards."
+> **Domain expert:** "Only when **Bloodied**. In an encounter conscious adventurers drink between rounds before checking whether to flee; a fallen adventurer receives a potion from a conscious companion. Between encounters they take the **Short rest** first and drink only if they are still **Bloodied** afterwards."
