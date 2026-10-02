@@ -133,6 +133,8 @@ export function mergeParties(host: Party, donor: Party): Hero[] {
   }
   donor.members = donor.members.filter((h) => !moved.includes(h));
   host.gold += donor.gold;
+  host.earned += donor.gold;
+  donor.spent += donor.gold;
   donor.gold = 0;
   host.potions += donor.potions;
   donor.potions = 0;

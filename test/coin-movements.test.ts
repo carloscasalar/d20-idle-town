@@ -54,15 +54,8 @@ function assertHolderCounters(world: Pick<World, 'town' | 'parties'>, starting: 
 function watchBooks(game: Game) {
   let previous = readWorld(game);
   const starting = openings(previous);
-  const excluded = new Map<string, number>();
   let sources = 0;
   let sinks = 0;
-  const excludeMovement = (old: Party, current: Party, moved: number) => {
-    const counted = current.earned - old.earned - (current.spent - old.spent);
-    // Subtract only this movement's discrepancy. Future earnings/spending are
-    // still checked, and recording the transfer correctly needs no correction.
-    excluded.set(old.id, (excluded.get(old.id) ?? 0) + moved - counted);
-  };
   const observe = () => {
     const current = readWorld(game);
     for (const p of current.parties) {
@@ -97,29 +90,6 @@ function watchBooks(game: Game) {
         }
       }
     }
-    for (const old of previous.parties) {
-      const p = current.parties.find((candidate) => candidate.id === old.id)!;
-      if (old.status !== 'disbanded' && p.status === 'disbanded') {
-        const work = previous.quests.find((q) => q.id === old.questId);
-        const lair = previous.lairs.find((l) => l.id === work?.lairId);
-        const holding = previous.town.employers.flatMap((e) => e.assets).find((a) => a.id === work?.assetId);
-        if (work && (lair || holding)) {
-          // AUDIT.md F01: exclude only the wiped purse's missing spent entry.
-          excludeMovement(old, p, -old.gold);
-          continue;
-        }
-      }
-      const movedHeroes = old.members.filter((hero) => hero.alive && !p.members.some((member) => member.id === hero.id));
-      const host = current.parties.find((candidate) => candidate.id !== old.id
-        && movedHeroes.some((hero) => candidate.members.some((member) => member.id === hero.id)));
-      if (host) {
-        const oldHost = previous.parties.find((candidate) => candidate.id === host.id)!;
-        // AUDIT.md F02: exclude precisely the donor purse movement, on each
-        // side. Never drop a company, a tick, or its subsequent counters.
-        excludeMovement(old, p, -old.gold);
-        excludeMovement(oldHost, host, old.gold);
-      }
-    }
     previous = current;
   };
   game.onEvent(observe);
@@ -139,11 +109,7 @@ function watchBooks(game: Game) {
       observe();
       const after = readWorld(game);
       assertConservation(totalGold(before), totalGold(after), sources, sinks);
-      // Remove only F01/F02 movements from the counter input, leaving the
-      // assertion helper strict and all other movements under its guard.
-      assertHolderCounters({ ...after, parties: after.parties.map((p) => ({
-        ...p, gold: p.gold - (excluded.get(p.id) ?? 0),
-      })) }, starting);
+      assertHolderCounters(after, starting);
     },
   };
 }
@@ -348,22 +314,30 @@ describe('expiry looting', () => {
 });
 
 describe('company purse transfers', () => {
-  it('conserves both purses when survivors join another company', () => {
+  it('records a merged purse as donor spending and host earnings', () => {
     const game = scene((s, rng) => {
       const host = provisioned(rng, 1, 10);
       const donor = provisioned(rng, 1, 5);
+      Object.assign(host, { earned: 3, spent: 2 });
+      Object.assign(donor, { earned: 2, spent: 1 });
       host.members = host.members.slice(0, 2);
       donor.members = donor.members.slice(0, 2);
       s.parties = [host, donor];
+      s.stats.goldSpentByHeroes = 9;
+      s.stats.goldPaid = 11;
     });
+    const before = readWorld(game);
     watchBooks(game).step();
-    expect(readWorld(game).parties.map((p) => p.gold)).toEqual([15, 0]);
-    // F02: missing transfer counters are reported, never asserted as correct.
-    expect(game.view().stats).toMatchObject({ goldPaid: 0 });
+    const after = readWorld(game);
+    expect(after.parties[0]).toMatchObject({ gold: 15, earned: 8, spent: 2 });
+    expect(after.parties[1]).toMatchObject({ gold: 0, earned: 2, spent: 6 });
+    expect(after.stats).toEqual(before.stats);
   });
-  it.each(['Holding', 'Lair'] as const)('leaves the wiped company’s purse at the %s', (destination) => {
+  it.each(['Holding', 'Lair'] as const)('records the wiped purse as company spending when left at the %s', (destination) => {
     const game = scene((s, rng) => {
       const p = provisioned(rng, 1, 37);
+      Object.assign(p, { earned: 13, spent: 7 });
+      s.stats.goldSpentByHeroes = 9;
       const e = s.town.employers[0]!;
       const a = createAsset(rng, 'watchtower', e.id);
       e.assets = [a];
@@ -383,15 +357,14 @@ describe('company purse transfers', () => {
     });
     watchBooks(game).step();
     const after = readWorld(game);
-    expect(after.parties[0]).toMatchObject({ gold: 0, status: 'disbanded' });
+    expect(after.parties[0]).toMatchObject({ gold: 0, earned: 13, spent: 44, status: 'disbanded' });
     expect(after.town.employers[0]!.assets[0]!.loot.gold).toBe(destination === 'Holding' ? 48 : 11);
     if (destination === 'Lair') expect(after.lairs[0]!.hoard.gold).toBe(137);
     const store = destination === 'Lair' ? after.lairs[0]!.hoard : after.town.employers[0]!.assets[0]!.loot;
     expect(store.items.map((item) => item.name)).toEqual(['Longsword +1', 'Shield +1']);
     expect(after.parties[0]!.stash).toEqual([]);
     expect(after.parties[0]!.members.flatMap((h) => h.items)).toEqual([]);
-    // F01: missing company spent is excluded only for this purse movement.
-    expect(after.stats).toMatchObject({ partiesWiped: 1, heroesDied: 4, goldPaid: 0, itemsFound: 0 });
+    expect(after.stats).toMatchObject({ partiesWiped: 1, heroesDied: 4, goldPaid: 0, itemsFound: 0, goldSpentByHeroes: 9 });
     expect(after.town.employers[0]).toMatchObject({ treasury: 1000, earned: 0, spent: 0 });
   });
 });

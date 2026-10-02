@@ -1035,6 +1035,7 @@ export class Game {
       p.stash = [];
       gold = p.gold;
       store.gold += gold;
+      p.spent += gold;
       p.gold = 0;
     }
     store.items.push(...items);

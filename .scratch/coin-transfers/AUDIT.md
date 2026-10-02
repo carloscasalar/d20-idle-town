@@ -1,8 +1,9 @@
 # Gold movements — Turn 05
 
-Added `test/coin-movements.test.ts` only, plus this document. Production code is
-unchanged. This audit describes the current implementation and identifies bugs
-for a later fix; the new tests do not assert that omitted bookkeeping is correct.
+Turn 05 added `test/coin-movements.test.ts` and this audit (committed as
+`f78a95f`). Turn 05, part 2 fixes the two company-counter failures in their
+existing movement sites, strengthens the focused tests, and removes every
+seeded-run counter exclusion. No coin-transfer module has been introduced.
 
 ## Audit
 
@@ -43,9 +44,9 @@ C04 and G03 allocate one retirement payment; their combined debit is 25000.
 | B05 | `src/sim/board.ts`, `expireContract` and `unansweredRaid` | Loot the employer when an unanswered Contract has an active originating Lair | Employer treasury | Active Lair hoard | A = max(0, min(treasury, Holding income/day × configured `lootingDays`, default 2)). Employer `treasury −= A`, `spent += A`; Lair `hoard.gold += A`, `raidsWon += 1`, strength rises/caps. Board `questsExpired += 1`; `questsFailed`, `goldPaid`, `goldSpentByHeroes` do not rise. First overrun increments Holding `timesRavaged`. | Transfer |
 | B06 | `src/sim/board.ts`, `expireContract` without an active origin | Looting loss where no recorded active Lair receives it | Employer treasury | Outside the recorded world | Same A and employer debit/counter as B05; no hoard credit. Includes no origin, missing origin and a cleared origin (`unansweredRaid` returns early). Same expiry statistics. Empty or negative treasury loses zero. | Sink |
 | G07 | `src/sim/game.ts`, `payHoard` | Take a broken Lair's hoard | Lair hoard | Company purse | Company `gold += hoard.gold`, `earned += hoard.gold`; hoard items enter stash; `itemsFound += item count`; Lair `hoard = { gold: 0, items: [] }`. No `goldPaid` or `goldSpentByHeroes` increment for hoard gold. | Transfer |
-| G08 | `src/sim/game.ts`, `leaveLoot` with a Lair | The wiped company's purse is left with its fallen equipment | Wiped company | Lair hoard | `hoard.gold += company.gold`, company `gold = 0`; **company `spent` is not updated (F01)**. Fallen equipment and wiped stash enter hoard; their originals are emptied. This movement changes no gold/item lifetime statistic; Expedition has already counted deaths and the wipe. If survivors remain, only equipment is left: purse and all gold counters stay unchanged. | Transfer |
-| G09 | `src/sim/game.ts`, `leaveLoot` with a Holding and no Lair | The wiped company's purse lies among the fallen at a Holding | Wiped company | Holding loot | `loot.gold += company.gold`, company `gold = 0`; **missing company `spent` (F01)**. Equipment/stash and statistics behave as in G08. If neither destination exists, the function returns and the disbanded company's purse remains recorded; no gold leaves the world. | Transfer |
-| P01 | `src/adventurers/party.ts`, `mergeParties`; called by `Game.absorb` | Survivors bring their company's whole purse to the host company | Donor company | Host company | Host `gold += donor.gold`, donor `gold = 0`; **neither host `earned` nor donor `spent` is updated (F02)**. No gold lifetime statistic or individual hero spending changes. Also moves potions/stash; whole purse moves even if some survivors do not fit. | Transfer |
+| G08 | `src/sim/game.ts`, `leaveLoot` with a Lair | The wiped company's purse is left with its fallen equipment | Wiped company | Lair hoard | `hoard.gold += company.gold`, company `spent += transferred gold`, then `gold = 0`; company `earned` unchanged. F01 is fixed; `goldSpentByHeroes` does not change. Fallen equipment and wiped stash enter hoard; their originals are emptied. This movement changes no gold/item lifetime statistic; Expedition has already counted deaths and the wipe. If survivors remain, only equipment is left: purse and all gold counters stay unchanged. | Transfer |
+| G09 | `src/sim/game.ts`, `leaveLoot` with a Holding and no Lair | The wiped company's purse lies among the fallen at a Holding | Wiped company | Holding loot | `loot.gold += company.gold`, company `spent += transferred gold`, then `gold = 0`; company `earned` unchanged. F01 is fixed; `goldSpentByHeroes` does not change. Equipment/stash and statistics behave as in G08. If neither destination exists, the function returns and the disbanded company's purse remains recorded; no gold leaves the world. | Transfer |
+| P01 | `src/adventurers/party.ts`, `mergeParties`; called by `Game.absorb` | Survivors bring their company's whole purse to the host company | Donor company | Host company | Host `gold += donor.gold`, `earned += donor.gold`; donor `spent += donor.gold`, then `gold = 0`. Host `spent` and donor `earned` unchanged. F02 is fixed. No gold lifetime statistic or individual hero spending changes. Also moves potions/stash; whole purse moves even if some survivors do not fit. | Transfer |
 | G01 | `src/sim/game.ts`, `closeTheBooks` income | Daily Holding income | Outside the recorded world | Unruined employer treasury | Employer `treasury += income` (combined with G02), `earned += income`. Safe Holding contributes full income/day; threatened contributes floor(half); ravaged contributes zero. No gold lifetime statistic. Ruined employers are skipped. | Source |
 | G02 | `src/sim/game.ts`, `closeTheBooks` upkeep | Pay daily upkeep | Unruined employer treasury | Outside the recorded world | Employer `treasury −= upkeep` (combined with G01), `spent += upkeep`. No recipient or gold lifetime statistic. Debit can put treasury below zero; the same signed amount is recorded in its counters. Ruin does not reset/delete treasury. | Sink |
 | G03 | `src/sim/game.ts`, `retire` | Buy the retiring adventurer's business, after retaining its opening capital | Company purse | Outside the recorded world | 20000 leaves the recorded world; another 5000 is C04. The code records **one** total debit: company `gold −= 25000`, `spent += 25000`, `goldSpentByHeroes += 25000`, `retirements += 1`; no hero `goldSpent` update. Equipment is returned to stash; the veteran becomes an employer with C04's starting treasury. | Sink (20000) |
@@ -79,26 +80,27 @@ subtracting closing totals or by trusting the gold counters under test.
 Retirement is accounted as 5000 retained/transferred capital and a 20000 sink.
 It is **not** a 25000 transfer to a 5000 treasury. The new employer's 5000 is its
 starting treasury, so its zero earned/spent counters satisfy the employer rule.
-No retirement discrepancy is excluded.
+Retirement satisfies both rules without special handling.
 
 **Conservation failures: none found.** The focused transfers, sources and sinks
 and all 1200 seeded hourly transitions conserve the recorded balances under the
 classifications above.
 
-**Holder-counter failures:**
+**Historical holder-counter failures — both fixed in Turn 05, part 2:**
 
 | Entry | Audit row | Rule broken | Exact discrepancy | Handling |
 | --- | --- | --- | --- | --- |
-| F01 | G08, G09 | Company purse = opening purse + earned − spent | For a wiped purse of A, actual purse is **A below** the equation. `spent` is missing A; the destination receives A correctly. Focused examples: 37 gp to a Holding and 37 gp to a Lair. | Exclude only that wiped purse movement from the counter input; retain full conservation and exact two-holder gold assertions. |
-| F02 | P01 | Company purse = opening purse + earned − spent, on both sides | For donor purse A, host purse is **A above** its equation (missing earned A), donor purse **A below** its equation (missing spent A). Focused example: 5 gp, host 10 → 15, donor 5 → 0. | Exclude only the donor purse transfer from each company's counter input; conserve both purses and keep checking later movements in both companies. |
+| F01 | G08, G09 | Company purse = opening purse + earned − spent | Before the fix, for a wiped purse of A, actual purse was **A below** the equation. `spent` was missing A; the destination receives A correctly. Focused examples: 37 gp to a Holding and 37 gp to a Lair. | Fixed: `Game.leaveLoot` adds A to company `spent` before emptying its purse. No purchase statistic changes. Exclusion removed. |
+| F02 | P01 | Company purse = opening purse + earned − spent, on both sides | Before the fix, for donor purse A, host purse was **A above** its equation (missing earned A), donor purse **A below** its equation (missing spent A). Focused example: 5 gp, host 10 → 15, donor 5 → 0. | Fixed: `mergeParties` adds A to host `earned` and donor `spent` before emptying the donor purse. No lifetime statistic changes. Exclusions removed. |
 
-No employer-counter failures were found. The bug is the missing ledger updates,
-not the gold transfers themselves. The focused tests never assert that the
-missing `earned`/`spent` values or missing spending statistics are correct. Their
-repair remains for a bug-fix turn.
+No employer-counter failures were found. Both failures were missing company
+ledger updates; the gold transfers were already correct. The focused tests now
+assert the repaired counters and unchanged purchase statistics. The strict
+seeded check passes every hour for all three seeds, with no corrections or
+exclusions. No third bug was found.
 
-The raw, unexcluded counter helper was run first against the three seeds. First
-failures were seed 7 at hour 37 (`party-2`, 31 actual vs 11 expected), seed 42 at
+In the original Turn 05 audit, the raw counter helper was run against the three
+seeds before any exclusions. The first failures were seed 7 at hour 37 (`party-2`, 31 actual vs 11 expected), seed 42 at
 hour 27 (`party-1`, 28 vs 17), seed 20260907 at hour 25 (`party-1`, 28 vs 14).
 Then event-level diagnostics measured every occurrence, not just first failures.
 Each amount below is the **additional error introduced by that movement**, not
@@ -110,8 +112,9 @@ a previously accumulated company discrepancy.
 | 42 | 134: party-10, 20; 172: party-6, 579 |
 | 20260907 | 43: party-5, 20; 147: party-13, 20; 166: party-9, 89; 173: party-12, 34; 307: party-11, 515 |
 
-For every F02 entry below, the host is above its equation by the listed amount
-and the donor is below by that same amount.
+For every historical F02 entry below, the host was above its equation by the
+listed amount and the donor was below by that same amount. These discrepancies
+are now repaired by recording the transfer on both companies.
 
 | Seed | F02 merges: hour, donor → host, amount |
 | --- | --- |
@@ -119,16 +122,33 @@ and the donor is below by that same amount.
 | 42 | 27: party-2 → party-1, 11; 47: party-4 → party-3, 14; 89: party-9 → party-5, 20; 103: party-7 → party-3, 401; 136: party-12 → party-1, 60; 170: party-14 → party-11, 17; 185: party-3 → party-1, 574; 187: party-5 → party-15, 572; 195: party-16 → party-11, 20; 205: party-8 → party-15, 551; 214: party-17 → party-13, 40; 253: party-19 → party-18, 176 |
 | 20260907 | 25: party-2 → party-1, 14; 41: party-1 → party-3, 25; 50: party-4 → party-3, 17; 99: party-7 → party-8, 135; 169: party-15 → party-12, 20; 264: party-16 → party-11, 442; 266: party-8 → party-14, 5; 276: party-18 → party-17, 20; 328: party-20 → party-10, 84; 400: party-3 → party-10, 1149 |
 
-The seeded check tracks initial purses/treasuries once. It recognizes F01 by a
-wipe with a recorded loot destination and F02 by adventurer IDs moving between
-companies. At those public event boundaries it removes only that movement's
-purse change minus any counter change already recorded. Comments name F01/F02.
-The strict helper then receives a copy with those movements removed from its
-counter input. A future implementation that correctly records them needs zero
-correction; the test does not demand the bug persist. No company or tick is
-skipped. Conservation always sees the actual, unadjusted balances, including
-the bug movements. Controlled focused fixtures establish their opening ledger
-at setup; it is never rebased after a movement.
+The seeded check tracks initial purses/treasuries once, observes arrivals before
+their first decision, and passes `after` directly to
+`assertHolderCounters(after, starting)`. The exclusion map, correction function,
+wipe/merge detection loop, adjusted purse copies and associated comments have
+all been deleted. Every company, including disbanded donors and wiped companies,
+is checked against its actual purse and counters on every tick. Conservation
+also receives the actual balances. Controlled focused fixtures establish their
+opening ledger at setup; it is never rebased after a movement.
+
+### Focused red/green evidence for part 2
+
+The existing purse-transfer tests were strengthened with nonzero prior counters
+and run before each corresponding production fix:
+
+- **F01, both destinations:** a 37 gp purse with prior `earned = 13` and
+  `spent = 7` must end at purse 0, earned 13, spent **44**. Both the Holding and
+  Lair tests failed before the fix (actual spent **7**, expected **44**) and
+  passed immediately after it. Holding loot reaches 48 gp or Lair hoard 137 gp;
+  `goldSpentByHeroes` remains **9**, proving the loss is not a purchase.
+- **F02:** host purse 10/earned 3/spent 2 and donor purse 5/earned 2/spent 1 must
+  end at host **15/8/2** and donor **0/2/6**. The focused test failed before
+  the fix (host earned **3**, expected **8**) and passed after it. It compares
+  the entire lifetime statistics object before/after, including nonzero
+  `goldSpentByHeroes = 9` and `goldPaid = 11`, to prove no statistic changes.
+
+The production changes are one `spent` increment in `Game.leaveLoot` and two
+counter increments in `mergeParties`; no interfaces or gold destinations change.
 
 ## Existing coverage and added tests
 
@@ -163,11 +183,12 @@ complete literal balances/counters:
   amounts. The new Game cases assert 37 gp wipe transfers and actual fallen
   equipment destinations while survivors retain 37 gp.
 - `party.test.ts` checks a host's merged purse, not donor purse or its ledger
-  rule. New coverage checks both purses without pinning F02's missing counters.
+  rule. Part 2 now checks both companies' exact purse/earned/spent values and
+  unchanged lifetime statistics.
 
 New focused tests cover S00–S05; G04–G06; E01–E02; C04/G03 retirement;
 G01–G02 income/upkeep, including signed debt; B05 active-origin looting;
-G08–G09 wipes and surviving-company equipment loss; P01 merge conservation;
+G08–G09 wipes and surviving-company equipment loss; P01 merge bookkeeping;
 C01–C03/C05 opening balances. All use `Game`, `visitTownServices` or
 `advanceExpedition`; fixtures use public constructors. There is no spying,
 private runtime access, RNG call counting, or production-location assertion.
@@ -176,8 +197,10 @@ of the 400-hour runs for seeds 7, 42 and 20260907.
 
 ## Mutation sensitivity
 
-One hypothetical mutation for **each new describe block** follows. Production
-mutations were not applied: this turn forbids changing `src/`.
+One hypothetical mutation for each describe block introduced in Turn 05 follows.
+Part 2 strengthens the purse-transfer block without introducing another block.
+The counter-omission mutations were demonstrated by the focused tests failing
+before their respective fixes.
 
 | Describe block | Mutation that makes it fail |
 | --- | --- |
@@ -188,25 +211,31 @@ mutations were not applied: this turn forbids changing `src/`.
 | retirement capital | Seed the new business with 4999 gp: the 5000 treasury assertion and conservation fail by 1 gp. |
 | daily income and upkeep | Round threatened income up instead of down for an 11 gp/day Holding: expected earned 16/treasury 1016 fail by 1 gp. |
 | expiry looting | Debit the employer 20 gp without crediting the active Lair: expected hoard 120 and conservation fail. |
-| company purse transfers | Empty a donor's 5 gp purse without crediting its host: expected host 15 and conservation fail by 5 gp. |
-| bookkeeping across 400 hours | Pay a Contract company one extra gp without changing its employer payment: the tick's conservation fails; no F01/F02 exclusion applies to the reward. |
+| company purse transfers | Omit donor `spent += donor.gold` during a merge: expected donor spent 6 becomes 1, and its strict holder equation fails. Reverting F01 also fails both wipe tests. |
+| bookkeeping across 400 hours | Pay a Contract company one extra gp without changing its employer payment: the tick's conservation fails. The check has no exclusions for any movement. |
 | opening gold sources | Give a new company 21 gp rather than 20: the literal opening purse, independently accounted arrival source and holder equation fail. |
 | fallen equipment and the surviving purse | Move the shared purse along with one fallen adventurer's gear despite survivors: expected purse 37 and destination gold 11/100 fail. |
 
 ## Verification and remaining work
 
-Final checks: `pnpm typecheck` passed; `pnpm test` passed (16 test files,
-350 tests, including 26 new tests). The three 400-hour runs check both rules
-after each of their 1200 ticks. Only the new test file and this document were
-added; `git diff --exit-code -- src` passed. The pre-existing untracked
-`.claude/` directory was left untouched.
+Part 2 final checks: `pnpm typecheck` passed; `pnpm test` passed
+(**16 test files, 350 tests**). `git diff --check` passed.
 
-The regression snapshot's opening SHA-256 was
-`76b408738e20921bb37d66952cabe61799593c2be08aabf314f3775ffae3a468`.
-The final hash is identical; `git diff --exit-code --
-test/__snapshots__/simulation-regression.test.ts.snap` passed. The snapshot is
-byte-for-byte unchanged. F01/F02 are reported for a separate
-bug-fix turn; they were neither fixed under `src/` nor pinned as correct.
-The supplied instructions reference `RTK.md`; that file was absent from this
-repository and its parent paths, so no additional instructions could be read
-from it. No other requested work is intentionally omitted.
+Both defects are fixed in their existing movement sites, and the three focused
+regressions were demonstrated failing before their fixes. After deleting all
+correction code, `test/coin-movements.test.ts` passes all 26 tests, including the
+three 400-hour runs (1200 strict hourly checks). No third bug or new exclusion.
+
+This is an explicitly authorized **bug-fix** turn. The regression snapshot was
+refreshed **once**, after the strict seeded checks passed, for the changed
+serialized `earned`/`spent` counters using
+`pnpm exec vitest run test/simulation-regression.test.ts --update`. The original
+Turn 05 snapshot was unchanged; part 2 intentionally replaces all three seed
+hashes. That single update invocation reported **3 snapshots updated**. The
+subsequent full `pnpm test` run passed without snapshot-update flags. The new
+snapshot file SHA-256 is
+`84469c230e1e08ca637af7dc7bdec70af68e619b7d04a1ef6f04c8899763c39a`.
+
+The pre-existing untracked `.claude/` directory is left untouched. No commit,
+push, agent configuration or coin-transfer module was added. No requested work
+is intentionally omitted.
