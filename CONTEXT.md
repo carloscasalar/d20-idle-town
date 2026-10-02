@@ -12,7 +12,7 @@ _Avoid_: Party in prose; `Party` remains the code type.
 Work posted by an employer to recover a threatened holding through a sequence of encounters.
 
 **Bounty**:
-Work posted by the guild to clear a lair through a sequence of encounters.
+Work posted by the guild to clear a lair through a sequence of encounters, and only when the guild's treasury meets the same threshold an employer needs to post a Contract.
 
 **Board**:
 The posted contracts and bounties. It is the only thing that links a holding, a lair, or a company to that work.

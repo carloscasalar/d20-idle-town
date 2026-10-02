@@ -276,6 +276,9 @@ export const DEFAULT_CONFIG: GameConfig = {
 
 export const TICKS_PER_DAY = 24;
 
+/** An employer posts work only when its treasury is at least this much. */
+export const POSTING_THRESHOLD = 25;
+
 /** Asking around about a job costs this much per company level, and a company asks at most this many times. */
 const INVESTIGATION_COST_PER_LEVEL = 15;
 const MAX_INVESTIGATIONS = 2;
@@ -670,7 +673,7 @@ export class Game {
         continue;
       }
       if (this.openQuests.length >= this.config.maxOpenQuests) continue;
-      if (employer.treasury < 25) continue;
+      if (employer.treasury < POSTING_THRESHOLD) continue;
       const free = employer.assets.filter((a) => a.questId === null);
       if (free.length === 0) continue;
       // The overrun holding is always the priority; otherwise trouble strikes at random.
@@ -692,7 +695,7 @@ export class Game {
       if (this.openQuests.length >= this.config.maxOpenQuests) continue;
       const targets: { employer: Employer; asset: Asset }[] = [];
       for (const employer of this.town.employers) {
-        if (employer.ruined || employer.treasury < 25) continue;
+        if (employer.ruined || employer.treasury < POSTING_THRESHOLD) continue;
         for (const asset of employer.assets) {
           if (asset.questId === null && ASSET_KINDS[asset.kind].threats.some((t) => t.item === lair.theme)) targets.push({ employer, asset });
         }
@@ -707,7 +710,7 @@ export class Game {
   /** The guild keeps a standing contract on every lair once someone in town could plausibly take it. */
   private postAssaults(): void {
     const guild = serviceOf(this.town, 'guild');
-    if (guild.ruined) return;
+    if (guild.ruined || guild.treasury < POSTING_THRESHOLD) return;
     for (const lair of this.activeLairs) {
       if (lair.questId) continue;
       const strongest = Math.max(0, ...this.activeParties.map(partyLevel));

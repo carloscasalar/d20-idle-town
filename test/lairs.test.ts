@@ -5,7 +5,7 @@ import { Rng } from '../src/core/rng';
 import { generateAssault } from '../src/quests/quest';
 import { createLair, pickBoss } from '../src/town/lairs';
 import { generateTown, serviceOf } from '../src/town/town';
-import { Game } from '../src/sim/game';
+import { Game, POSTING_THRESHOLD } from '../src/sim/game';
 
 describe('lairs', () => {
   it('have a boss the theme can field and an assault that ends with it', () => {
@@ -59,6 +59,51 @@ describe('lairs', () => {
     expect(view.lairs[0]).toMatchObject({ status: 'cleared', bountyPosted: false });
     expect(view.board.taken).toHaveLength(0);
     expect(view.stats).toMatchObject({ questsCompleted: 1, lairsCleared: 1 });
+  });
+});
+
+function bountyScene(treasury: number) {
+  return Game.forTesting({ seed: 14, maxParties: 1, maxOpenQuests: 0 }, (scenario) => {
+    const rng = new Rng(14);
+    const guild = serviceOf(scenario.town, 'guild');
+    guild.ruined = false;
+    guild.treasury = treasury;
+    guild.upkeepPerDay = 0;
+    const lair = createLair(rng, 'goblins', 4, 0);
+    lair.raidCooldown = 10_000;
+    const company = createParty(rng, 4, 4, 0);
+    scenario.tick = 100;
+    scenario.lairs = [lair];
+    scenario.parties = [company];
+    scenario.quests = [];
+  });
+}
+
+function bounties(game: Game) {
+  const board = game.view().board;
+  return [...board.open, ...board.taken].filter((quest) => quest.kind === 'assault');
+}
+
+describe('posting a Bounty', () => {
+  it('waits until the guild’s treasury meets the posting threshold', () => {
+    for (const treasury of [-40, POSTING_THRESHOLD - 1]) {
+      const game = bountyScene(treasury);
+      game.step();
+      expect(bounties(game)).toEqual([]);
+      expect(game.view().lairs[0]).toMatchObject({ bountyPosted: false });
+    }
+
+    const game = bountyScene(POSTING_THRESHOLD);
+    game.step();
+    const posted = bounties(game);
+    expect(posted).toHaveLength(1);
+    expect(posted[0]!.reward).toBeGreaterThanOrEqual(0);
+    expect(game.view().lairs[0]).toMatchObject({ bountyPosted: true });
+  });
+
+  it('runs 1,500 hours of seed 14', () => {
+    const game = new Game({ seed: 14 });
+    for (let hour = 0; hour < 1_500; hour++) game.step();
   });
 });
 
