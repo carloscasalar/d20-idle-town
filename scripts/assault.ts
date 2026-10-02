@@ -1,5 +1,5 @@
 import { healHero, potionHeal } from '../src/adventurers/hero';
-import { aliveMembers, createParty } from '../src/adventurers/party';
+import { aliveMembers, createParty, PARTY_SIZE } from '../src/adventurers/party';
 import { runCombat } from '../src/combat/battlecast';
 import { Rng } from '../src/core/rng';
 import { generateAssault } from '../src/quests/quest';
@@ -17,8 +17,8 @@ for (const level of [5, 6, 8]) {
     let wins = 0, deaths = 0, reachedBoss = 0;
     for (let t = 0; t < trials; t++) {
       const lair = createLair(rng, rng.pick(LAIR_THEMES), level, 0);
-      const quest = generateAssault(rng, lair, guild, 4, 0, scale);
-      const party = createParty(rng, level + partyLevelOffset, 4, 0);
+      const quest = generateAssault(rng, lair, guild, PARTY_SIZE, 0, scale);
+      const party = createParty(rng, level + partyLevelOffset, PARTY_SIZE, 0);
       party.potions = 4;
       let ok = true;
       for (let i = 0; i < quest.encounters.length && ok; i++) {
