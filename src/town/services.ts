@@ -2,6 +2,7 @@ import { armorUpgradeCost, equipItem, wantsItem, MAX_ARMOR_TIER, potionCost, res
 import { aliveMembers, partyLevel, type Party } from '../adventurers/party';
 import { listNames } from '../core/names';
 import { describeEffect, resalePrice, type MagicItem } from '../items/items';
+import { goldStatistics, purse, transfer, treasury } from './coin';
 import { MAX_STOCK, serviceOf, type Employer, type Town } from './town';
 
 const GUILD_DUES_PER_LEVEL = 15;
@@ -9,9 +10,8 @@ const DUES_PERIOD_DAYS = 7;
 const BLESSING_COST_PER_LEVEL = 40;
 export const BLESSING_HP_PER_LEVEL = 3;
 
-/** The lifetime counters affected by town services. */
+/** Item statistics for a service visit. Gold statistics are written by the coin module. */
 export interface ServiceLedger {
-  goldSpentByHeroes: number;
   itemsSold: number;
 }
 
@@ -31,15 +31,6 @@ export interface TownServiceContext {
   tryRetire: () => boolean;
 }
 
-/** Transfer a service payment and record it in both lifetime ledgers. */
-export function payForService(from: Party, to: Employer, amount: number, ledger: Pick<ServiceLedger, 'goldSpentByHeroes'>): void {
-  from.gold -= amount;
-  from.spent += amount;
-  to.treasury += amount;
-  to.earned += amount;
-  ledger.goldSpentByHeroes += amount;
-}
-
 /**
  * Spend at most one idle hour on potions, loot, items, dues, blessings,
  * retirement or armour, in that order. Mutates the supplied domain state.
@@ -49,7 +40,9 @@ export function payForService(from: Party, to: Employer, amount: number, ledger:
  */
 export function visitTownServices(p: Party, services: TownServiceContext): boolean {
   const { town, day, ledger, report, tryRetire } = services;
-  const pay = (from: Party, to: Employer, amount: number) => payForService(from, to, amount, ledger);
+  const books = goldStatistics(ledger);
+  const pay = (from: Party, to: Employer, amount: number, adventurer?: Hero) =>
+    transfer(purse(from), treasury(to), amount, 'service', books, adventurer);
   const log = (kind: ServiceEvent['kind'], text: string) => report({ kind, text });
   const chronicleLog = (kind: ServiceEvent['kind'], text: string) => report({ kind, text, chronicle: true });
 
@@ -85,9 +78,8 @@ export function visitTownServices(p: Party, services: TownServiceContext): boole
       if (h.armorTier >= MAX_ARMOR_TIER) continue;
       const cost = armorUpgradeCost(h.armorTier, h.level);
       if (p.gold - cost < reserve) continue;
-      pay(p, smith, cost);
+      pay(p, smith, cost, h);
       h.armorTier += 1;
-      h.goldSpent += cost;
       bill += cost;
       fitted.push(`${h.name} (AC +${h.armorTier})`);
     }
@@ -125,11 +117,8 @@ export function visitTownServices(p: Party, services: TownServiceContext): boole
       p.stash.push(item);
       return false;
     }
-    enchanter.treasury -= price;
-    enchanter.spent += price;
+    transfer(treasury(enchanter), purse(p), price, 'resale', books);
     enchanter.stock.push(item);
-    p.gold += price;
-    p.earned += price;
     ledger.itemsSold += 1;
     log('shop', `${p.name} sell a ${item.name} to ${enchanter.name} for ${price} gp.`);
     return true;
@@ -150,8 +139,7 @@ export function visitTownServices(p: Party, services: TownServiceContext): boole
     }
     if (!best) return false;
     best.shop.stock = best.shop.stock.filter((i) => i !== best!.item);
-    pay(p, best.shop, best.item.price);
-    best.hero.goldSpent += best.item.price;
+    pay(p, best.shop, best.item.price, best.hero);
     const replaced = equipItem(best.hero, best.item);
     if (replaced) p.stash.push(replaced);
     chronicleLog('shop', `${best.hero.name} buys a ${best.item.name} from ${best.shop.name} for ${best.item.price} gp (${describeEffect(best.item.effect)}).`);

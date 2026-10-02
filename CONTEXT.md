@@ -25,7 +25,22 @@ An employer-owned asset that earns income while safe and can be threatened or ra
 _Avoid_: Asset in prose; `Asset` remains the code type.
 
 **Lair**:
-A threat's stronghold that sends raids, grows stronger when unanswered and can hold lost loot.
+A threat's stronghold that sends raids, grows stronger when unanswered and can hold a hoard.
+
+**Purse**:
+A company's gold.
+
+**Treasury**:
+An employer's gold.
+
+**Hoard**:
+The gold and gear stored in a Lair.
+
+**Loot**:
+The gold and gear left at a Holding.
+
+**Coin movement**:
+Gold moving by a transfer between two holders, a source into the world, or a sink out of it. The reason decides which counters and lifetime statistics move with it.
 
 **Bloodied**:
 An adventurer at half or less of their maximum hit points.

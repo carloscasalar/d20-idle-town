@@ -1,5 +1,6 @@
 import { listNames } from '../core/names';
-import { payForService, visitTownServices } from '../town/services';
+import { emptyGoldStatistics, hoard, loot, purse, sink, source, transfer, treasury } from '../town/coin';
+import { visitTownServices } from '../town/services';
 import {
   describeHero,
   resurrectHero,
@@ -307,8 +308,7 @@ export class Game {
     resurrections: 0,
     partiesWiped: 0,
     partiesArrived: 0,
-    goldPaid: 0,
-    goldSpentByHeroes: 0,
+    ...emptyGoldStatistics(),
     employersRuined: 0,
     itemsFound: 0,
     itemsSold: 0,
@@ -636,9 +636,8 @@ export class Game {
     for (const e of this.town.employers) {
       if (e.ruined) continue;
       const income = dailyIncome(e);
-      e.treasury += income - e.upkeepPerDay;
-      e.earned += income;
-      e.spent += e.upkeepPerDay;
+      source(treasury(e), income, 'income', this.stats);
+      sink(treasury(e), e.upkeepPerDay, 'upkeep', this.stats);
       earned += income;
       paid += e.upkeepPerDay;
       if (e.treasury < 0) {
@@ -659,11 +658,6 @@ export class Game {
     this.stats.employersRuined += 1;
     this.board.withdrawOpenWork(e, this.boardContext());
     this.chronicleLog('economy', `${e.name} are ruined. ${e.title === 'Faction' ? 'The organisation dissolves' : 'Their holdings are sold off'}; no more contracts from them.`);
-  }
-
-  /** Coin from adventurers into a town business. */
-  private pay(from: Party, to: Employer, amount: number): void {
-    payForService(from, to, amount, this.stats);
   }
 
   // ---------------------------------------------------------------- quests
@@ -871,7 +865,7 @@ export class Game {
     const temple = serviceOf(this.town, 'temple');
     const divination = DIVINATION_COST_PER_LEVEL * level;
     if (!temple.ruined && p.gold - divination >= reserve * 2) {
-      this.pay(p, temple, divination);
+      transfer(purse(p), treasury(temple), divination, 'service', this.stats);
       this.board.revealAll(quest);
       this.log('temple', `${p.name} pay ${divination} gp for a divination at the ${temple.name}. The priests see "${quest.title}" whole: ${quest.encounters.length} fights [${difficultyCode(quest)}].`);
       return true;
@@ -882,7 +876,7 @@ export class Game {
     if (done >= MAX_INVESTIGATIONS) return false;
     const cost = INVESTIGATION_COST_PER_LEVEL * level;
     if (tavern.ruined || p.gold - cost < reserve) return false;
-    this.pay(p, tavern, cost);
+    transfer(purse(p), treasury(tavern), cost, 'service', this.stats);
     p.investigations[quest.id] = done + 1;
     this.log('shop', `${p.name} buy a round at ${tavern.name} (${cost} gp) and ask about "${quest.title}": ${this.board.learnIntel(quest)}.`);
     return true;
@@ -915,13 +909,14 @@ export class Game {
   private retire(p: Party): boolean {
     const veteran = aliveMembers(p).find((h) => h.level >= RETIREMENT_LEVEL);
     if (!veteran || p.gold < RETIREMENT_PRICE + resurrectionCost(partyLevel(p))) return false;
-    p.gold -= RETIREMENT_PRICE;
-    p.spent += RETIREMENT_PRICE;
-    this.stats.goldSpentByHeroes += RETIREMENT_PRICE;
     p.members = p.members.filter((h) => h !== veteran);
     for (const item of veteran.items) p.stash.push(item);
     veteran.items = [];
-    const employer = retiredEmployer(this.rng, veteran.name, p.id, Math.floor(RETIREMENT_PRICE * 0.2));
+    const capital = Math.floor(RETIREMENT_PRICE * 0.2);
+    const employer = retiredEmployer(this.rng, veteran.name, p.id, 0);
+    // 20,000 leaves the world; 5,000 is the new employer's opening treasury. No event between them.
+    sink(purse(p), RETIREMENT_PRICE - capital, 'retirement', this.stats);
+    transfer(purse(p), treasury(employer), capital, 'retirement', this.stats);
     this.town.employers.push(employer);
     this.stats.retirements += 1;
     this.chronicleLog(
@@ -939,8 +934,7 @@ export class Game {
     for (const dead of deadMembers(p)) {
       const cost = resurrectionCost(dead.level);
       if (p.gold < cost) continue;
-      this.pay(p, temple, cost);
-      dead.goldSpent += cost;
+      transfer(purse(p), treasury(temple), cost, 'service', this.stats, dead);
       resurrectHero(dead);
       this.stats.resurrections += 1;
       raised.push(dead);
@@ -970,7 +964,7 @@ export class Game {
   private absorb(host: Party, donor: Party, gaveUp = false): void {
     const donorName = donor.name;
     const donorMembers = aliveMembers(donor).map((h) => h.name);
-    const leftover = mergeParties(host, donor);
+    const leftover = mergeParties(host, donor, this.stats);
     const size = aliveMembers(host).length;
     if (leftover.length === 0) {
       for (const h of buryDead(donor)) this.log('death', `${donorName} leave ${h.name} in the temple's care for good.`);
@@ -997,12 +991,12 @@ export class Game {
   /** Hand a broken lair's hoard to the company. The Board asks for this when a bounty succeeds. */
   private payHoard(lair: Lair, company: Party): string {
     const gold = lair.hoard.gold;
-    company.gold += gold;
-    company.earned += gold;
-    company.stash.push(...lair.hoard.items);
-    this.stats.itemsFound += lair.hoard.items.length;
-    const found = [gold > 0 ? `${gold} gp` : '', ...lair.hoard.items.map((item) => item.name)].filter(Boolean).join(', ');
-    lair.hoard = { gold: 0, items: [] };
+    const items = lair.hoard.items;
+    transfer(hoard(lair), purse(company), gold, 'spoils', this.stats);
+    company.stash.push(...items);
+    this.stats.itemsFound += items.length;
+    lair.hoard.items = [];
+    const found = [gold > 0 ? `${gold} gp` : '', ...items.map((item) => item.name)].filter(Boolean).join(', ');
     return found;
   }
 
@@ -1034,9 +1028,8 @@ export class Game {
       items.push(...p.stash);
       p.stash = [];
       gold = p.gold;
-      store.gold += gold;
-      p.spent += gold;
-      p.gold = 0;
+      if (lair) transfer(purse(p), hoard(lair), gold, 'wipe', this.stats);
+      else if (asset) transfer(purse(p), loot(asset), gold, 'wipe', this.stats);
     }
     store.items.push(...items);
     if (items.length === 0 && gold === 0) return;

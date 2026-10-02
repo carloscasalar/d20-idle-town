@@ -115,8 +115,19 @@ enchanter buys back.
   that amount. Events are reported synchronously to Game, which publishes them
   to the log and chronicle. A retirement callback keeps Game's population change
   between blessings and armour in the priority order. Recruitment and resurrection
-  remain in Game. `payForService` records payments for both this module and
-  Game's other service visits; `BLESSING_HP_PER_LEVEL` is shared with combat setup.
+  remain in Game. Payments go through the coin module; `BLESSING_HP_PER_LEVEL`
+  is shared with combat setup.
+
+- **`coin.ts`** — the only writer of a gold balance or a gold counter. Callers
+  name a purse, treasury, hoard or loot and one of three operations: `transfer`,
+  `source` or `sink`, each with an amount and a reason. `coinReasons` decides
+  which earned/spent counters and which lifetime statistics (`goldPaid`,
+  `goldSpentByHeroes`, and a named adventurer's `goldSpent`) that reason
+  touches. A hoard and a loot store have no earned/spent counters. The module
+  does not decide whether anyone can afford the amount, and it does not import
+  `Game`; it receives the gold statistics and nothing else. Factories still
+  set a holder's starting amount. `party.ts` calls it for a merger.
+  `payForService` is gone.
 
 ### `src/quests` — what companies actually do
 
@@ -171,7 +182,9 @@ configuration (including inclusive cooldown ranges), built by Game from
 selects small, named Contract and Bounty behaviors for creation, posting,
 acceptance wording, success, failure, expiry and withdrawal after a lair falls.
 An injected table can add a kind through `Board.post` without changing Board
-operations. Creators receive the kind, and posting rules receive the original
+operations. Kind entries do not do gold arithmetic: a Contract's reward and
+windfall, a Bounty's payment, an expiry loss and a hoard's payout are coin
+movements with reasons. Creators receive the kind, and posting rules receive the original
 posting terms. Entries apply consequences; Board operations write terminal
 status and release references. Expiry prepares and validates its consequences
 before the Board closes work, then applies them after closure. The three

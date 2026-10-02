@@ -6,7 +6,8 @@ import type { DeepReadonly } from '../core/readonly';
 import type { Rng } from '../core/rng';
 import { describeEncounter, scaleEncounter, type EncounterSpec } from '../quests/encounters';
 import { difficultyCode, isFullyKnown, type ReadonlyQuest } from '../quests/quest';
-import { BLESSING_HP_PER_LEVEL, payForService } from '../town/services';
+import { goldStatistics, purse, transfer, treasury } from '../town/coin';
+import { BLESSING_HP_PER_LEVEL } from '../town/services';
 import { serviceOf, type Town } from '../town/town';
 
 const CAROUSING_SHARE = 0.05;
@@ -23,7 +24,6 @@ export interface ExpeditionEvent {
 export interface ExpeditionLedger {
   heroesDied: number;
   partiesWiped: number;
-  goldSpentByHeroes: number;
 }
 
 export interface ExpeditionContext {
@@ -243,12 +243,13 @@ function arriveHome(p: Party, q: ReadonlyQuest, context: ExpeditionContext): voi
   const tavern = serviceOf(town, 'tavern');
   const fee = 3 * partyLevel(p) * aliveMembers(p).length;
   if (!tavern.ruined && p.gold >= fee) {
-    payForService(p, tavern, fee, ledger);
+    const books = goldStatistics(ledger);
+    transfer(purse(p), treasury(tavern), fee, 'service', books);
     let line = `${p.name} take rooms at ${tavern.name} for ${fee} gp.`;
     if (success && dead.length === 0 && p.renown < MAX_RENOWN) {
       const spree = Math.max(10, Math.floor(p.gold * CAROUSING_SHARE));
       if (p.gold - spree >= resurrectionCost(partyLevel(p))) {
-        payForService(p, tavern, spree, ledger);
+        transfer(purse(p), treasury(tavern), spree, 'service', books);
         p.renown = Math.min(MAX_RENOWN, p.renown + 1);
         line += ` They drink ${spree} gp away telling the tale (renown ${p.renown}).`;
       }

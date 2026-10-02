@@ -143,3 +143,42 @@ snapshots. `git diff --check` passed. The regression snapshot has no diff and
 its SHA-256 checksum is identical before and after the refactor. The final
 interface, configuration fields and exact test edits are recorded in the
 [turn report](../.scratch/architecture-flow/turns/04b-board-config-and-kinds-report.md).
+
+## 4. Give coin one module
+
+**Problem.** Every movement of gold edited some combination of a purse, a
+treasury, a hoard, a loot store, `earned`, `spent`, an adventurer's
+`goldSpent` and the lifetime statistics by hand. Only a company paying an
+employer went through a shared function, `payForService`. Two of those
+hand-edited lines had been wrong until the previous turn because a counter
+was forgotten.
+
+**Change.** `src/town/coin.ts` is now the only code that writes a gold balance
+or a gold counter, other than the factories that create a holder with its
+starting amount. Callers name a purse, treasury, hoard or loot and use one of
+three operations — transfer, source, sink — with an amount and a reason.
+`coinReasons` decides the counters and statistics. `ServiceLedger`,
+`ExpeditionLedger` and `BoardLedger` no longer carry a gold field those
+modules assign. `payForService` is gone. The Board's Contract reward,
+windfall, Bounty, expiry loss and hoard payout are movements. Retirement is
+a 20,000 gp sink and a 5,000 gp transfer onto the new employer's opening
+treasury, with no event between them. Contract settlement is a windfall
+source and a reward transfer before the reward event; holding loot still
+moves after that event.
+
+**Files.** `src/town/coin.ts`, the call sites in Game, Board, Expedition,
+services and `mergeParties`, `test/coin.test.ts`, `CONTEXT.md`, and the
+architecture references. The audit's Reason column names each row's entry.
+
+**Evidence.** `test/coin.test.ts` drives every operation for every kind of
+holder, checks each reason against its table entry (including a reason added
+from the test), refuses a negative and a fractional amount, and checks
+conservation over 400 seeded random movements. The existing coin-movement
+tests, including conservation and per-holder checks on every tick of the
+three 400-hour runs, were not edited.
+
+**Verification.** `pnpm typecheck` passed. `pnpm test` passed all 374 tests
+across 17 files, including the unchanged three-seed, 400-hour trajectory
+snapshots. `git diff --check` passed. The regression snapshot has no diff.
+Its SHA-256 is `84469c230e1e08ca637af7dc7bdec70af68e619b7d04a1ef6f04c8899763c39a`,
+the same checksum recorded after the previous turn.

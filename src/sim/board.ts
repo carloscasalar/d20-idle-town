@@ -1,6 +1,7 @@
 import { MAX_RENOWN, PARTY_SIZE, type Party } from '../adventurers/party';
 import type { DeepReadonly } from '../core/readonly';
 import type { Rng } from '../core/rng';
+import { goldStatistics, hoard, loot, purse, sink, source, transfer, treasury, type GoldStatistics } from '../town/coin';
 import { difficultyCode, generateAssault, generateQuest, learnQuestIntel, revealAll, type Quest, type QuestKind, type ReadonlyQuest } from '../quests/quest';
 import { THEMES, type ThemeId } from '../quests/themes';
 import { ASSET_KINDS, type Asset } from '../town/assets';
@@ -247,15 +248,21 @@ export class Board {
   }
 }
 
-export interface BoardLedger {
+interface BoardCounters {
   questsCompleted: number;
   questsFailed: number;
   questsExpired: number;
-  goldPaid: number;
   itemsFound: number;
   raids: number;
   lairsCleared: number;
 }
+
+/**
+ * Work statistics. Gold statistics are not written here. The second arm exists
+ * so a statistics object that already names `goldPaid` — Game's ledger, and
+ * existing Board fixtures — still typechecks. Board code cannot assign it.
+ */
+export type BoardLedger = BoardCounters | (BoardCounters & Pick<GoldStatistics, 'goldPaid'>);
 
 export interface BoardEvent {
   kind: 'quest' | 'reward' | 'party' | 'economy';
@@ -364,17 +371,15 @@ function payContract(work: Readonly<Quest>, company: Party, employer: Employer, 
     windfall = holding.incomePerDay * context.config.windfallDays;
     holding.status = 'safe';
   }
-  employer.treasury += windfall - work.reward;
-  employer.earned += windfall;
-  employer.spent += work.reward;
+  const statistics = goldStatistics(context.ledger);
+  // Windfall and reward used to be one treasury assignment. Both finish before the reward event.
+  source(treasury(employer), windfall, 'windfall', statistics);
+  transfer(treasury(employer), purse(company), work.reward, 'reward', statistics);
   employer.questsCompleted += 1;
   employer.reputation += context.config.reputationGain;
-  company.gold += work.reward;
-  company.earned += work.reward;
   company.questsDone += 1;
   company.renown = Math.min(context.config.renownCap, company.renown + context.config.contractRenown);
   context.ledger.questsCompleted += 1;
-  context.ledger.goldPaid += work.reward;
   let inKind = '';
   if (work.itemReward) {
     company.stash.push(work.itemReward);
@@ -388,11 +393,11 @@ function payContract(work: Readonly<Quest>, company: Party, employer: Employer, 
   );
   if (holding && (holding.loot.gold > 0 || holding.loot.items.length > 0)) {
     const found = [holding.loot.items.map((item) => item.name).join(', '), holding.loot.gold > 0 ? `${holding.loot.gold} gp` : ''].filter(Boolean).join(' and ');
-    company.gold += holding.loot.gold;
-    company.earned += holding.loot.gold;
-    company.stash.push(...holding.loot.items);
-    context.ledger.itemsFound += holding.loot.items.length;
-    holding.loot = { gold: 0, items: [] };
+    const items = holding.loot.items;
+    transfer(loot(holding), purse(company), holding.loot.gold, 'spoils', statistics);
+    company.stash.push(...items);
+    context.ledger.itemsFound += items.length;
+    holding.loot.items = [];
     report(context, 'reward', `Among the bones at ${holding.name}, ${company.name} find ${found}: all that is left of the last company that came this way.`, true);
   }
 }
@@ -404,21 +409,17 @@ function failContract(work: Readonly<Quest>, company: Party, employer: Employer,
   context.ledger.questsFailed += 1;
   employer.cooldown = Math.min(employer.cooldown, context.rng.int(...context.config.failureCooldown));
   const lair = lairById(context.lairs, work.lairId);
-  if (lair) unansweredRaid(lair, 0, context);
+  if (lair) unansweredRaid(lair, context);
   report(context, 'party', `${company.name} limp back to ${context.town.name} empty-handed.${holding ? ` ${capitalize(holding.name)} remains in enemy hands.` : ''}`);
 }
 
 function payBounty(work: Readonly<Quest>, company: Party, guild: Employer, _holding: Asset | undefined, context: WorkContext): void {
   const lair = bountyLair(work, context);
-  guild.treasury -= work.reward;
-  guild.spent += work.reward;
+  transfer(treasury(guild), purse(company), work.reward, 'reward', goldStatistics(context.ledger));
   guild.questsCompleted += 1;
   guild.reputation += context.config.reputationGain;
-  company.gold += work.reward;
-  company.earned += work.reward;
   company.questsDone += 1;
   context.ledger.questsCompleted += 1;
-  context.ledger.goldPaid += work.reward;
   if (work.itemReward) {
     company.stash.push(work.itemReward);
     context.ledger.itemsFound += 1;
@@ -444,10 +445,11 @@ function expireContract(contract: ReadonlyQuest, context: WorkContext): () => vo
   if (!holding) throw new Error(`Cannot expire "${contract.title}": its holding is missing.`);
   return () => {
     const loss = Math.max(0, Math.min(employer.treasury, holding.incomePerDay * context.config.lootingDays));
-    employer.treasury -= loss;
-    employer.spent += loss;
     const lair = lairById(context.lairs, contract.lairId);
-    if (lair) unansweredRaid(lair, loss, context);
+    const statistics = goldStatistics(context.ledger);
+    if (lair?.status === 'active') transfer(treasury(employer), hoard(lair), loss, 'looting', statistics);
+    else sink(treasury(employer), loss, 'forfeit', statistics);
+    if (lair) unansweredRaid(lair, context);
     employer.cooldown = Math.min(employer.cooldown, context.rng.int(...context.config.expiryCooldown));
     if (holding.status === 'threatened') {
       holding.status = 'ravaged';
@@ -467,11 +469,10 @@ function lairById(lairs: readonly Lair[], id: string | null): Lair | undefined {
   return id ? lairs.find((lair) => lair.id === id) : undefined;
 }
 
-function unansweredRaid(lair: Lair, gold: number, context: WorkContext): void {
+function unansweredRaid(lair: Lair, context: WorkContext): void {
   if (lair.status !== 'active') return;
   lair.raidsWon += 1;
   lair.strength = Math.min(context.config.lairStrengthCap, lair.strength + context.config.lairStrengthGain);
-  lair.hoard.gold += gold;
 }
 
 function report(context: BoardContext, kind: BoardEvent['kind'], text: string, chronicle = false): void {
