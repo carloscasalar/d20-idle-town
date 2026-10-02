@@ -30,6 +30,10 @@ case "$mode" in
     ;;
 esac
 
+# Record the session id before the turn runs, so an interrupted turn can be resumed.
+echo "$session" > "$LOG_DIR/$stamp.session"
+echo "session (started): $session"
+
 cursor-agent -p --trust --force --output-format text \
   --resume "$session" --model "$MODEL" "$(cat "$prompt")" > "$out" 2>&1
 status=$?
