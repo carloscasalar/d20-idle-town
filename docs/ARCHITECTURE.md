@@ -1,8 +1,9 @@
 # Architecture
 
 d20 Town is a headless simulation with a thin browser front-end bolted on. The
-whole world lives in one class, `Game`, which owns a seeded RNG and advances by
-discrete hourly ticks. Combat — the one part with real rules in it — is
+world advances through `Game`, which owns a seeded RNG and orchestrates
+discrete hourly ticks. `Board` owns the contracts and bounties; Expedition owns
+a company’s journey. Combat — the one part with real rules in it — is
 delegated to [battlecast-engine](https://github.com/bjedrzejewski/battlecast-engine)
 behind a single adapter module.
 
@@ -163,7 +164,19 @@ Game code above this line never sees a `Creature`, a `BattleLog` or a
 event log, and exposes one method that matters: `step()`, one in-game hour.
 The **Board** (`board.ts`) owns the contracts and bounties. It is the only
 code that posts them, accepts them, ends them, or writes the links between a
-holding, a lair, a company and that work. The ordering of `step()` is the game:
+holding, a lair, a company and that work. Its `BoardConfig` is plain numerical
+configuration (including inclusive cooldown ranges), built by Game from
+`GameConfig`; `contractDays` is converted to `contractOpenTicks`. The exported
+`DEFAULT_BOARD_CONFIG` preserves the existing tuning. The `WORK_KINDS` table
+selects small, named Contract and Bounty behaviors for creation, posting,
+acceptance wording, success, failure, expiry and withdrawal after a lair falls.
+An injected table can add a kind through `Board.post` without changing Board
+operations. Query results are deeply read-only TypeScript views, including
+encounters and rewards. Intelligence changes go through `learnIntel` and
+`revealAll`. Only scenario setup uses `recordsForScenario` and
+`replaceForScenario`; regression serialization uses `all()`.
+
+The ordering of `step()` is the game:
 
 ```
 step()
@@ -177,6 +190,12 @@ step()
  ├─ updateParty()    every company, most renowned first
  └─ expireQuests()   nobody answered; looters move in
 ```
+
+`Game.acceptQuest` is the single place that takes work through the Board,
+then calls Expedition's `startExpedition`, then publishes the returned
+acceptance event. The Board links work and company; Expedition sets traveling
+status, travel ticks and idle ticks. Event subscribers see the same linked,
+traveling company as before.
 
 `updateParty` handles idle companies and sends active ones to
 `advanceExpedition` in `expedition.ts`. The Expedition module owns this state
@@ -198,9 +217,12 @@ subtracts combat potions, handles retreat and recovery through `shortRest`
 (a configured fraction of maximum HP, default 0.5, then a potion for each hero
 still Bloodied while supplies last), and reports events synchronously. It takes a
 combat resolver through an interface: `runCombat` is the production adapter,
-while tests supply scripted outcomes. Before settlement it asks the Board to
-release the company, then calls the settlement callback, which Game forwards
-to the Board. Lost-loot storage stays in `Game` and is called at the same
+while tests supply scripted outcomes. A wipe or homecoming resets expedition
+progress and hands the finished work and outcome to settlement exactly once.
+Game forwards that callback to the Board, which alone releases the company.
+Expedition's road intelligence callbacks also go through the Board. Expiring
+a Contract without its employer or holding is an error before it is closed or
+counted; real games never remove those entities. Lost-loot storage stays in `Game` and is called at the same
 point in the journey. A broken lair's hoard is paid out by `Game` when the
 Board asks, after the bounty is paid and before the chronicle line.
 
@@ -291,6 +313,9 @@ touching `difficultyScale` or the XP bands.
   `src/quests/themes.ts` (curated names plus creature types), then wire it into
   the weights of an asset kind in `src/town/assets.ts`, and into `LAIR_THEMES`
   if it should be able to hold a lair.
+- **A new kind of work** — add a `WorkBehavior` entry to the Board's kind table.
+  Its creation/posting, success/failure, acceptance, optional expiry and optional
+  withdrawal rule supply the behavior; `post`, `take` and `settle` dispatch it.
 - **A new holding** — add an `AssetKind` and its `AssetKindDef` (income, titles,
   threat weights) in `src/town/assets.ts`. Nothing else needs to change.
 - **A new magic item** — add an `ItemTemplate` to `ITEM_CATALOGUE` in

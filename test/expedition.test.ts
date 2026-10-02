@@ -5,7 +5,7 @@ import type { CombatOutcome } from '../src/combat/battlecast';
 import { listNames } from '../src/core/names';
 import { Rng } from '../src/core/rng';
 import type { EncounterSpec } from '../src/quests/encounters';
-import type { Quest } from '../src/quests/quest';
+import { learnQuestIntel, revealAll, type Quest } from '../src/quests/quest';
 import { advanceExpedition, type CombatResolver, type ExpeditionContext, type ExpeditionEvent } from '../src/sim/expedition';
 import { generateTown, serviceOf } from '../src/town/town';
 
@@ -52,6 +52,8 @@ function setup(level = 1) {
     quest, town, rng, ledger, travelTicks: 2, restTicks: 2, shortRestHealFraction: 0.5, skillDc: 15,
     combat,
     report: (event) => { events.push(event); calls.push(`event:${event.kind}`); },
+    learnIntel: () => learnQuestIntel(quest),
+    revealAll: () => revealAll(quest),
     settleQuest,
     leaveLoot,
   };
@@ -131,23 +133,23 @@ describe('an expedition hour', () => {
     expect(calls.slice(-2)).toEqual([`loot:${party.members.length}`, 'settle:false']);
   });
 
-  it.each(['contract', 'assault'] as const)('releases the company’s %s and encounter progress when it is wiped out', (kind) => {
+  it.each(['contract', 'assault'] as const)('hands a wiped company’s %s to settlement once and resets progress', (kind) => {
     const { party, quest, context } = setup();
     quest.kind = kind;
     party.progress = 1;
     context.combat = () => outcome(party, 'monsters', party.members.map(() => false));
-    let companyAtSettlement: { questId: string | null; progress: number } | undefined;
-    context.settleQuest = (contract, company, success) => {
+    const settle = vi.fn<ExpeditionContext['settleQuest']>((work, company, success) => {
+      expect(work).toBe(quest);
+      expect(company).toBe(party);
       expect(success).toBe(false);
-      companyAtSettlement = { questId: company.questId, progress: company.progress };
-      contract.status = 'failed';
-    };
+      expect(company.progress).toBe(0);
+    });
+    context.settleQuest = settle;
 
     advanceExpedition(party, context);
 
-    expect(quest.status).toBe('failed');
-    expect(party).toMatchObject({ status: 'disbanded', questId: null, progress: 0 });
-    expect(companyAtSettlement).toEqual({ questId: null, progress: 0 });
+    expect(settle).toHaveBeenCalledExactlyOnceWith(quest, party, false);
+    expect(party).toMatchObject({ status: 'disbanded', progress: 0 });
   });
 
   it('passes a blessing and the no-retreat rule into the final lair fight', () => {
@@ -207,21 +209,22 @@ describe('an expedition hour', () => {
   });
 
   it('settles before charging for rooms, then rests back to idle', () => {
-    const { party, context, town, ledger, calls, events } = homecoming();
+    const { party, quest, context, town, ledger, calls, events } = homecoming();
     party.renown = MAX_RENOWN;
     party.members[0]!.hp = 1;
     const tavern = serviceOf(town, 'tavern');
     const startingTreasury = tavern.treasury;
     const startingGold = party.gold;
     const fee = 3 * partyLevel(party) * aliveMembers(party).length;
-    context.settleQuest = (_quest, company, success) => {
-      expect(company.questId).toBe(null);
+    context.settleQuest = vi.fn((_quest, company, success) => {
       expect(company.progress).toBe(0);
       calls.push(`settle:${success}`);
-    };
+    });
 
     advanceExpedition(party, context);
 
+    expect(context.settleQuest).toHaveBeenCalledExactlyOnceWith(quest, party, true);
+    expect(party.progress).toBe(0);
     expect(calls[0]).toBe('settle:true');
     expect(events.some((event) => event.kind === 'shop' && event.text.includes('take rooms'))).toBe(true);
     expect(party.status).toBe('resting');
@@ -610,6 +613,8 @@ describe('reading the road', () => {
     party.questId = nextQuest.id;
     party.ticksLeft = 3;
     context.quest = nextQuest;
+    context.learnIntel = () => learnQuestIntel(nextQuest);
+    context.revealAll = () => revealAll(nextQuest);
     context.skillDc = 0;
     advanceExpedition(party, context);
 

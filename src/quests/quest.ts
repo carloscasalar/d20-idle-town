@@ -1,3 +1,4 @@
+import type { DeepReadonly } from '../core/readonly';
 import type { Rng } from '../core/rng';
 import { rollLootItem, type MagicItem } from '../items/items';
 import { ASSET_KINDS, type Asset } from '../town/assets';
@@ -8,7 +9,9 @@ import { THEMES, themeMonsters, type ThemeId } from './themes';
 
 export type QuestStatus = 'open' | 'taken' | 'done' | 'failed';
 
-export type QuestKind = 'contract' | 'assault';
+export type QuestKind = 'contract' | 'assault' | (string & {});
+
+export type ReadonlyQuest = DeepReadonly<Quest>;
 
 export interface Quest {
   id: string;
@@ -183,11 +186,11 @@ function buildBossEncounter(rng: Rng, lair: Lair, partySize: number, scale: numb
   return { ...spec, monsters, totalXp };
 }
 
-export function questXp(q: Quest): number {
+export function questXp(q: ReadonlyQuest): number {
   return q.encounters.reduce((s, e) => s + e.totalXp, 0);
 }
 
-export function isFullyKnown(q: Quest): boolean {
+export function isFullyKnown(q: ReadonlyQuest): boolean {
   return q.countRevealed && q.revealed >= q.encounters.length;
 }
 
@@ -210,7 +213,7 @@ export function revealAll(q: Quest): void {
 }
 
 /** "I/?/?" for a three-fight job with one known; "I/…" while even the length is a secret. */
-export function difficultyCode(q: Quest): string {
+export function difficultyCode(q: ReadonlyQuest): string {
   const known = q.encounters.slice(0, q.revealed).map((e) => e.difficulty[0]!.toUpperCase());
   if (!q.countRevealed) return q.revealed < q.encounters.length ? `${known.join('/')}/…` : known.join('/');
   const hidden = q.encounters.length - q.revealed;

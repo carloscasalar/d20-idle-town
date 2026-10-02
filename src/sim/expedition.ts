@@ -2,16 +2,16 @@ import { describeHero, gainXp, healHero, isBloodied, killHero, potionHeal, resur
 import { aliveMembers, deadMembers, MAX_RENOWN, partyLevel, type Party } from '../adventurers/party';
 import type { CombatOptions, CombatOutcome } from '../combat/battlecast';
 import { listNames } from '../core/names';
+import type { DeepReadonly } from '../core/readonly';
 import type { Rng } from '../core/rng';
 import { describeEncounter, scaleEncounter, type EncounterSpec } from '../quests/encounters';
-import { difficultyCode, isFullyKnown, learnQuestIntel, revealAll, type Quest } from '../quests/quest';
+import { difficultyCode, isFullyKnown, type ReadonlyQuest } from '../quests/quest';
 import { BLESSING_HP_PER_LEVEL, payForService } from '../town/services';
 import { serviceOf, type Town } from '../town/town';
-import { releaseCompany } from './board';
 
 const CAROUSING_SHARE = 0.05;
 
-export type CombatResolver = (heroes: Hero[], spec: EncounterSpec, seed: number, options?: CombatOptions) => CombatOutcome;
+export type CombatResolver = (heroes: Hero[], spec: DeepReadonly<EncounterSpec>, seed: number, options?: CombatOptions) => CombatOutcome;
 
 export interface ExpeditionEvent {
   kind: 'party' | 'quest' | 'combat' | 'death' | 'levelup' | 'temple' | 'shop';
@@ -28,7 +28,7 @@ export interface ExpeditionLedger {
 
 export interface ExpeditionContext {
   /** Required while traveling, questing or returning; resting has no contract. */
-  quest?: Quest;
+  quest?: ReadonlyQuest;
   town: Town;
   rng: Rng;
   ledger: ExpeditionLedger;
@@ -39,8 +39,17 @@ export interface ExpeditionContext {
   combat: CombatResolver;
   /** Publish immediately so observers see state at the point of the event. */
   report: (event: ExpeditionEvent) => void;
-  settleQuest: (quest: Quest, party: Party, success: boolean) => void;
-  leaveLoot: (quest: Quest, party: Party, fallen: Hero[]) => void;
+  learnIntel: (quest: ReadonlyQuest) => string;
+  revealAll: (quest: ReadonlyQuest) => void;
+  settleQuest: (quest: ReadonlyQuest, party: Party, success: boolean) => void;
+  leaveLoot: (quest: ReadonlyQuest, party: Party, fallen: Hero[]) => void;
+}
+
+/** Start the journey after the Board has linked work and company. */
+export function startExpedition(company: Party, travelTicks: number): void {
+  company.status = 'traveling';
+  company.ticksLeft = travelTicks;
+  company.idleTicks = 0;
 }
 
 /** Advance one non-idle company by one hour. The supplied quest must match its questId. */
@@ -72,7 +81,7 @@ export function advanceExpedition(p: Party, context: ExpeditionContext): void {
   }
 }
 
-function currentQuest(p: Party, context: ExpeditionContext): Quest {
+function currentQuest(p: Party, context: ExpeditionContext): ReadonlyQuest {
   const { quest } = context;
   if (!quest || quest.id !== p.questId) throw new Error(`Missing contract for ${p.name} while ${p.status}.`);
   return quest;
@@ -86,14 +95,14 @@ function chronicleLog(context: ExpeditionContext, kind: ExpeditionEvent['kind'],
   context.report({ kind, text, chronicle: true });
 }
 
-function travel(p: Party, q: Quest, context: ExpeditionContext): void {
+function travel(p: Party, q: ReadonlyQuest, context: ExpeditionContext): void {
   const { rng, skillDc } = context;
   if (!isFullyKnown(q) && !p.investigations[`${q.id}:tracks`]) {
     p.investigations[`${q.id}:tracks`] = 1;
     const check = rollSkill(rng, aliveMembers(p), 'Survival', skillDc);
     if (check) {
       const dice = `${check.roll}${check.bonus >= 0 ? '+' : ''}${check.bonus} = ${check.total}${check.advantage ? ', with advantage' : ''}`;
-      if (check.success) log(context, 'party', `On the road, ${check.hero.name} reads the tracks (Survival ${dice} vs DC ${skillDc}): ${learnQuestIntel(q)}.`);
+      if (check.success) log(context, 'party', `On the road, ${check.hero.name} reads the tracks (Survival ${dice} vs DC ${skillDc}): ${context.learnIntel(q)}.`);
       else log(context, 'party', `${check.hero.name} tries to read the tracks along the road (Survival ${dice} vs DC ${skillDc}) and learns nothing.`);
     }
   }
@@ -101,12 +110,12 @@ function travel(p: Party, q: Quest, context: ExpeditionContext): void {
     p.status = 'questing';
     p.progress = 0;
     const surprise = !isFullyKnown(q);
-    revealAll(q);
+    context.revealAll(q);
     log(context, 'party', `${p.name} reach ${q.place}${surprise ? ` and take stock: ${q.encounters.length} fights ahead [${difficultyCode(q)}]` : ''}.`);
   }
 }
 
-function resolveFight(p: Party, q: Quest, context: ExpeditionContext): void {
+function resolveFight(p: Party, q: ReadonlyQuest, context: ExpeditionContext): void {
   const { town, rng, ledger, travelTicks, combat, settleQuest, leaveLoot } = context;
   const fighters = aliveMembers(p);
   const spec = scaleEncounter(q.encounters[p.progress]!, fighters.length);
@@ -176,7 +185,6 @@ function resolveFight(p: Party, q: Quest, context: ExpeditionContext): void {
       p.status = 'disbanded';
       ledger.partiesWiped += 1;
       leaveLoot(q, p, p.members);
-      releaseCompany(p);
       p.progress = 0;
       settleQuest(q, p, false);
     } else {
@@ -218,10 +226,9 @@ function headHome(p: Party, travelTicks: number): void {
   p.ticksLeft = travelTicks;
 }
 
-function arriveHome(p: Party, q: Quest, context: ExpeditionContext): void {
+function arriveHome(p: Party, q: ReadonlyQuest, context: ExpeditionContext): void {
   const { town, ledger, restTicks, settleQuest } = context;
   const success = p.progress >= q.encounters.length && aliveMembers(p).length > 0;
-  releaseCompany(p);
   p.progress = 0;
   settleQuest(q, p, success);
 

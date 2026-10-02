@@ -84,37 +84,53 @@ company, the holding's contract, the lair's bounty, and the company's work —
 and each transition updated them by hand. `quest.ts` only creates and reveals
 work; it guards no transition.
 
-**Change.** `Board` now owns the list and is the only code that writes those
-links. One call posts a contract, posts a bounty, accepts open work, settles
-taken work, expires unanswered contracts, or withdraws an employer's open work.
-Queries return read-only views of the list. `Game` still decides when an
-employer posts, when a lair raids, when the guild is eligible to post a bounty,
-and which work a company prefers. It still stores lost loot, and it pays out a
-broken lair's hoard when the Board asks. Settlement, including coin, renown and
-statistics, moved with the bookkeeping. An expedition releases the company
-through the Board before the settlement callback, because that callback is
-specified to observe the company already released; settlement releases it again.
-`scenario.quests` is the same list, backed by the Board. `WINDFALL_DAYS`,
-`LOOTING_DAYS` and `ASSAULT_RENOWN` moved with the operations and stayed named
-constants.
+**Change.** `Board` owns the work list and is the sole writer of its status,
+company and holding/lair/company links. Every tunable Board value is supplied
+as plain `BoardConfig` data; the exported default reproduces existing tuning.
+Game builds it from `GameConfig`, retaining the existing fields and converting
+`contractDays` to ticks. The `WORK_KINDS` table contains named Contract and
+Bounty entries. Each supplies creation/posting, success/failure, acceptance
+wording, and optional expiry and withdrawal after a lair falls. A third kind
+can be registered in an injected table and posted through `post` without
+editing the Board's operations.
 
-Missing-employer and missing-lair returns in settlement now throw. Expiry of a
-contract whose employer or holding is already gone still marks it failed, counts
-it, and skips the rest: the lifecycle tests construct that case and require
-that outcome.
+`take` links the work and company and returns travel time and an acceptance
+event. The single `Game.acceptQuest` operation takes work, calls Expedition's
+`startExpedition`, then publishes that event with the same state visible as
+before. Expedition owns traveling status, timers and idle progress. On a wipe
+or homecoming it resets encounter progress and calls settlement once with the
+outcome. Settlement alone releases the company; `releaseCompany` is removed.
 
-**Files.** `src/sim/board.ts`, `src/sim/game.ts`, `src/sim/expedition.ts`,
-`test/board.test.ts`, `CONTEXT.md`, and the architecture references.
+Queries expose deeply read-only work, including encounters and item rewards.
+Game and Expedition route intelligence changes through Board operations.
+`recordsForScenario` and `replaceForScenario` support `scenario.quests` only
+inside `Game.forTesting`; regression state reads `all()`. Board contexts go
+last, and configuration values are no longer operation parameters. Expiry
+without a Contract's employer or holding now throws before closing or counting
+it, matching the real world's invariant that neither entity is removed.
 
-**Evidence.** Board tests call the Board directly. Each operation checks the
-links on both sides, and the refusals are a second contract for one holding, a
-second bounty on one lair, accepting work that is not open, and settling work
-that is not taken. An invariant check covers those four links after every Board
-operation and after every tick of a 400-hour run for seeds 7, 42 and 20260907.
-The existing lifecycle tests still run through `Game` and were not edited.
+Game still chooses posting times, raids, bounty eligibility and company
+preferences, stores lost loot and pays a broken lair's hoard when asked. Random
+draw order, settlement accounting and narrative text are preserved.
 
-**Verification.** `pnpm typecheck` passed. `pnpm test` passed all 286 tests
+**Files.** Board, Game, Expedition and the read-only query types/readers;
+`test/board.test.ts`, the permitted Expedition assertions/context adapters, the
+one removed lifecycle test, and the architecture references.
+
+**Evidence.** Direct Board tests exercise every configuration field, a
+registered Escort's posting, acceptance, both settlement outcomes, non-expiry
+and withdrawal after a lair falls, and refusal of orphaned Contract expiry.
+Compile-time checks prohibit assignments through every work query, including
+nested encounters and rewards. Game tests check acceptance subscriber state
+and company release after Contract and Bounty wipes and homecomings. The link
+invariant runs after each Board transition and every tick of 400-hour runs for
+seeds 7, 42 and 20260907. Existing lifecycle, ruin and lair tests remain intact
+except deletion of “an expired Contract missing its %s is still closed and
+counted”, replaced by the Board refusal test.
+
+**Verification.** `pnpm typecheck` passed. `pnpm test` passed all 318 tests
 across 15 files, including the unchanged three-seed, 400-hour trajectory
-snapshots. `git diff` of the regression snapshot and of
-`test/contract-lifecycle.test.ts`, `test/contract-ruin.test.ts`,
-`test/lairs.test.ts` and `test/expedition.test.ts` is empty.
+snapshots. `git diff --check` passed. The regression snapshot has no diff and
+its SHA-256 checksum is identical before and after the refactor. The final
+interface, configuration fields and exact test edits are recorded in the
+[turn report](../.scratch/architecture-flow/turns/04b-board-config-and-kinds-report.md).

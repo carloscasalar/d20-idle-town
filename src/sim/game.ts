@@ -22,10 +22,11 @@ import {
 } from '../adventurers/party';
 import { runCombat } from '../combat/battlecast';
 import { describeEffect, rollStockItem, type MagicItem } from '../items/items';
+import type { DeepReadonly } from '../core/readonly';
 import { hashString, Rng } from '../core/rng';
 import { MAX_LEVEL, xpToNextLevel } from '../core/xp';
 import { describeEncounter, type Difficulty } from '../quests/encounters';
-import { difficultyCode, isFullyKnown, learnQuestIntel, revealAll, type Quest } from '../quests/quest';
+import { difficultyCode, isFullyKnown, type Quest, type ReadonlyQuest } from '../quests/quest';
 import { THEMES, type ThemeId } from '../quests/themes';
 import { ASSET_KINDS, rollThreat, type Asset } from '../town/assets';
 import { createLair, describeLair, LAIR_THEMES, raidInterval, type Lair } from '../town/lairs';
@@ -42,8 +43,8 @@ import {
   type Employer,
   type Town,
 } from '../town/town';
-import { Board, type BoardContext } from './board';
-import { advanceExpedition } from './expedition';
+import { Board, DEFAULT_BOARD_CONFIG, type BoardConfig, type BoardContext } from './board';
+import { advanceExpedition, startExpedition } from './expedition';
 
 export type EventKind = 'town' | 'quest' | 'party' | 'combat' | 'death' | 'levelup' | 'temple' | 'reward' | 'economy' | 'shop';
 
@@ -73,7 +74,7 @@ export interface GameStats {
   lairsCleared: number;
 }
 
-export interface GameConfig {
+export interface GameConfig extends Omit<BoardConfig, 'contractOpenTicks'> {
   seed: number;
   maxOpenQuests: number;
   maxParties: number;
@@ -255,7 +256,10 @@ export interface GameQuestView {
   readonly encounters: readonly GameEncounterView[];
 }
 
+const { contractOpenTicks: _contractOpenTicks, ...boardDefaults } = DEFAULT_BOARD_CONFIG;
+
 export const DEFAULT_CONFIG: GameConfig = {
+  ...boardDefaults,
   seed: 20260907,
   maxOpenQuests: 8,
   maxParties: 8,
@@ -291,7 +295,7 @@ export class Game {
   private readonly rng: Rng;
   private readonly town: Town;
   private tick = 0;
-  private readonly board = new Board();
+  private readonly board: Board;
   private parties: Party[] = [];
   private events: GameEvent[] = [];
   private chronicle: GameEvent[] = [];
@@ -319,6 +323,24 @@ export class Game {
 
   constructor(config: Partial<GameConfig> = {}) {
     this.config = { ...DEFAULT_CONFIG, ...config };
+    this.board = new Board({
+      windfallDays: this.config.windfallDays,
+      lootingDays: this.config.lootingDays,
+      bountyRenown: this.config.bountyRenown,
+      contractRenown: this.config.contractRenown,
+      failureRenownLoss: this.config.failureRenownLoss,
+      renownCap: this.config.renownCap,
+      reputationGain: this.config.reputationGain,
+      expiryCooldown: this.config.expiryCooldown,
+      failureCooldown: this.config.failureCooldown,
+      pruningThreshold: this.config.pruningThreshold,
+      contractOpenTicks: TICKS_PER_DAY * this.config.contractDays,
+      travelTicks: this.config.travelTicks,
+      difficultyScale: this.config.difficultyScale,
+      encounterPartySize: this.config.encounterPartySize,
+      lairStrengthGain: this.config.lairStrengthGain,
+      lairStrengthCap: this.config.lairStrengthCap,
+    });
     this.rng = new Rng(this.config.seed);
     this.town = generateTown(this.rng);
     this.nextArrival = 1;
@@ -354,8 +376,8 @@ export class Game {
       get town() { return duringSetup(() => game.town); },
       get parties() { return duringSetup(() => game.parties); },
       set parties(value) { duringSetup(() => { game.parties = value; }); },
-      get quests() { return duringSetup(() => game.board.records()); },
-      set quests(value) { duringSetup(() => { game.board.replace(value); }); },
+      get quests() { return duringSetup(() => game.board.recordsForScenario()); },
+      set quests(value) { duringSetup(() => { game.board.replaceForScenario(value); }); },
       get lairs() { return duringSetup(() => game.lairs); },
       set lairs(value) { duringSetup(() => { game.lairs = value; }); },
       get stats() { return duringSetup(() => game.stats); },
@@ -378,7 +400,7 @@ export class Game {
       tick: this.tick,
       town: this.town,
       parties: this.parties,
-      quests: this.board.records(),
+      quests: this.board.all(),
       lairs: this.lairs,
       stats: this.stats,
       events: this.events,
@@ -418,7 +440,7 @@ export class Game {
     return Math.floor(this.tick / TICKS_PER_DAY) + 1;
   }
 
-  private get openQuests(): readonly Quest[] {
+  private get openQuests(): readonly ReadonlyQuest[] {
     return this.board.open();
   }
 
@@ -522,7 +544,7 @@ export class Game {
     });
   }
 
-  private questView(quest: Quest, partyNames: ReadonlyMap<string, string>, lairs: ReadonlyMap<string, Lair>): GameQuestView {
+  private questView(quest: ReadonlyQuest, partyNames: ReadonlyMap<string, string>, lairs: ReadonlyMap<string, Lair>): GameQuestView {
     const lair = quest.lairId ? lairs.get(quest.lairId) : undefined;
     return Object.freeze({
       id: quest.id,
@@ -564,7 +586,7 @@ export class Game {
     }
   }
 
-  private questById(id: string | null): Quest | undefined {
+  private questById(id: string | null): ReadonlyQuest | undefined {
     return this.board.byId(id);
   }
 
@@ -727,7 +749,7 @@ export class Game {
   }
 
   private expireQuests(): void {
-    this.board.expireContracts(this.boardContext(), TICKS_PER_DAY * this.config.contractDays);
+    this.board.expireContracts(this.boardContext());
   }
 
   // ---------------------------------------------------------------- arrivals
@@ -773,6 +795,8 @@ export class Game {
         if (chronicle) this.chronicleLog(kind, text);
         else this.log(kind, text, detail);
       },
+      learnIntel: (quest) => this.board.learnIntel(quest),
+      revealAll: (quest) => this.board.revealAll(quest),
       settleQuest: (quest, party, success) => this.board.settle(quest, party, success, this.boardContext()),
       leaveLoot: (quest, party, fallen) => this.leaveLoot(quest, party, fallen),
     });
@@ -800,8 +824,8 @@ export class Game {
     );
     if (candidates.length === 0) return;
     // An old friend's contract first, then exact level, then the employer's name, then the pay.
-    const rep = (q: Quest) => this.employerById(q.giverId)?.reputation ?? 0;
-    const favored = (q: Quest) => (this.employerById(q.giverId)?.favoredPartyId === p.id ? 1 : 0);
+    const rep = (q: ReadonlyQuest) => this.employerById(q.giverId)?.reputation ?? 0;
+    const favored = (q: ReadonlyQuest) => (this.employerById(q.giverId)?.favoredPartyId === p.id ? 1 : 0);
     candidates.sort(
       (a, b) => favored(b) - favored(a) || Math.abs(a.level - level) - Math.abs(b.level - level) || rep(b) - rep(a) || b.reward - a.reward,
     );
@@ -810,8 +834,11 @@ export class Game {
     this.acceptQuest(p, quest);
   }
 
-  private acceptQuest(p: Party, quest: Quest): void {
-    this.board.take(p, quest, this.config.travelTicks, this.boardContext());
+  private acceptQuest(p: Party, quest: ReadonlyQuest): void {
+    const context = this.boardContext();
+    const departure = this.board.take(p, quest, context);
+    startExpedition(p, departure.travelTicks);
+    context.report(departure.acceptance);
   }
 
   /**
@@ -819,7 +846,7 @@ export class Game {
    * asks around: first how long the job is, then what else waits out there.
    * Returns true if the hour went on that.
    */
-  private investigate(p: Party, quest: Quest): boolean {
+  private investigate(p: Party, quest: ReadonlyQuest): boolean {
     if (isFullyKnown(quest)) return false;
     const level = partyLevel(p);
     const reserve = resurrectionCost(level);
@@ -832,7 +859,7 @@ export class Game {
       if (check) {
         const dice = `${check.roll}${check.bonus >= 0 ? '+' : ''}${check.bonus} = ${check.total}${check.advantage ? ', with advantage' : ''}`;
         if (check.success) {
-          this.log('shop', `${check.hero.name} works the room at ${tavern.name} (Persuasion ${dice} vs DC ${SKILL_DC}): ${learnQuestIntel(quest)}.`);
+          this.log('shop', `${check.hero.name} works the room at ${tavern.name} (Persuasion ${dice} vs DC ${SKILL_DC}): ${this.board.learnIntel(quest)}.`);
         } else {
           this.log('shop', `${check.hero.name} tries to get the regulars at ${tavern.name} talking about "${quest.title}" (Persuasion ${dice} vs DC ${SKILL_DC}) and gets nowhere.`);
         }
@@ -845,7 +872,7 @@ export class Game {
     const divination = DIVINATION_COST_PER_LEVEL * level;
     if (!temple.ruined && p.gold - divination >= reserve * 2) {
       this.pay(p, temple, divination);
-      revealAll(quest);
+      this.board.revealAll(quest);
       this.log('temple', `${p.name} pay ${divination} gp for a divination at the ${temple.name}. The priests see "${quest.title}" whole: ${quest.encounters.length} fights [${difficultyCode(quest)}].`);
       return true;
     }
@@ -857,12 +884,12 @@ export class Game {
     if (tavern.ruined || p.gold - cost < reserve) return false;
     this.pay(p, tavern, cost);
     p.investigations[quest.id] = done + 1;
-    this.log('shop', `${p.name} buy a round at ${tavern.name} (${cost} gp) and ask about "${quest.title}": ${learnQuestIntel(quest)}.`);
+    this.log('shop', `${p.name} buy a round at ${tavern.name} (${cost} gp) and ask about "${quest.title}": ${this.board.learnIntel(quest)}.`);
     return true;
   }
 
   /** A retired adventurer's contracts are held a day for their old company. */
-  private hasFirstRefusal(q: Quest, p: Party): boolean {
+  private hasFirstRefusal(q: ReadonlyQuest, p: Party): boolean {
     const employer = this.employerById(q.giverId);
     if (!employer?.favoredPartyId || employer.favoredPartyId === p.id) return true;
     const friends = this.parties.find((o) => o.id === employer.favoredPartyId);
@@ -985,7 +1012,6 @@ export class Game {
       lairs: this.lairs,
       rng: this.rng,
       tick: this.tick,
-      difficultyScale: this.config.difficultyScale,
       ledger: this.stats,
       report: ({ kind, text, chronicle }) => {
         if (chronicle) this.chronicleLog(kind, text);
@@ -995,7 +1021,7 @@ export class Game {
     };
   }
 
-  private leaveLoot(quest: Quest, p: Party, fallen: Hero[]): void {
+  private leaveLoot(quest: ReadonlyQuest, p: Party, fallen: Hero[]): void {
     const lair = this.lairById(quest.lairId);
     const asset = quest.assetId ? assetById(this.town, quest.assetId) : undefined;
     const store = lair ? lair.hoard : asset?.loot;
@@ -1035,7 +1061,7 @@ export class Game {
   }
 }
 
-function itemView(item: MagicItem): GameItemView {
+function itemView(item: DeepReadonly<MagicItem>): GameItemView {
   return Object.freeze({ name: item.name, effect: describeEffect(item.effect), price: item.price });
 }
 

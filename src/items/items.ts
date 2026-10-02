@@ -1,3 +1,4 @@
+import type { DeepReadonly } from '../core/readonly';
 import type { Rng } from '../core/rng';
 
 export type ItemSlot = 'weapon' | 'armor' | 'accessory';
@@ -75,7 +76,7 @@ export function rollLootItem(rng: Rng, level: number): MagicItem {
   return instantiate(rng, rng.pick(byRarity));
 }
 
-export function describeEffect(e: ItemEffect): string {
+export function describeEffect(e: DeepReadonly<ItemEffect>): string {
   const parts: string[] = [];
   if (e.weaponBonus) parts.push(`+${e.weaponBonus} to hit and damage`);
   if (e.ac) parts.push(`AC +${e.ac}`);

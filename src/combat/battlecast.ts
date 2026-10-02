@@ -1,4 +1,5 @@
 import { buildHero, Encounter, getMonsterByName, type BattleLog, type Creature, type HeroClassName, type MonsterData } from 'battlecast-engine';
+import type { DeepReadonly } from '../core/readonly';
 import { Rng } from '../core/rng';
 import { combinedEffect, heroAc, isBloodied, potionHeal, skillBonus, WEAPON_CLASSES, type Hero } from '../adventurers/hero';
 import type { EncounterSpec } from '../quests/encounters';
@@ -93,7 +94,7 @@ function fmtBonus(n: number): string {
   return n === 0 ? '' : n > 0 ? `+${n}` : `${n}`;
 }
 
-export function runCombat(heroes: Hero[], spec: EncounterSpec, seed: number, opts: CombatOptions = {}): CombatOutcome {
+export function runCombat(heroes: Hero[], spec: DeepReadonly<EncounterSpec>, seed: number, opts: CombatOptions = {}): CombatOutcome {
   const fighters = heroes.filter((h) => h.alive);
   const rng = new Rng(seed);
   const enc = new Encounter({ gridSize: GRID, seed });

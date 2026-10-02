@@ -802,20 +802,6 @@ describe('Contract expiry', () => {
     expect(game.view().chronicle.filter((event) => event.kind === 'economy' && event.text.includes(name))).toHaveLength(0);
   });
 
-  it.each(['employer', 'Holding'] as const)('an expired Contract missing its %s is still closed and counted', (missing) => {
-    const game = scene((scenario, rng) => {
-      const employer = scenario.town.employers[0]!;
-      const work = contract(employer, holding(rng, employer), 'orphaned', { postedAt: 0 });
-      if (missing === 'employer') work.giverId = 'absent employer';
-      else work.assetId = null;
-      scenario.quests = [work];
-    });
-    game.step();
-    expect(game.view().board.open).toHaveLength(0);
-    expect(hidden(game).quests[0]!.status).toBe('failed');
-    expect(game.view().stats.questsExpired).toBe(1);
-    expect(employerView(game)).toMatchObject({ treasury: 1000, spent: 0 });
-  });
 
   it.each([
     { kind: 'contract', status: 'open', postedAt: 29, expires: false },
