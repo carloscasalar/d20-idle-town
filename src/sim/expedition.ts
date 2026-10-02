@@ -7,6 +7,7 @@ import { describeEncounter, scaleEncounter, type EncounterSpec } from '../quests
 import { difficultyCode, isFullyKnown, learnQuestIntel, revealAll, type Quest } from '../quests/quest';
 import { BLESSING_HP_PER_LEVEL, payForService } from '../town/services';
 import { serviceOf, type Town } from '../town/town';
+import { releaseCompany } from './board';
 
 const CAROUSING_SHARE = 0.05;
 
@@ -175,7 +176,7 @@ function resolveFight(p: Party, q: Quest, context: ExpeditionContext): void {
       p.status = 'disbanded';
       ledger.partiesWiped += 1;
       leaveLoot(q, p, p.members);
-      p.questId = null;
+      releaseCompany(p);
       p.progress = 0;
       settleQuest(q, p, false);
     } else {
@@ -220,7 +221,7 @@ function headHome(p: Party, travelTicks: number): void {
 function arriveHome(p: Party, q: Quest, context: ExpeditionContext): void {
   const { town, ledger, restTicks, settleQuest } = context;
   const success = p.progress >= q.encounters.length && aliveMembers(p).length > 0;
-  p.questId = null;
+  releaseCompany(p);
   p.progress = 0;
   settleQuest(q, p, success);
 

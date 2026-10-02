@@ -15,7 +15,6 @@ import {
   describeParty,
   hasRoom,
   isFull,
-  MAX_RENOWN,
   mergeParties,
   partyLevel,
   PARTY_SIZE,
@@ -26,10 +25,10 @@ import { describeEffect, rollStockItem, type MagicItem } from '../items/items';
 import { hashString, Rng } from '../core/rng';
 import { MAX_LEVEL, xpToNextLevel } from '../core/xp';
 import { describeEncounter, type Difficulty } from '../quests/encounters';
-import { difficultyCode, generateAssault, generateQuest, isFullyKnown, learnQuestIntel, revealAll, type Quest } from '../quests/quest';
+import { difficultyCode, isFullyKnown, learnQuestIntel, revealAll, type Quest } from '../quests/quest';
 import { THEMES, type ThemeId } from '../quests/themes';
 import { ASSET_KINDS, rollThreat, type Asset } from '../town/assets';
-import { createLair, describeLair, LAIR_THEMES, MAX_STRENGTH, raidInterval, type Lair } from '../town/lairs';
+import { createLair, describeLair, LAIR_THEMES, raidInterval, type Lair } from '../town/lairs';
 import {
   assetById,
   dailyIncome,
@@ -43,6 +42,7 @@ import {
   type Employer,
   type Town,
 } from '../town/town';
+import { Board, type BoardContext } from './board';
 import { advanceExpedition } from './expedition';
 
 export type EventKind = 'town' | 'quest' | 'party' | 'combat' | 'death' | 'levelup' | 'temple' | 'reward' | 'economy' | 'shop';
@@ -271,10 +271,6 @@ export const DEFAULT_CONFIG: GameConfig = {
 
 export const TICKS_PER_DAY = 24;
 
-/** Days of an asset's income the owner recovers when it is retaken (cargo, ore, tolls). */
-const WINDFALL_DAYS = 4;
-/** Days of income lost to looters when nobody answers the call. */
-const LOOTING_DAYS = 2;
 /** Asking around about a job costs this much per company level, and a company asks at most this many times. */
 const INVESTIGATION_COST_PER_LEVEL = 15;
 const MAX_INVESTIGATIONS = 2;
@@ -285,8 +281,7 @@ const SKILL_DC = 15;
 const STARTING_LAIRS: [number, number] = [2, 3];
 const LAIR_LEVELS: [number, number] = [5, 8];
 const LAIR_RESPAWN_DAYS = 12;
-/** Renown for breaking a lair, and the odds an eligible company goes for it on a given idle hour. */
-const ASSAULT_RENOWN = 3;
+/** The odds an eligible company goes for a lair on a given idle hour. */
 const ASSAULT_APPETITE = 0.35;
 /** Days a broken company waits for its own recruits before its survivors sign on with whoever has room. */
 const DISBAND_AFTER_DAYS = 3;
@@ -296,7 +291,7 @@ export class Game {
   private readonly rng: Rng;
   private readonly town: Town;
   private tick = 0;
-  private quests: Quest[] = [];
+  private readonly board = new Board();
   private parties: Party[] = [];
   private events: GameEvent[] = [];
   private chronicle: GameEvent[] = [];
@@ -359,8 +354,8 @@ export class Game {
       get town() { return duringSetup(() => game.town); },
       get parties() { return duringSetup(() => game.parties); },
       set parties(value) { duringSetup(() => { game.parties = value; }); },
-      get quests() { return duringSetup(() => game.quests); },
-      set quests(value) { duringSetup(() => { game.quests = value; }); },
+      get quests() { return duringSetup(() => game.board.records()); },
+      set quests(value) { duringSetup(() => { game.board.replace(value); }); },
       get lairs() { return duringSetup(() => game.lairs); },
       set lairs(value) { duringSetup(() => { game.lairs = value; }); },
       get stats() { return duringSetup(() => game.stats); },
@@ -383,7 +378,7 @@ export class Game {
       tick: this.tick,
       town: this.town,
       parties: this.parties,
-      quests: this.quests,
+      quests: this.board.records(),
       lairs: this.lairs,
       stats: this.stats,
       events: this.events,
@@ -395,7 +390,7 @@ export class Game {
 
   /** Encounter compositions accumulated in the world, for calibration scripts. */
   encounterSamples(): readonly GameEncounterSample[] {
-    return Object.freeze(this.quests.flatMap((quest) => quest.encounters.map((encounter) => Object.freeze({
+    return Object.freeze(this.board.all().flatMap((quest) => quest.encounters.map((encounter) => Object.freeze({
       monsters: Object.freeze(encounter.monsters.map((monster) => Object.freeze({ name: monster.name, count: monster.count }))),
     }))));
   }
@@ -423,8 +418,8 @@ export class Game {
     return Math.floor(this.tick / TICKS_PER_DAY) + 1;
   }
 
-  private get openQuests(): Quest[] {
-    return this.quests.filter((q) => q.status === 'open');
+  private get openQuests(): readonly Quest[] {
+    return this.board.open();
   }
 
   private get activeParties(): Party[] {
@@ -468,7 +463,7 @@ export class Game {
       ),
       board: Object.freeze({
         open: Object.freeze(this.openQuests.map((quest) => this.questView(quest, partyNames, lairs))),
-        taken: Object.freeze(this.quests.filter((quest) => quest.status === 'taken').map((quest) => this.questView(quest, partyNames, lairs))),
+        taken: Object.freeze(this.board.taken().map((quest) => this.questView(quest, partyNames, lairs))),
       }),
       lairs: Object.freeze(
         [...this.lairs]
@@ -570,7 +565,7 @@ export class Game {
   }
 
   private questById(id: string | null): Quest | undefined {
-    return id ? this.quests.find((q) => q.id === id) : undefined;
+    return this.board.byId(id);
   }
 
   private employerById(id: string): Employer | undefined {
@@ -640,14 +635,7 @@ export class Game {
   private ruin(e: Employer): void {
     e.ruined = true;
     this.stats.employersRuined += 1;
-    for (const q of this.quests) {
-      if (q.giverId !== e.id || q.status !== 'open') continue;
-      q.status = 'failed';
-      const asset = q.assetId ? assetById(this.town, q.assetId) : undefined;
-      if (asset?.questId === q.id) asset.questId = null;
-      const lair = this.lairById(q.lairId);
-      if (lair?.questId === q.id) lair.questId = null;
-    }
+    this.board.withdrawOpenWork(e, this.boardContext());
     this.chronicleLog('economy', `${e.name} are ruined. ${e.title === 'Faction' ? 'The organisation dissolves' : 'Their holdings are sold off'}; no more contracts from them.`);
   }
 
@@ -671,41 +659,11 @@ export class Game {
       if (free.length === 0) continue;
       // The overrun holding is always the priority; otherwise trouble strikes at random.
       const asset = free.find((a) => a.status !== 'safe') ?? this.rng.pick(free);
-      this.threaten(employer, asset, rollThreat(this.rng, asset), null);
+      const theme = rollThreat(this.rng, asset);
+      const level = this.pickQuestLevel(employer);
+      this.board.postContract(employer, asset, theme, level, null, this.boardContext());
       employer.cooldown = this.rng.int(12, 30);
     }
-  }
-
-  /** Trouble at a holding becomes a contract. If a lair of that kind is active, the raid is theirs. */
-  private threaten(employer: Employer, asset: Asset, theme: ThemeId, from: Lair | null): Quest {
-    const lair = from ?? this.activeLairs.find((l) => l.theme === theme) ?? null;
-    const level = this.pickQuestLevel(employer);
-    const quest = generateQuest(this.rng, {
-      employer,
-      asset,
-      theme,
-      level,
-      partySize: PARTY_SIZE,
-      tick: this.tick,
-      difficultyScale: this.config.difficultyScale,
-      lair,
-    });
-    this.quests.push(quest);
-    asset.questId = quest.id;
-    const wasSafe = asset.status === 'safe';
-    if (wasSafe) asset.status = 'threatened';
-    employer.questsPosted += 1;
-    if (lair) {
-      lair.raids += 1;
-      this.stats.raids += 1;
-    }
-    const who = lair ? `${THEMES[theme].label} out of ${lair.name}` : THEMES[theme].label;
-    const lead = wasSafe
-      ? `${who} ${lair ? 'raid' : 'threaten'} ${asset.name}.`
-      : capitalize(`${asset.name} is still overrun; ${employer.name} raise the bounty.`);
-    const extras = [quest.itemReward ? `and a ${quest.itemReward.name}` : '', quest.guildOnly ? '(guild)' : ''].filter(Boolean).join(' ');
-    this.log('quest', `${lead} ${employer.name} post a level ${quest.level} contract: "${quest.title}" [${difficultyCode(quest)}] for ${quest.reward} gp ${extras}`.trim() + '.');
-    return quest;
   }
 
   // ---------------------------------------------------------------- lairs
@@ -725,7 +683,8 @@ export class Game {
       }
       if (targets.length === 0) continue;
       const { employer, asset } = this.rng.pick(targets);
-      this.threaten(employer, asset, lair.theme, lair);
+      const level = this.pickQuestLevel(employer);
+      this.board.postContract(employer, asset, lair.theme, level, lair, this.boardContext());
     }
   }
 
@@ -737,46 +696,8 @@ export class Game {
       if (lair.questId) continue;
       const strongest = Math.max(0, ...this.activeParties.map(partyLevel));
       if (strongest < lair.level - 1) continue;
-      const quest = generateAssault(this.rng, lair, guild, PARTY_SIZE, this.tick, this.config.difficultyScale);
-      this.quests.push(quest);
-      lair.questId = quest.id;
-      guild.questsPosted += 1;
-      this.chronicleLog('quest', `The Adventurers’ Guild posts a bounty on ${lair.name}: "${quest.title}", level ${quest.level}, ${quest.encounters.length} fights ending with ${lair.boss}. ${quest.reward} gp, the ${quest.itemReward?.name ?? 'spoils'}, and whatever the hoard holds (${lair.hoard.gold} gp).`);
+      this.board.postBounty(lair, this.boardContext());
     }
-  }
-
-  /** Raids that go unanswered make the lair bolder and richer. */
-  private raidSucceeded(lair: Lair, gold: number): void {
-    if (lair.status !== 'active') return;
-    lair.raidsWon += 1;
-    lair.strength = Math.min(MAX_STRENGTH, lair.strength + 1);
-    lair.hoard.gold += gold;
-  }
-
-  private clearLair(lair: Lair, p: Party, quest: Quest): void {
-    lair.status = 'cleared';
-    lair.clearedAt = this.tick;
-    this.stats.lairsCleared += 1;
-    const gold = lair.hoard.gold;
-    p.gold += gold;
-    p.earned += gold;
-    p.stash.push(...lair.hoard.items);
-    this.stats.itemsFound += lair.hoard.items.length;
-    const found = [gold > 0 ? `${gold} gp` : '', ...lair.hoard.items.map((i) => i.name)].filter(Boolean).join(', ');
-    lair.hoard = { gold: 0, items: [] };
-    p.renown = Math.min(MAX_RENOWN, p.renown + ASSAULT_RENOWN);
-    // Everything that kind of trouble had going stops.
-    for (const q of this.quests) {
-      if (q.lairId === lair.id && q.kind === 'contract' && q.status === 'open') {
-        q.status = 'failed';
-        const asset = q.assetId ? assetById(this.town, q.assetId) : undefined;
-        if (asset) {
-          asset.questId = null;
-          asset.status = 'safe';
-        }
-      }
-    }
-    this.chronicleLog('reward', `${p.name} break ${lair.name}. ${lair.boss} is dead at ${quest.place}; the hoard yields ${found || 'nothing but bones'}. Renown ${p.renown}. The ${THEMES[lair.theme].label.toLowerCase()} scatter and every holding they held is free.`);
   }
 
   /** A while after a lair falls, something worse moves in. */
@@ -806,122 +727,7 @@ export class Game {
   }
 
   private expireQuests(): void {
-    const ttl = TICKS_PER_DAY * this.config.contractDays;
-    for (const q of this.quests) {
-      if (q.status !== 'open' || q.kind === 'assault' || this.tick - q.postedAt <= ttl) continue;
-      q.status = 'failed';
-      this.stats.questsExpired += 1;
-      const employer = this.employerById(q.giverId);
-      const asset = q.assetId ? assetById(this.town, q.assetId) : undefined;
-      if (!employer || !asset) continue;
-      asset.questId = null;
-      const loss = Math.max(0, Math.min(employer.treasury, asset.incomePerDay * LOOTING_DAYS));
-      employer.treasury -= loss;
-      employer.spent += loss;
-      const lair = this.lairById(q.lairId);
-      if (lair) this.raidSucceeded(lair, loss);
-      employer.cooldown = Math.min(employer.cooldown, this.rng.int(4, 10));
-      if (asset.status === 'threatened') {
-        asset.status = 'ravaged';
-        asset.timesRavaged += 1;
-        this.chronicleLog('economy', `Nobody answered "${q.title}". ${THEMES[q.theme].label} overrun ${asset.name}; ${employer.name} lose ${loss} gp and the income of the ${ASSET_KINDS[asset.kind].label} with it.`);
-      } else {
-        this.log('economy', `Nobody answered "${q.title}". ${capitalize(asset.name)} stays in enemy hands and ${employer.name} lose another ${loss} gp.`);
-      }
-    }
-    if (this.quests.length > 200) this.quests = this.quests.filter((q) => q.status === 'open' || q.status === 'taken');
-  }
-
-  private settleQuest(quest: Quest, p: Party, success: boolean): void {
-    const employer = this.employerById(quest.giverId);
-    const asset = quest.assetId ? assetById(this.town, quest.assetId) : undefined;
-    if (asset) asset.questId = null;
-    if (!employer) return;
-    if (quest.kind === 'assault') {
-      this.settleAssault(quest, p, employer, success);
-      return;
-    }
-    if (success) {
-      quest.status = 'done';
-      let windfall = 0;
-      if (asset) {
-        windfall = asset.incomePerDay * WINDFALL_DAYS;
-        asset.status = 'safe';
-      }
-      employer.treasury += windfall - quest.reward;
-      employer.earned += windfall;
-      employer.spent += quest.reward;
-      employer.questsCompleted += 1;
-      employer.reputation += 1;
-      p.gold += quest.reward;
-      p.earned += quest.reward;
-      p.questsDone += 1;
-      p.renown = Math.min(MAX_RENOWN, p.renown + 1);
-      this.stats.questsCompleted += 1;
-      this.stats.goldPaid += quest.reward;
-      let inKind = '';
-      if (quest.itemReward) {
-        p.stash.push(quest.itemReward);
-        this.stats.itemsFound += 1;
-        inKind = ` and a ${quest.itemReward.name}`;
-      }
-      this.log(
-        'reward',
-        `${p.name} return to ${this.town.name}. ${employer.name} pay ${quest.reward} gp${inKind}; ${asset ? `${asset.name} is back in business (+${windfall} gp recovered)` : 'the client is grateful'}. Purse: ${p.gold} gp.`,
-      );
-      if (asset && (asset.loot.gold > 0 || asset.loot.items.length > 0)) {
-        const found = [asset.loot.items.map((i) => i.name).join(', '), asset.loot.gold > 0 ? `${asset.loot.gold} gp` : ''].filter(Boolean).join(' and ');
-        p.gold += asset.loot.gold;
-        p.earned += asset.loot.gold;
-        p.stash.push(...asset.loot.items);
-        this.stats.itemsFound += asset.loot.items.length;
-        asset.loot = { gold: 0, items: [] };
-        this.chronicleLog('reward', `Among the bones at ${asset.name}, ${p.name} find ${found}: all that is left of the last company that came this way.`);
-      }
-    } else {
-      quest.status = 'failed';
-      employer.questsFailed += 1;
-      p.questsFailed += 1;
-      p.renown = Math.max(0, p.renown - 1);
-      this.stats.questsFailed += 1;
-      employer.cooldown = Math.min(employer.cooldown, this.rng.int(2, 8));
-      const lair = this.lairById(quest.lairId);
-      if (lair) this.raidSucceeded(lair, 0);
-      this.log('party', `${p.name} limp back to ${this.town.name} empty-handed.${asset ? ` ${capitalize(asset.name)} remains in enemy hands.` : ''}`);
-    }
-  }
-
-  private settleAssault(quest: Quest, p: Party, guild: Employer, success: boolean): void {
-    const lair = this.lairById(quest.lairId);
-    if (!lair) return;
-    if (success) {
-      lair.questId = null;
-      quest.status = 'done';
-      guild.treasury -= quest.reward;
-      guild.spent += quest.reward;
-      guild.questsCompleted += 1;
-      guild.reputation += 1;
-      p.gold += quest.reward;
-      p.earned += quest.reward;
-      p.questsDone += 1;
-      this.stats.questsCompleted += 1;
-      this.stats.goldPaid += quest.reward;
-      if (quest.itemReward) {
-        p.stash.push(quest.itemReward);
-        this.stats.itemsFound += 1;
-      }
-      this.log('reward', `${p.name} return to ${this.town.name} to a hero’s welcome. The guild pays its bounty of ${quest.reward} gp${quest.itemReward ? ` and hands over the ${quest.itemReward.name}` : ''}.`);
-      this.clearLair(lair, p, quest);
-    } else {
-      quest.status = 'failed';
-      lair.questId = null;
-      lair.strength = Math.min(MAX_STRENGTH, lair.strength + 1);
-      guild.questsFailed += 1;
-      p.questsFailed += 1;
-      p.renown = Math.max(0, p.renown - 1);
-      this.stats.questsFailed += 1;
-      this.log('party', `${p.name} come back from ${lair.place} beaten. ${capitalize(lair.name)} stands, and grows bolder.`);
-    }
+    this.board.expireContracts(this.boardContext(), TICKS_PER_DAY * this.config.contractDays);
   }
 
   // ---------------------------------------------------------------- arrivals
@@ -967,7 +773,7 @@ export class Game {
         if (chronicle) this.chronicleLog(kind, text);
         else this.log(kind, text, detail);
       },
-      settleQuest: (quest, party, success) => this.settleQuest(quest, party, success),
+      settleQuest: (quest, party, success) => this.board.settle(quest, party, success, this.boardContext()),
       leaveLoot: (quest, party, fallen) => this.leaveLoot(quest, party, fallen),
     });
   }
@@ -1005,19 +811,7 @@ export class Game {
   }
 
   private acceptQuest(p: Party, quest: Quest): void {
-    quest.status = 'taken';
-    quest.partyId = p.id;
-    p.questId = quest.id;
-    p.status = 'traveling';
-    p.ticksLeft = this.config.travelTicks;
-    p.idleTicks = 0;
-    const employer = this.employerById(quest.giverId);
-    const lair = this.lairById(quest.lairId);
-    if (quest.kind === 'assault' && lair) {
-      this.chronicleLog('quest', `${p.name} take the guild’s bounty on ${lair.name} and march on ${lair.place}. ${lair.boss} waits at the end of it.`);
-    } else {
-      this.log('quest', `${p.name} accept "${quest.title}" from ${employer?.name ?? 'an unknown client'} and set out for ${quest.place}.`);
-    }
+    this.board.take(p, quest, this.config.travelTicks, this.boardContext());
   }
 
   /**
@@ -1173,6 +967,34 @@ export class Game {
    * job, its hoard swells with it; otherwise the next company to clear the
    * holding finds it among the bones.
    */
+  /** Hand a broken lair's hoard to the company. The Board asks for this when a bounty succeeds. */
+  private payHoard(lair: Lair, company: Party): string {
+    const gold = lair.hoard.gold;
+    company.gold += gold;
+    company.earned += gold;
+    company.stash.push(...lair.hoard.items);
+    this.stats.itemsFound += lair.hoard.items.length;
+    const found = [gold > 0 ? `${gold} gp` : '', ...lair.hoard.items.map((item) => item.name)].filter(Boolean).join(', ');
+    lair.hoard = { gold: 0, items: [] };
+    return found;
+  }
+
+  private boardContext(): BoardContext {
+    return {
+      town: this.town,
+      lairs: this.lairs,
+      rng: this.rng,
+      tick: this.tick,
+      difficultyScale: this.config.difficultyScale,
+      ledger: this.stats,
+      report: ({ kind, text, chronicle }) => {
+        if (chronicle) this.chronicleLog(kind, text);
+        else this.log(kind, text);
+      },
+      payHoard: (lair, company) => this.payHoard(lair, company),
+    };
+  }
+
   private leaveLoot(quest: Quest, p: Party, fallen: Hero[]): void {
     const lair = this.lairById(quest.lairId);
     const asset = quest.assetId ? assetById(this.town, quest.assetId) : undefined;
@@ -1211,10 +1033,6 @@ export class Game {
     this.chronicle.push(e);
     if (this.chronicle.length > 300) this.chronicle.splice(0, this.chronicle.length - 300);
   }
-}
-
-function capitalize(text: string): string {
-  return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
 function itemView(item: MagicItem): GameItemView {

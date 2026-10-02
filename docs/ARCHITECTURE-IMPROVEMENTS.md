@@ -75,3 +75,46 @@ board and coin-transfer modules are deepened.
 snapshots. The regression snapshot file has no diff against `HEAD`, and its
 SHA-256 checksum before and after these edits is identical. `git diff --check`
 passed.
+
+## 3. Give the Board the lifecycle of contracts and bounties
+
+**Problem.** Posting, accepting, settling, expiring and withdrawing work lived
+as private methods on `Game`. Four links had to agree — the work's status and
+company, the holding's contract, the lair's bounty, and the company's work —
+and each transition updated them by hand. `quest.ts` only creates and reveals
+work; it guards no transition.
+
+**Change.** `Board` now owns the list and is the only code that writes those
+links. One call posts a contract, posts a bounty, accepts open work, settles
+taken work, expires unanswered contracts, or withdraws an employer's open work.
+Queries return read-only views of the list. `Game` still decides when an
+employer posts, when a lair raids, when the guild is eligible to post a bounty,
+and which work a company prefers. It still stores lost loot, and it pays out a
+broken lair's hoard when the Board asks. Settlement, including coin, renown and
+statistics, moved with the bookkeeping. An expedition releases the company
+through the Board before the settlement callback, because that callback is
+specified to observe the company already released; settlement releases it again.
+`scenario.quests` is the same list, backed by the Board. `WINDFALL_DAYS`,
+`LOOTING_DAYS` and `ASSAULT_RENOWN` moved with the operations and stayed named
+constants.
+
+Missing-employer and missing-lair returns in settlement now throw. Expiry of a
+contract whose employer or holding is already gone still marks it failed, counts
+it, and skips the rest: the lifecycle tests construct that case and require
+that outcome.
+
+**Files.** `src/sim/board.ts`, `src/sim/game.ts`, `src/sim/expedition.ts`,
+`test/board.test.ts`, `CONTEXT.md`, and the architecture references.
+
+**Evidence.** Board tests call the Board directly. Each operation checks the
+links on both sides, and the refusals are a second contract for one holding, a
+second bounty on one lair, accepting work that is not open, and settling work
+that is not taken. An invariant check covers those four links after every Board
+operation and after every tick of a 400-hour run for seeds 7, 42 and 20260907.
+The existing lifecycle tests still run through `Game` and were not edited.
+
+**Verification.** `pnpm typecheck` passed. `pnpm test` passed all 286 tests
+across 15 files, including the unchanged three-seed, 400-hour trajectory
+snapshots. `git diff` of the regression snapshot and of
+`test/contract-lifecycle.test.ts`, `test/contract-ruin.test.ts`,
+`test/lairs.test.ts` and `test/expedition.test.ts` is empty.

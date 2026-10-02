@@ -14,6 +14,9 @@ Work posted by an employer to recover a threatened holding through a sequence of
 **Bounty**:
 Work posted by the guild to clear a lair through a sequence of encounters.
 
+**Board**:
+The posted contracts and bounties. It is the only thing that links a holding, a lair, or a company to that work.
+
 **Expedition**:
 One company's journey on an accepted contract or bounty, including travel, encounters, return and recovery unless the company is wiped out.
 
@@ -36,6 +39,7 @@ A draught from the company's shared supply that restores hit points to the adven
 
 ## Relationships
 
+- The **Board** posts, accepts, and ends each **Contract** and **Bounty**.
 - A **Company** accepts one **Contract** or **Bounty** at a time.
 - An accepted **Contract** or **Bounty** starts one **Expedition**.
 - A **Contract** concerns one **Holding**; a **Bounty** concerns one **Lair**.

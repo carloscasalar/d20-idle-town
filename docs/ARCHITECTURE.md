@@ -159,9 +159,11 @@ Game code above this line never sees a `Creature`, a `BattleLog` or a
 
 ### `src/sim` — the world
 
-`Game` (`game.ts`) owns the town, the parties, the quests, the lairs, the stats
-and the event log, and exposes one method that matters: `step()`, one in-game
-hour. Its ordering is the game:
+`Game` (`game.ts`) owns the town, the parties, the lairs, the stats and the
+event log, and exposes one method that matters: `step()`, one in-game hour.
+The **Board** (`board.ts`) owns the contracts and bounties. It is the only
+code that posts them, accepts them, ends them, or writes the links between a
+holding, a lair, a company and that work. The ordering of `step()` is the game:
 
 ```
 step()
@@ -196,8 +198,11 @@ subtracts combat potions, handles retreat and recovery through `shortRest`
 (a configured fraction of maximum HP, default 0.5, then a potion for each hero
 still Bloodied while supplies last), and reports events synchronously. It takes a
 combat resolver through an interface: `runCombat` is the production adapter,
-while tests supply scripted outcomes. Contract settlement and lost-loot storage
-still belong to `Game` and are called at the same points in the journey.
+while tests supply scripted outcomes. Before settlement it asks the Board to
+release the company, then calls the settlement callback, which Game forwards
+to the Board. Lost-loot storage stays in `Game` and is called at the same
+point in the journey. A broken lair's hoard is paid out by `Game` when the
+Board asks, after the bounty is paid and before the chronicle line.
 
 Renderers cross two seams: `onEvent(listener)` pushes each log event as it
 happens, and `view()` returns a fresh immutable snapshot for the current frame.
