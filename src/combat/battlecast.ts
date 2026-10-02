@@ -1,6 +1,6 @@
 import { buildHero, Encounter, getMonsterByName, type BattleLog, type Creature, type HeroClassName, type MonsterData } from 'battlecast-engine';
 import { Rng } from '../core/rng';
-import { combinedEffect, heroAc, skillBonus, WEAPON_CLASSES, type Hero } from '../adventurers/hero';
+import { combinedEffect, heroAc, isBloodied, potionHeal, skillBonus, WEAPON_CLASSES, type Hero } from '../adventurers/hero';
 import type { EncounterSpec } from '../quests/encounters';
 
 export type CombatWinner = 'party' | 'monsters' | 'retreat' | 'stalemate';
@@ -24,11 +24,13 @@ export interface CombatOutcome {
   ambush: Ambush;
   /** One sentence on how the fight opened. */
   opening: string;
-  /** Battle log lines, straight from the engine's narration. */
+  /** Engine narration plus potion drinking between rounds. */
   lines: string[];
   heroes: HeroResult[];
   /** Monster XP the party earns (0 unless it won). */
   xpEarned: number;
+  /** Healing potions consumed from the supplied shared pack. */
+  potionsDrunk: number;
 }
 
 const MAX_ROUNDS = 30;
@@ -39,6 +41,8 @@ const MAX_ROUNDS = 30;
  * damage they were already carrying.
  */
 export interface CombatOptions {
+  /** Healing potions available in the shared pack (defaults to none). */
+  potions?: number;
   /** A temple blessing: extra hit points for the whole company. */
   blessingHp?: number;
   /** No running from this one (a boss in its own hall). */
@@ -157,6 +161,7 @@ export function runCombat(heroes: Hero[], spec: EncounterSpec, seed: number, opt
   let rounds = 0;
   let winner: 'red' | 'blue' | 'draw' | null = null;
   let retreated = false;
+  let potionsDrunk = 0;
   for (let i = 0; i < MAX_ROUNDS; i++) {
     const r = enc.runRound();
     rounds = r.round;
@@ -168,6 +173,16 @@ export function runCombat(heroes: Hero[], spec: EncounterSpec, seed: number, opt
     if (r.isComplete) {
       winner = r.winner;
       break;
+    }
+    // Stand-in for the 2024 Bonus Action: one potion per living Bloodied hero
+    // between rounds, before deciding whether the company must flee.
+    for (const h of fighters) {
+      if (potionsDrunk >= (opts.potions ?? 0)) break;
+      const c = enc.creatures.find((x) => x.id === idByHero.get(h.id));
+      if (!c?.isAlive || !isBloodied({ hp: c.currentHp, maxHp: c.maxHp })) continue;
+      enc.heal(c.id, potionHeal(h));
+      potionsDrunk += 1;
+      lines.push(`${h.name} drinks a healing potion.`);
     }
     if (!opts.noRetreat && shouldFlee(enc.creatures, fighters.length)) {
       retreated = true;
@@ -200,6 +215,7 @@ export function runCombat(heroes: Hero[], spec: EncounterSpec, seed: number, opt
     lines: [opening, ...lines],
     heroes: results,
     xpEarned: partyWon ? spec.totalXp : 0,
+    potionsDrunk,
   };
 }
 

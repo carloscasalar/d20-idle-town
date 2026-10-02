@@ -114,6 +114,11 @@ export function healHero(hero: Hero, amount: number): void {
   hero.hp = Math.min(hero.maxHp, hero.hp + amount);
 }
 
+/** Bloodied means half of maximum hit points or fewer. */
+export function isBloodied(hero: Pick<Hero, 'hp' | 'maxHp'>): boolean {
+  return hero.hp * 2 <= hero.maxHp;
+}
+
 export function killHero(hero: Hero): void {
   hero.alive = false;
   hero.hp = 0;

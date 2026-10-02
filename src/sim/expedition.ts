@@ -1,4 +1,4 @@
-import { describeHero, gainXp, healHero, killHero, potionHeal, resurrectionCost, rollSkill, type Hero } from '../adventurers/hero';
+import { describeHero, gainXp, healHero, isBloodied, killHero, potionHeal, resurrectionCost, rollSkill, type Hero } from '../adventurers/hero';
 import { aliveMembers, deadMembers, MAX_RENOWN, partyLevel, type Party } from '../adventurers/party';
 import type { CombatOptions, CombatOutcome } from '../combat/battlecast';
 import { listNames } from '../core/names';
@@ -33,6 +33,7 @@ export interface ExpeditionContext {
   ledger: ExpeditionLedger;
   travelTicks: number;
   restTicks: number;
+  shortRestHealFraction: number;
   skillDc: number;
   combat: CombatResolver;
   /** Publish immediately so observers see state at the point of the event. */
@@ -111,10 +112,12 @@ function resolveFight(p: Party, q: Quest, context: ExpeditionContext): void {
   const n = p.progress + 1;
   const bossFight = q.kind === 'assault' && p.progress === q.encounters.length - 1;
   const outcome = combat(fighters, spec, rng.seed(), {
+    potions: p.potions,
     ...(p.blessed ? { blessingHp: BLESSING_HP_PER_LEVEL * partyLevel(p) } : {}),
     noRetreat: bossFight,
     ...(q.kind === 'assault' ? { lairDepth: { index: p.progress, total: q.encounters.length } } : {}),
   });
+  p.potions -= outcome.potionsDrunk;
 
   for (const r of outcome.heroes) {
     const hero = p.members.find((h) => h.id === r.heroId)!;
@@ -159,7 +162,7 @@ function resolveFight(p: Party, q: Quest, context: ExpeditionContext): void {
       log(context, 'quest', `${p.name} have cleared ${q.place} and head back to ${town.name}.`);
       headHome(p, travelTicks);
     } else {
-      breather(p, context);
+      shortRest(p, context);
     }
     return;
   }
@@ -193,11 +196,12 @@ function resolveFight(p: Party, q: Quest, context: ExpeditionContext): void {
   headHome(p, travelTicks);
 }
 
-function breather(p: Party, context: ExpeditionContext): void {
+/** Between encounters, heal living heroes, then give each still-Bloodied hero one potion if available. */
+function shortRest(p: Party, context: ExpeditionContext): void {
   let drunk = 0;
   for (const h of aliveMembers(p)) {
-    healHero(h, Math.ceil(h.maxHp * 0.5));
-    if (p.potions > 0 && h.hp < h.maxHp * 0.5) {
+    healHero(h, Math.ceil(h.maxHp * context.shortRestHealFraction));
+    if (p.potions > 0 && isBloodied(h)) {
       p.potions -= 1;
       drunk += 1;
       healHero(h, potionHeal(h));

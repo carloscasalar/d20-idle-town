@@ -68,12 +68,6 @@ synchronous casualty visibility and combat-before-loot event ordering; and rest.
 The settlement and lost-loot callbacks remain an interim dependency until the
 board and coin-transfer modules are deepened.
 
-**Potion finding.** The current breather never drinks a potion for a living
-combat result: `runCombat` clamps living HP to at least 1, then the breather
-heals `ceil(maxHp * 0.5)` before testing whether HP is below half. Tests with
-even and odd maximum HP pin the resulting healing and unchanged potion count.
-This behavior is preserved; changing the potion rule is a separate decision.
-
 **Verification.** `pnpm typecheck` and `pnpm test` passed all 97 tests across
 11 files, including the unchanged three-seed, 400-hour per-tick trajectory
 snapshots. The regression snapshot file has no diff against `HEAD`, and its

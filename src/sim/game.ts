@@ -81,6 +81,8 @@ export interface GameConfig {
   arrivalInterval: number;
   travelTicks: number;
   restTicks: number;
+  /** Fraction of maximum HP healed during a short rest between encounters. */
+  shortRestHealFraction: number;
   /** Ticks an incomplete party waits before a band of strangers shows up to fill it. */
   patienceTicks: number;
   /** Days a contract stays on the board before the employer gives up and the asset is overrun. */
@@ -260,6 +262,7 @@ export const DEFAULT_CONFIG: GameConfig = {
   arrivalInterval: 10,
   travelTicks: 2,
   restTicks: 8,
+  shortRestHealFraction: 0.5,
   patienceTicks: 12,
   contractDays: 3,
   ruinDays: 3,
@@ -948,6 +951,7 @@ export class Game {
       ledger: this.stats,
       travelTicks: this.config.travelTicks,
       restTicks: this.config.restTicks,
+      shortRestHealFraction: this.config.shortRestHealFraction,
       skillDc: SKILL_DC,
       combat: runCombat,
       report: ({ kind, text, detail, chronicle }) => {

@@ -25,6 +25,7 @@ function outcome(party: Party, winner: CombatOutcome['winner'], alive = party.me
     lines: ['A short fight.'],
     heroes: party.members.map((hero, index) => ({ heroId: hero.id, hp: alive[index] ? hero.maxHp : 0, alive: alive[index]!, kills: 0 })),
     xpEarned: winner === 'party' ? 200 : 0,
+    potionsDrunk: 0,
   };
 }
 
@@ -48,7 +49,7 @@ function setup(level = 1) {
   const settleQuest = vi.fn<ExpeditionContext['settleQuest']>((_quest, _party, success) => { calls.push(`settle:${success}`); });
   const leaveLoot = vi.fn<ExpeditionContext['leaveLoot']>((_quest, _party, fallen) => { calls.push(`loot:${fallen.length}`); });
   const context: ExpeditionContext = {
-    quest, town, rng, ledger, travelTicks: 2, restTicks: 2, skillDc: 15,
+    quest, town, rng, ledger, travelTicks: 2, restTicks: 2, shortRestHealFraction: 0.5, skillDc: 15,
     combat,
     report: (event) => { events.push(event); calls.push(`event:${event.kind}`); },
     settleQuest,
@@ -82,7 +83,7 @@ describe('an expedition hour', () => {
     expect(events.at(-1)?.text).toContain('reach Stonebridge');
   });
 
-  it('uses one world seed per fight, takes a breather, and returns after clearing the contract', () => {
+  it('uses one world seed per fight, takes a short rest, and returns after clearing the contract', () => {
     const { party, quest, context, events } = setup();
     const expectedRng = new Rng(99);
     const seeds: number[] = [];
@@ -143,7 +144,7 @@ describe('an expedition hour', () => {
 
     advanceExpedition(party, context);
 
-    expect(options).toEqual({ blessingHp: 3, noRetreat: true, lairDepth: { index: 1, total: 2 } });
+    expect(options).toEqual({ blessingHp: 3, noRetreat: true, lairDepth: { index: 1, total: 2 }, potions: 0 });
   });
 
   it('leaves fallen gear on retreat and defers settlement until homecoming', () => {
@@ -339,25 +340,43 @@ describe('scripted combat outcomes', () => {
   });
 });
 
-// These tests must be deleted when .scratch/potions-and-short-rest/issues/01-adventurers-never-drink-potions.md is fixed.
-describe('known defect: potions are never drunk during a short rest', () => {
-  it.each([100, 101])('heals a living hero from 1 HP with max HP %s without drinking a potion', (maxHp) => {
-    const { party, context, events } = setup();
-    party.members[0]!.maxHp = maxHp;
+describe('expedition potions and short rests', () => {
+  it.each(['party', 'monsters', 'retreat', 'stalemate'] as const)('accounts for combat potions after a %s outcome', (winner) => {
+    const { party, context } = setup();
     party.potions = 4;
+    context.combat = (_heroes, _spec, _seed, options) => {
+      expect(options?.potions).toBe(4);
+      return { ...outcome(party, winner), potionsDrunk: 2 };
+    };
+
+    advanceExpedition(party, context);
+
+    expect(party.potions).toBe(2);
+  });
+
+  it.each([
+    { potions: 2, hp: [84, 60, 85, 100], left: 0 },
+    { potions: 1, hp: [84, 26, 85, 100], left: 0 },
+    { potions: 0, hp: [50, 26, 85, 100], left: 0 },
+  ])('heals first, then shares $potions potions among heroes still Bloodied', ({ potions, hp, left }) => {
+    const { party, context, events } = setup();
+    for (const hero of party.members) hero.maxHp = 100;
+    party.potions = potions;
+    context.shortRestHealFraction = 0.25;
     context.combat = () => {
       const result = outcome(party, 'party');
       result.xpEarned = 0;
-      result.heroes[0]!.hp = 1;
+      // The first reaches exactly half after resting; the third is above half.
+      result.heroes.forEach((hero, i) => { hero.hp = [25, 1, 60, 100][i]!; });
       return result;
     };
 
     advanceExpedition(party, context);
 
     expect(party.status).toBe('questing');
-    expect(party.members[0]!.hp).toBe(1 + Math.ceil(maxHp * 0.5));
-    expect(party.potions).toBe(4);
-    expect(events.some((event) => event.text.includes('potion'))).toBe(false);
+    expect(party.members.map((hero) => hero.hp)).toEqual(hp);
+    expect(party.potions).toBe(left);
+    expect(events.some((event) => event.text.includes('potion'))).toBe(potions > 0);
   });
 });
 

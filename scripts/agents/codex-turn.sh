@@ -40,7 +40,7 @@ session_id="$(grep -o '"thread_id":"[^"]*"' "$log" | head -1 | cut -d'"' -f4)"
 echo "session: ${session_id:-${session:-unknown}}"
 echo "exit: $status"
 echo "log: $log"
-if grep -qiE 'usage limit|rate limit|quota' "$log"; then echo "LIMIT: the log mentions a usage or rate limit"; fi
+if grep -E "\"type\":\"(error|turn.failed)\"" "$log" | grep -qiE "usage limit|rate limit|quota"; then echo "LIMIT: an error event mentions a usage or rate limit"; fi
 echo "--- final message ---"
 if [ -s "$last" ]; then cat "$last"; else tail -c 2000 "$log"; fi
 exit $status

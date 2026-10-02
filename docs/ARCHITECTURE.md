@@ -149,10 +149,10 @@ enchanter buys back.
    items become `acOverride`, `hpOverride`, `speedOverride`,
    `additionalResistances`; a +1 weapon is rebuilt from the class's own main
    attack with the bonus folded into attack and damage.
-4. Runs the engine's `Encounter` to a conclusion or a round cap.
+4. Runs the engine's `Encounter` to a conclusion or a round cap, healing living Bloodied heroes with potions from the supplied pack between unfinished rounds, before checking whether to flee.
 5. Maps the result back to a `CombatOutcome`: winner (`party | monsters |
-   retreat | stalemate`), rounds, per-hero HP / alive / kills, XP earned, and the
-   engine's narration lines.
+   retreat | stalemate`), rounds, per-hero HP / alive / kills, XP earned, potions
+   drunk, and the engine's narration plus potion-drinking lines.
 
 Game code above this line never sees a `Creature`, a `BattleLog` or a
 `MonsterData` instance in flight — only the game's own types.
@@ -192,7 +192,9 @@ potions, armour, items and blessings, paying guild dues and selling loot
 through `visitTownServices`,
 investigating a contract, and finally accepting one. During `questing`, the
 Expedition module resolves one fight per tick, applies casualties and XP,
-handles retreat and recovery, and reports events synchronously. It takes a
+subtracts combat potions, handles retreat and recovery through `shortRest`
+(a configured fraction of maximum HP, default 0.5, then a potion for each hero
+still Bloodied while supplies last), and reports events synchronously. It takes a
 combat resolver through an interface: `runCombat` is the production adapter,
 while tests supply scripted outcomes. Contract settlement and lost-loot storage
 still belong to `Game` and are called at the same points in the journey.
