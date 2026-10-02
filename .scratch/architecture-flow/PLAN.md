@@ -18,7 +18,8 @@ Status values: `todo`, `in-progress`, `done`, `blocked`.
 | 07 | Company roster: characterisation tests (arrivals, recruiting, merging, retirement) | tests | todo | |
 | 08 | Company roster: deepen the module, remove the `tryRetire` callback | refactor | todo | |
 | 09 | Job intel: characterisation tests (investigation, divination, reading the road) | tests | todo | |
-| 10 | Job intel: deepen the module, remove the string-keyed `investigations` | refactor | todo | |
+| 10 | Job intel: deepen the module, remove the string-keyed `investigations`; take `learnIntel`/`revealAll` off the Board | refactor | todo | |
+| 11 | Configuration: `GameConfig` in sections per module, plain data, ready to load from YAML; remaining `'assault'` branches in `Game` and the expedition | refactor | todo | |
 
 Not planned: typed domain events (candidate 6). It waits for a second renderer.
 
