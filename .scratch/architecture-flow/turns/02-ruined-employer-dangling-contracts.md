@@ -49,3 +49,8 @@ refactor, any rule change.
 `pnpm typecheck` and `pnpm test` pass; the new tests fail without the fix and
 pass with it (say how you checked); your report follows rule 9 and includes the
 audit list from step 3.
+
+## One leftover from turn 01
+
+`src/combat/battlecast.ts` has a stale comment near the potion loop ("one potion
+per living Bloodied hero"). Make it match the code. Nothing else in that file.
