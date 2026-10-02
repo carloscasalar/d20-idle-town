@@ -1,5 +1,5 @@
 import { listNames } from '../core/names';
-import { emptyGoldStatistics, hoard, loot, purse, sink, source, transfer, treasury } from '../town/coin';
+import { coinReasons, emptyGoldStatistics, hoard, loot, purse, sink, source, transfer, treasury } from '../town/coin';
 import { visitTownServices } from '../town/services';
 import {
   describeHero,
@@ -639,8 +639,8 @@ export class Game {
     for (const e of this.town.employers) {
       if (e.ruined) continue;
       const income = dailyIncome(e);
-      source(treasury(e), income, 'income', this.stats);
-      sink(treasury(e), e.upkeepPerDay, 'upkeep', this.stats);
+      source(treasury(e), income, 'income', this.stats, coinReasons);
+      sink(treasury(e), e.upkeepPerDay, 'upkeep', this.stats, coinReasons);
       earned += income;
       paid += e.upkeepPerDay;
       if (e.treasury < 0) {
@@ -868,7 +868,7 @@ export class Game {
     const temple = serviceOf(this.town, 'temple');
     const divination = DIVINATION_COST_PER_LEVEL * level;
     if (!temple.ruined && p.gold - divination >= reserve * 2) {
-      transfer(purse(p), treasury(temple), divination, 'service', this.stats);
+      transfer(purse(p), treasury(temple), divination, 'service', this.stats, coinReasons);
       this.board.revealAll(quest);
       this.log('temple', `${p.name} pay ${divination} gp for a divination at the ${temple.name}. The priests see "${quest.title}" whole: ${quest.encounters.length} fights [${difficultyCode(quest)}].`);
       return true;
@@ -879,7 +879,7 @@ export class Game {
     if (done >= MAX_INVESTIGATIONS) return false;
     const cost = INVESTIGATION_COST_PER_LEVEL * level;
     if (tavern.ruined || p.gold - cost < reserve) return false;
-    transfer(purse(p), treasury(tavern), cost, 'service', this.stats);
+    transfer(purse(p), treasury(tavern), cost, 'service', this.stats, coinReasons);
     p.investigations[quest.id] = done + 1;
     this.log('shop', `${p.name} buy a round at ${tavern.name} (${cost} gp) and ask about "${quest.title}": ${this.board.learnIntel(quest)}.`);
     return true;
@@ -916,10 +916,10 @@ export class Game {
     for (const item of veteran.items) p.stash.push(item);
     veteran.items = [];
     const capital = Math.floor(RETIREMENT_PRICE * 0.2);
-    const employer = retiredEmployer(this.rng, veteran.name, p.id, 0);
+    const employer = retiredEmployer(this.rng, veteran.name, p.id);
     // 20,000 leaves the world; 5,000 is the new employer's opening treasury. No event between them.
-    sink(purse(p), RETIREMENT_PRICE - capital, 'retirement', this.stats);
-    transfer(purse(p), treasury(employer), capital, 'retirement', this.stats);
+    sink(purse(p), RETIREMENT_PRICE - capital, 'retirement', this.stats, coinReasons);
+    transfer(purse(p), treasury(employer), capital, 'retirement', this.stats, coinReasons);
     this.town.employers.push(employer);
     this.stats.retirements += 1;
     this.chronicleLog(
@@ -937,7 +937,7 @@ export class Game {
     for (const dead of deadMembers(p)) {
       const cost = resurrectionCost(dead.level);
       if (p.gold < cost) continue;
-      transfer(purse(p), treasury(temple), cost, 'service', this.stats, dead);
+      transfer(purse(p), treasury(temple), cost, 'service', this.stats, coinReasons, dead);
       resurrectHero(dead);
       this.stats.resurrections += 1;
       raised.push(dead);
@@ -995,7 +995,7 @@ export class Game {
   private payHoard(lair: Lair, company: Party): string {
     const gold = lair.hoard.gold;
     const items = lair.hoard.items;
-    transfer(hoard(lair), purse(company), gold, 'spoils', this.stats);
+    transfer(hoard(lair), purse(company), gold, 'spoils', this.stats, coinReasons);
     company.stash.push(...items);
     this.stats.itemsFound += items.length;
     lair.hoard.items = [];
@@ -1031,8 +1031,8 @@ export class Game {
       items.push(...p.stash);
       p.stash = [];
       gold = p.gold;
-      if (lair) transfer(purse(p), hoard(lair), gold, 'wipe', this.stats);
-      else if (asset) transfer(purse(p), loot(asset), gold, 'wipe', this.stats);
+      if (lair) transfer(purse(p), hoard(lair), gold, 'wipe', this.stats, coinReasons);
+      else if (asset) transfer(purse(p), loot(asset), gold, 'wipe', this.stats, coinReasons);
     }
     store.items.push(...items);
     if (items.length === 0 && gold === 0) return;

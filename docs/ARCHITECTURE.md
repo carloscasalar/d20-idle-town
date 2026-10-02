@@ -120,10 +120,10 @@ enchanter buys back.
 
 - **`coin.ts`** — the only writer of a gold balance or a gold counter. Callers
   name a purse, treasury, hoard or loot and one of three operations: `transfer`,
-  `source` or `sink`, each with an amount and a reason. `coinReasons` decides
-  which earned/spent counters and which lifetime statistics (`goldPaid`,
-  `goldSpentByHeroes`, and a named adventurer's `goldSpent`) that reason
-  touches. A hoard and a loot store have no earned/spent counters. The module
+  `source` or `sink`, each with an amount and a reason. `coinReasons` is a
+  frozen table of typed keys. It decides which earned/spent counters and which
+  lifetime statistics (`goldPaid`, `goldSpentByHeroes`, and a named adventurer's
+  `goldSpent`) that reason touches. A hoard and a loot store have no earned/spent counters. The module
   does not decide whether anyone can afford the amount, and it does not import
   `Game`; it receives the gold statistics and nothing else. Factories still
   set a holder's starting amount. `party.ts` calls it for a merger.

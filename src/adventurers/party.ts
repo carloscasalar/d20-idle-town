@@ -2,7 +2,7 @@ import { partyName } from '../core/names';
 import type { Rng } from '../core/rng';
 import type { MagicItem } from '../items/items';
 import type { HeroClassName } from 'battlecast-engine';
-import { emptyGoldStatistics, purse, transfer, type GoldStatistics } from '../town/coin';
+import { coinReasons, purse, transfer, type GoldStatistics } from '../town/coin';
 import { createHero, type Hero } from './hero';
 
 /** A company sets out with at least this many and never more than MAX_PARTY_SIZE. */
@@ -125,7 +125,7 @@ export function partyLevel(p: Party): number {
  * Moves survivors of `donor` into `host` while there is room (six at most).
  * Returns the survivors that did not fit (the donor keeps them).
  */
-export function mergeParties(host: Party, donor: Party, statistics: GoldStatistics = emptyGoldStatistics()): Hero[] {
+export function mergeParties(host: Party, donor: Party, statistics?: GoldStatistics): Hero[] {
   const moved: Hero[] = [];
   for (const h of aliveMembers(donor)) {
     if (!hasRoom(host)) break;
@@ -133,7 +133,7 @@ export function mergeParties(host: Party, donor: Party, statistics: GoldStatisti
     moved.push(h);
   }
   donor.members = donor.members.filter((h) => !moved.includes(h));
-  transfer(purse(donor), purse(host), donor.gold, 'merger', statistics);
+  transfer(purse(donor), purse(host), donor.gold, 'merger', statistics, coinReasons);
   host.potions += donor.potions;
   donor.potions = 0;
   host.stash.push(...donor.stash);

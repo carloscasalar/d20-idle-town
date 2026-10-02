@@ -2,7 +2,7 @@ import { armorUpgradeCost, equipItem, wantsItem, MAX_ARMOR_TIER, potionCost, res
 import { aliveMembers, partyLevel, type Party } from '../adventurers/party';
 import { listNames } from '../core/names';
 import { describeEffect, resalePrice, type MagicItem } from '../items/items';
-import { goldStatistics, purse, transfer, treasury } from './coin';
+import { coinReasons, goldStatistics, purse, transfer, treasury } from './coin';
 import { MAX_STOCK, serviceOf, type Employer, type Town } from './town';
 
 const GUILD_DUES_PER_LEVEL = 15;
@@ -42,7 +42,7 @@ export function visitTownServices(p: Party, services: TownServiceContext): boole
   const { town, day, ledger, report, tryRetire } = services;
   const books = goldStatistics(ledger);
   const pay = (from: Party, to: Employer, amount: number, adventurer?: Hero) =>
-    transfer(purse(from), treasury(to), amount, 'service', books, adventurer);
+    transfer(purse(from), treasury(to), amount, 'service', books, coinReasons, adventurer);
   const log = (kind: ServiceEvent['kind'], text: string) => report({ kind, text });
   const chronicleLog = (kind: ServiceEvent['kind'], text: string) => report({ kind, text, chronicle: true });
 
@@ -117,7 +117,7 @@ export function visitTownServices(p: Party, services: TownServiceContext): boole
       p.stash.push(item);
       return false;
     }
-    transfer(treasury(enchanter), purse(p), price, 'resale', books);
+    transfer(treasury(enchanter), purse(p), price, 'resale', books, coinReasons);
     enchanter.stock.push(item);
     ledger.itemsSold += 1;
     log('shop', `${p.name} sell a ${item.name} to ${enchanter.name} for ${price} gp.`);

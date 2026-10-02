@@ -150,7 +150,7 @@ function makeEmployer(rng: Rng, kind: EmployerKind, service: ServiceKind | null,
 }
 
 /** A high-level adventurer buys a business and becomes an employer in their own right. */
-export function retiredEmployer(rng: Rng, heroName: string, partyId: string, gold: number): Employer {
+export function retiredEmployer(rng: Rng, heroName: string, partyId: string): Employer {
   const id = rng.id('employer');
   const kind: AssetKind = rng.pick(['vineyard', 'warehouse', 'trade-route', 'hunting-lodge', 'farmland']);
   const asset = createAsset(rng, kind, id);
@@ -161,7 +161,7 @@ export function retiredEmployer(rng: Rng, heroName: string, partyId: string, gol
     title: 'Retired adventurer',
     service: null,
     assets: [asset],
-    treasury: gold,
+    treasury: 0,
     upkeepPerDay: Math.round(asset.incomePerDay * 0.4),
     generosity: 1.2,
     reputation: 1,
