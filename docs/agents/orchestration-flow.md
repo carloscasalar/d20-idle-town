@@ -68,7 +68,14 @@ and lists no 500k-context variant.
    why the task could not be completed.
 7. After each finished candidate (not each turn), a smoke tester checks the app.
 
-Stop and report to the user when the implementer hits its usage limit.
+Stop and report to the user when the implementer hits its usage limit; switch
+to the fallback implementer if the user has said so.
+
+Only one implementer works in the working tree at a time. Reviewers and smoke
+testers that run while an implementer works use a throwaway `git worktree` and
+never kill processes by pattern (`pkill -f vitest` once killed an implementer
+whose prompt contained the word); they stop only processes they started, by
+process id.
 
 ## Rules for the implementing agent
 
