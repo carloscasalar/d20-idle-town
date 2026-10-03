@@ -16,9 +16,9 @@ Status values: `todo`, `in-progress`, `done`, `blocked`.
 | 05 | Coin transfers: audit and characterisation tests, plus two counter bugs they exposed | tests + bug fix | done | f78a95f, e2ad6f4, 3e02d62 (Codex, then Cursor; 1 correction round) |
 | 06 | Coin transfers: one module moves gold, with reasons as data | refactor | done | 0288d2a, f11e248 (bug fix), a7ed2a9, 991b039 (Cursor; 2 correction rounds) |
 | 06c | A fight crashes when a Gargantuan monster does not fit (seed 75) | bug fix | done | b615320 (Cursor; reviewed by Sonnet, no corrections) |
-| 07 | Company roster: characterisation tests (arrivals, recruiting, merging, retirement) | tests | in-progress | beb00ac (Cursor); review pending |
+| 07 | Company roster: characterisation tests (arrivals, recruiting, merging, retirement) | tests | done | beb00ac (Cursor), 1e6902c (Codex correction; 13 targeted mutations caught, not re-reviewed) |
 | 07b | The long simulation tests time out on a slow machine | test fix | done | 1d5e6ef (Codex; per-tick checking cut from about 5 s to under 2 s a run) |
-| 07c | Roster bugs found by turn 07 (band of five arrives as four; ruined temple still raises the dead; retirement does not pick the most seasoned veteran) | bug fix | todo | |
+| 07c | Roster bugs found by turn 07 (band of five arrives as four; ruined temple still raises the dead; retirement does not pick the most seasoned veteran) | bug fix | in-progress | Codex |
 | 08 | Company roster: deepen the module, remove the `tryRetire` callback | refactor | todo | |
 | 09 | Job intel: characterisation tests (investigation, divination, reading the road) | tests | todo | |
 | 10 | Job intel: deepen the module, remove the string-keyed `investigations`; take `learnIntel`/`revealAll` off the Board | refactor | todo | |
@@ -58,3 +58,4 @@ Bugs found during a task get a new row inserted before the task continues.
 - Turn 07b: the Cursor run stalled overnight (the machine slept), then died with exit 143 while reconnecting for the fourth time; no file had changed. Codex's limit had reset by then, so the turn restarted on Codex in a new session.
 - Turn 07 review (Sonnet): 86 mutations, 67 caught; seven real gaps, correction prompt queued until 07b ends (one implementer in the tree at a time).
 - Incident: the reviewer ran `pkill -f vitest` to clear its own hung mutation run, which also matched the Cursor 07b process (its prompt text contains "vitest"). That, not only the reconnects, is what killed 07b with exit 143. Rule added to the flow: reviewers stop only processes they started, by id.
+- Turn 07 correction: not sent to a reviewer again. It was a list of seven named mutations, and Codex reported checking 13 targeted mutations in a temporary copy; the one source change is a single export. Saving a review where the correction is a closed checklist.
