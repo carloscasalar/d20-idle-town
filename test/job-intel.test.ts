@@ -470,22 +470,35 @@ describe('paid tavern rounds', () => {
     expect(game.view().events.filter((event) => event.text.includes('Persuasion'))).toHaveLength(1);
   });
 
-  it('a ruined tavern sells no paid round and the company takes the job', () => {
+  it.each([
+    { gold: 300, divined: false, left: 300, spent: 0, temple: 1000 },
+    { gold: 1000, divined: true, left: 940, spent: 60, temple: 1060 },
+  ])('a ruined tavern with $gold gp offers no talk or round; divination=$divined', ({ gold, divined, left, spent, temple }) => {
     const game = scene((scenario) => {
+      scenario.parties[0]!.gold = gold;
       serviceOf(scenario.town, 'tavern').ruined = true;
-      serviceOf(scenario.town, 'temple').ruined = true;
     });
-    // The current free attempt at a ruined tavern is a suspected bug. Do not
-    // assert its report or effect; this test concerns only the paid option.
-    hour(game);
     const before = knowledge(game);
 
     const events = hour(game);
 
-    expect(events.map((event) => event.kind)).toEqual(['quest']);
-    expect(game.view().parties[0]!.gold).toBe(300);
+    expect(events).toHaveLength(1);
+    expect(events[0]!.text).not.toContain('Persuasion');
+    expect(events[0]!.text).not.toContain('buy a round');
+    expect(game.view().parties[0]).toMatchObject({ gold: left, spent });
     expect(serviceView(game, 'tavern').treasury).toBe(1000);
-    expect(knowledge(game)).toEqual(before);
+    expect(serviceView(game, 'temple').treasury).toBe(temple);
+    if (divined) {
+      expect(events[0]!.text).toContain('pay 60 gp for a divination');
+      expect(events[0]!.text).toContain('3 fights [E/I/H]');
+      expect(isFullyKnownFromView(game)).toBe(true);
+      expect(game.view().board.taken).toHaveLength(0);
+    } else {
+      expect(events[0]!.kind).toBe('quest');
+      expect(events[0]!.text).toContain('accept "Recover the tower"');
+      expect(knowledge(game)).toEqual(before);
+      expect(game.view().board.taken.map((work) => work.id)).toEqual(['tower']);
+    }
   });
 });
 

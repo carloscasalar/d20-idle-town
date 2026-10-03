@@ -827,8 +827,8 @@ export class Game {
     const reserve = resurrectionCost(level);
     const tavern = serviceOf(this.town, 'tavern');
 
-    // Talk first: a good tongue gets the regulars talking for free. One try per job.
-    if (!p.investigations[`${quest.id}:talk`]) {
+    // Talk first, while the tavern stands: a good tongue gets the regulars talking for free. One try per job.
+    if (!tavern.ruined && !p.investigations[`${quest.id}:talk`]) {
       this.roster.recordInvestigation(p, `${quest.id}:talk`, 1);
       const check = rollSkill(this.rng, aliveMembers(p), 'Persuasion', SKILL_DC);
       if (check) {
