@@ -45,7 +45,15 @@ still not data, or not addressable by name from a YAML file:
    still exported, so any holder of a writable Contract can build a handle. Only
    the Board gives one out.
 
-5. **Allowed test edits.** Tests that construct steps, the coin context or a
+5. **Names are checked against what exists.** `town.retiredHoldings`,
+   `quests.relicHoldings` and `quests.guildOnlyKinds` accept any string today: a
+   configuration with `retiredHoldings: ['castle']` passes validation and breaks
+   at the first retirement. The validator checks every name in the
+   configuration (kinds of work, holdings, steps, coin reasons) against the
+   catalogue it refers to, and rejects a weight list whose weights are all zero.
+   Remove the unused `testRoster` from `test/helpers/supplied-config.ts`.
+
+6. **Allowed test edits.** Tests that construct steps, the coin context or a
    knowledge handle directly may change how those are built, keeping every
    expected value. List each edited test by name.
 

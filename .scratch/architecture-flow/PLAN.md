@@ -23,8 +23,8 @@ Status values: `todo`, `in-progress`, `done`, `blocked`.
 | 09 | Job intel: characterisation tests (investigation, divination, reading the road) | tests | done | 77ee846, 57918d4 (Codex, then Cursor; 1 correction round) |
 | 09b | A ruined tavern still hears the free Persuasion attempt | bug fix | done | 64db8e7 (Cursor; checked by the orchestrator, 2-file diff) |
 | 10 | Job intel: deepen the module, remove the string-keyed `investigations`; take `learnIntel`/`revealAll` off the Board and `recordInvestigation`/`payService` off the roster | refactor | done | b3d36c4, 3c8407b (Cursor; 1 correction round) |
-| 11a | Configuration: one `GameConfig` in sections, every tunable value in one home, deep partial overrides, JSON round trip, validation | refactor | in-progress | Cursor |
-| 11b | Kinds of work, steps and gold reasons as named data | refactor | todo | |
+| 11a | Configuration: one `GameConfig` in sections, every tunable value in one home, deep partial overrides, JSON round trip, validation | refactor | done | 518f324, 87d5ce3 (Cursor; 1 correction round) |
+| 11b | Kinds of work, steps and gold reasons as named data | refactor | in-progress | Codex |
 | 11 (scope notes) | Configuration: `GameConfig` in sections per module, plain data, ready to load from YAML; remaining `'assault'` branches in `Game` and the expedition; a coin object built once with its statistics and reason table, named effect fields instead of five positional booleans; town service steps as named entries instead of one positional slot; `GameConfig` sections (`board`, `roster`, ...) instead of flat-merged renamed fields | refactor | todo | |
 
 Not planned: typed domain events (candidate 6). It waits for a second renderer.
@@ -66,3 +66,4 @@ Bugs found during a task get a new row inserted before the task continues.
 - Turn 09: Codex's limit cut it off with a 619-line test file; Cursor kept most of it, tightened assertions that could pass for the wrong reason, and rewrote the road tests so none read the investigation keys. Six tests in `test/expedition.test.ts` still read `:tracks`; turn 10 needs an allowance to move them to public outcomes.
 - Turn 10: the snapshot changed only because the investigation records changed shape; the reviewer proved it independently by running old and new code side by side for 1,200 ticks with the records stripped or converted back. One correction made the module, not `Game`, decide what the road and arrival reveal, and turned the Board's knowledge handle into learn-next and reveal-all, so knowledge can only grow.
 - Task 11 split into 11a (configuration in sections) and 11b (kinds, steps and coin reasons as named data) to keep each diff reviewable.
+- Turn 11a: about 60 moved values and 30 seeds × 1,500 hours compared identical to the parent. The first review found two overrides that never reached the code that uses them, because production functions fell back to module defaults; the correction removed every fallback so a missing section is a type error. Smoke check 03 passed with figures identical to check 02.
