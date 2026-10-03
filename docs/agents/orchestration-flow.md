@@ -148,3 +148,38 @@ Every turn prompt refers to this section.
 9. **Report plainly.** End with: what changed, the result of `pnpm typecheck`
    and `pnpm test`, whether the regression snapshot changed, and anything not
    done with the reason.
+
+## Lessons from flow 1.0
+
+Recorded at the end of the first series (turns 01 to 11b), for turning this flow
+into agent and skill files.
+
+- **Characterise, then refactor, in separate turns.** Tests written first and
+  committed alone are what made each refactor checkable; nineteen bugs surfaced
+  in those test turns and were fixed before any code moved.
+- **Ask the implementer to report suspected bugs, never to pin them.** Most of
+  the bugs came from that instruction.
+- **A mutation check is the review of a tests-only turn.** It found gaps in
+  every test turn (between 2 and 19 surviving mutations).
+- **The regression snapshot covers three seeds; that is not enough.** A sweep of
+  150 seeds over 1,500 hours found two crashes (a negative Bounty, a monster
+  that did not fit) the snapshot seeds never reach. Run it once per refactor.
+- **Refactor reviews need design judgement; check reviews do not.** Default-model
+  reviewers caught second doors, leaked writers and silently ignored overrides
+  that tests could not; Sonnet and then opencode/MiniMax handled mutation
+  checks and closed correction lists at a fraction of the cost.
+- **"Single writer" needs a search for wrapped writes**, not only direct
+  assignments: twice the search came out clean because the write was hidden
+  behind an exported helper.
+- **Ban production fallbacks to defaults.** A `= DEFAULT_*` parameter is how two
+  configuration overrides silently stopped reaching their code.
+- **Run turns detached, record the session id first, log the event stream.**
+  The orchestrator's ten-minute background limit, an overnight sleep and
+  connection drops each killed a turn before these were in place.
+- **One implementer in the tree; reviewers in throwaway worktrees; never kill by
+  pattern.** A reviewer's `pkill -f vitest` once killed the implementer.
+- **Usage limits land mid-turn.** A handover prompt that points the next
+  implementer at the task file and the working-tree diff, and tells it to
+  verify every item, worked both times.
+- **Stage by `git status`, and keep the orchestrator's edits out of the
+  implementer's commit.**

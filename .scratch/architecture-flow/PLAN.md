@@ -24,7 +24,7 @@ Status values: `todo`, `in-progress`, `done`, `blocked`.
 | 09b | A ruined tavern still hears the free Persuasion attempt | bug fix | done | 64db8e7 (Cursor; checked by the orchestrator, 2-file diff) |
 | 10 | Job intel: deepen the module, remove the string-keyed `investigations`; take `learnIntel`/`revealAll` off the Board and `recordInvestigation`/`payService` off the roster | refactor | done | b3d36c4, 3c8407b (Cursor; 1 correction round) |
 | 11a | Configuration: one `GameConfig` in sections, every tunable value in one home, deep partial overrides, JSON round trip, validation | refactor | done | 518f324, 87d5ce3 (Cursor; 1 correction round) |
-| 11b | Kinds of work, steps and gold reasons as named data | refactor | in-progress | Cursor (Codex still at its limit until 1:32 PM; the orchestrator misread the time) |
+| 11b | Kinds of work, steps and gold reasons as named data | refactor | done | c90ff59, 96b0674 (Cursor; 1 correction round; re-check by opencode) |
 | 11 (scope notes) | Configuration: `GameConfig` in sections per module, plain data, ready to load from YAML; remaining `'assault'` branches in `Game` and the expedition; a coin object built once with its statistics and reason table, named effect fields instead of five positional booleans; town service steps as named entries instead of one positional slot; `GameConfig` sections (`board`, `roster`, ...) instead of flat-merged renamed fields | refactor | todo | |
 
 Not planned: typed domain events (candidate 6). It waits for a second renderer.
@@ -68,3 +68,14 @@ Bugs found during a task get a new row inserted before the task continues.
 - Task 11 split into 11a (configuration in sections) and 11b (kinds, steps and coin reasons as named data) to keep each diff reviewable.
 - Turn 11a: about 60 moved values and 30 seeds × 1,500 hours compared identical to the parent. The first review found two overrides that never reached the code that uses them, because production functions fell back to module defaults; the correction removed every fallback so a missing section is a type error. Smoke check 03 passed with figures identical to check 02.
 - New agent: opencode with `minimax/MiniMax-M3` (thinking) replaces the Sonnet subagent for cheap reviews (contained bug fixes, tests-only turns, closed correction lists). Wrapper `scripts/agents/opencode-turn.sh`; decisions in the flow document. Smoke checks stay on Sonnet (browser), refactor reviews on the default model. A no-op test turn worked.
+- Turn 11b: behaviour identical on 20 seeds × 1,500 hours and in the quest-card HTML; smoke check 04 identical to 03. One correction closed a second door on the coin module, made kinds use their own renown and profile, checked step names against registries, and moved kind-named settings into a per-kind section.
+- First opencode review (MiniMax-M3, re-check of the 11b correction): PASS with evidence on all eight items, including a mutation that proved the renown fix is tested, a type probe for the required fields and a 400-hour old-versus-new comparison; 108 tool calls. Safety held: experiments in a throwaway worktree that it removed; the repository was untouched (it left two scratch files in /tmp). Kept as the cheap reviewer.
+
+## Series complete
+
+All planned tasks are done. Open follow-ups, not started:
+
+- A new kind of work still needs a posting rule in `Game` (when work of that kind appears). Moving posting rules into the kind table would make a kind pure data.
+- `replaceForScenario` / `recordsForScenario` on the Board and roster are test-only doors; they could move behind `Game.forTesting` entirely.
+- Issues waiting for triage: `potions-and-short-rest/01`, `contract-lifecycle/01`, `contract-lifecycle/02`, `company-roster/01`, `company-roster/02`.
+- YAML loading itself (the configuration, validator and documentation are ready for it).
