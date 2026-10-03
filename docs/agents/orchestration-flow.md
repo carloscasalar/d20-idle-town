@@ -19,6 +19,7 @@ State lives in `.scratch/architecture-flow/`:
 | Orchestrator | Claude Code session | Chooses the next task, decides module interfaces, writes the turn prompt, commits and pushes, decides pass or fail | Read large diffs or logs itself; write production code |
 | Implementer | Codex CLI (`gpt-6.1-sol`, high effort) | One task per session: tests, refactor or fix | Commit, push, or add agent configuration |
 | Reviewer | Subagent, default model, one per turn | Checks the turn's diff against the turn prompt and runs the checks; returns pass or a short list of corrections | Edit files |
+| Cheap reviewer | opencode, `minimax/MiniMax-M3` (thinking variant) | Reviews of contained bug fixes and tests-only turns, mutation checks, re-checks of a closed correction list | Edit files |
 | Smoke tester | Subagent, Sonnet, built-in browser | Runs the app and compares with the baseline in `smoke/` | Edit files |
 
 The orchestrator's context is the scarce resource. Everything verbose (event
@@ -39,6 +40,41 @@ prints only the session id, the exit code and the agent's final message.
 - New task, new session. Corrections to the same task resume its session.
 - The model and effort are passed per call; the user's Codex config is not edited.
 - `codex exec resume` takes its options before the `resume` subcommand.
+
+### Cheap reviewer: opencode
+
+Tasks that were delegated to a Sonnet subagent because a cheaper model is
+enough go to opencode instead:
+
+```bash
+scripts/agents/opencode-turn.sh new <title> .scratch/architecture-flow/reviews/NN-<slug>.md
+scripts/agents/opencode-turn.sh resume <session-id> .scratch/architecture-flow/reviews/NN-<slug>-recheck.md
+```
+
+The wrapper runs `opencode run --auto --model minimax/MiniMax-M3 --variant thinking
+--format json --title <title> "<prompt>"`, logs the event stream and prints only
+the session id and the final message. Run it through `scripts/agents/detach.sh`
+like the implementers.
+
+Decisions, recorded when it was introduced (turn 11b):
+
+- **What it takes over:** reviews of contained bug fixes and of tests-only turns
+  (mutation checks), and re-checks of a correction that is a closed list. Those
+  were the Sonnet-subagent reviews.
+- **What stays elsewhere:** refactor reviews stay on a default-model Claude
+  subagent, because they need design judgement. Smoke checks stay on a Sonnet
+  subagent, because they need the built-in browser, which opencode cannot drive.
+- **Same prompt, same safety rules:** the review prompts are the ones the
+  subagents received (throwaway worktree, no edits, no commits, no killing
+  processes by pattern), now saved as files under
+  `.scratch/architecture-flow/reviews/` so the history shows them.
+- **`--auto` approves every action**, so the prompt's safety rules are the only
+  guard. The orchestrator checks `git status` and `git worktree list` after each
+  opencode review and reports anything left behind.
+- **Trial:** the first opencode review is checked against the same orchestrator
+  expectations as a Sonnet review. If it misses what a Sonnet review would have
+  caught, or breaks a safety rule, the orchestrator goes back to Sonnet for that
+  kind of review and records why.
 
 ### Fallback implementer: Cursor
 
