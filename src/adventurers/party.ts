@@ -1,12 +1,9 @@
 import { partyName } from '../core/names';
 import type { Rng } from '../core/rng';
 import type { MagicItem } from '../items/items';
-import type { HeroClassName } from 'battlecast-engine';
+import { HERO_CLASS_NAMES, type HeroClassName } from 'battlecast-engine';
+import type { DeepReadonly } from '../core/readonly';
 import { createHero, type Hero } from './hero';
-
-/** A company sets out with at least this many and never more than MAX_PARTY_SIZE. */
-export const PARTY_SIZE = 4;
-export const MAX_PARTY_SIZE = 6;
 
 export type PartyStatus =
   | 'idle'
@@ -47,14 +44,23 @@ export interface Party {
   guildMember: boolean;
   /** In-game day the dues were last paid. */
   duesPaidDay: number;
-  /** Rounds bought at the tavern to learn about a contract, by quest id. */
-  investigations: Record<string, number>;
+  /** What this company has tried in order to learn about each job. Job intelligence is the only writer. */
+  investigations: JobInquiry[];
 }
 
-let partyCounter = 0;
+/** What one company has tried for one job. */
+export interface JobInquiry {
+  jobId: string;
+  /** The free attempt at the tavern has been made. */
+  freeAttempt: boolean;
+  /** Paid rounds bought. */
+  roundsBought: number;
+  /** The road has been read. */
+  roadRead: boolean;
+}
 
 /** A full company covers the classic roles; smaller bands are whoever survived. */
-const ROLES: HeroClassName[][] = [
+export const ROLES: HeroClassName[][] = [
   ['Fighter', 'Barbarian', 'Paladin', 'Monk'],
   ['Cleric', 'Druid', 'Bard'],
   ['Rogue', 'Ranger', 'Bard', 'Monk'],
@@ -68,16 +74,17 @@ export function rollClasses(rng: Rng, size: number): HeroClassName[] {
     const options = role.filter((c) => !chosen.includes(c));
     chosen.push(rng.pick(options.length > 0 ? options : role));
   }
+  while (chosen.length < size) chosen.push(rng.pick(HERO_CLASS_NAMES));
   return chosen;
 }
 
-export function createParty(rng: Rng, level: number, size: number, tick: number): Party {
+export function createParty(rng: Rng, level: number, size: number, tick: number, startingGoldPerLevel: number): Party {
   const members: Hero[] = rollClasses(rng, size).map((cls) => createHero(rng, level, cls));
   return {
-    id: `party-${++partyCounter}`,
+    id: rng.id('party'),
     name: partyName(rng),
     members,
-    gold: 20 * level,
+    gold: startingGoldPerLevel * level,
     status: 'idle',
     questId: null,
     progress: 0,
@@ -94,63 +101,31 @@ export function createParty(rng: Rng, level: number, size: number, tick: number)
     blessed: false,
     guildMember: false,
     duesPaidDay: -1,
-    investigations: {},
+    investigations: [],
   };
 }
 
-export function aliveMembers(p: Party): Hero[] {
+export type ReadonlyParty = DeepReadonly<Party>;
+
+export function aliveMembers(p: Party): Hero[];
+export function aliveMembers(p: ReadonlyParty): DeepReadonly<Hero>[];
+export function aliveMembers(p: ReadonlyParty): DeepReadonly<Hero>[] {
   return p.members.filter((m) => m.alive);
 }
 
-export function deadMembers(p: Party): Hero[] {
+export function deadMembers(p: Party): Hero[];
+export function deadMembers(p: ReadonlyParty): DeepReadonly<Hero>[];
+export function deadMembers(p: ReadonlyParty): DeepReadonly<Hero>[] {
   return p.members.filter((m) => !m.alive);
 }
 
-/** Enough to take a contract. */
-export function isFull(p: Party): boolean {
-  return aliveMembers(p).length >= PARTY_SIZE;
-}
-
-export function hasRoom(p: Party): boolean {
-  return aliveMembers(p).length < MAX_PARTY_SIZE;
-}
-
-export function partyLevel(p: Party): number {
+export function partyLevel(p: ReadonlyParty): number {
   const alive = aliveMembers(p);
   if (alive.length === 0) return 1;
   return Math.max(1, Math.round(alive.reduce((s, h) => s + h.level, 0) / alive.length));
 }
 
-/**
- * Moves survivors of `donor` into `host` while there is room (six at most).
- * Returns the survivors that did not fit (the donor keeps them).
- */
-export function mergeParties(host: Party, donor: Party): Hero[] {
-  const moved: Hero[] = [];
-  for (const h of aliveMembers(donor)) {
-    if (!hasRoom(host)) break;
-    host.members.push(h);
-    moved.push(h);
-  }
-  donor.members = donor.members.filter((h) => !moved.includes(h));
-  host.gold += donor.gold;
-  donor.gold = 0;
-  host.potions += donor.potions;
-  donor.potions = 0;
-  host.stash.push(...donor.stash);
-  donor.stash = [];
-  host.renown = Math.max(host.renown, donor.renown);
-  return aliveMembers(donor);
-}
-
-/** Drops fallen members who will never be raised (party gave up on them). */
-export function buryDead(p: Party): Hero[] {
-  const dead = deadMembers(p);
-  p.members = p.members.filter((m) => m.alive);
-  return dead;
-}
-
-export function describeParty(p: Party): string {
+export function describeParty(p: ReadonlyParty, companySize: number): string {
   const n = aliveMembers(p).length;
-  return `${p.name} (lvl ${partyLevel(p)}, ${n < PARTY_SIZE ? `${n} of ${PARTY_SIZE} needed` : `${n} strong`})`;
+  return `${p.name} (lvl ${partyLevel(p)}, ${n < companySize ? `${n} of ${companySize} needed` : `${n} strong`})`;
 }

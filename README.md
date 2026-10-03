@@ -89,7 +89,7 @@ Adventurers spend in real shops, and every coin lands in that shop's treasury:
 - **Innkeeper**: rooms after every contract, and a night of carousing after a clean
   success. Tales told in the tavern raise the company's renown; famous companies get
   first pick of the board.
-- **Apothecary**: healing potions, drunk between encounters.
+- **Apothecary**: healing potions, drunk by conscious Bloodied adventurers or given to fallen companions between combat rounds, or drunk after a short rest if still Bloodied.
 - **Smith**: three tiers of armour (+1 AC each, real in combat), and the odd +1 weapon.
 - **Temple**: resurrections, blessings (extra hit points for the next contract), and
   a few holy items.
@@ -156,13 +156,15 @@ scripts         calibration
 ```
 
 The simulation has no DOM dependency; `Game` runs the same in tests, Node and the
-browser. A pixel-art renderer would subscribe to `game.onEvent` and read
-`game.parties` / `game.quests` exactly as the text UI does.
+browser. A renderer subscribes to `game.onEvent` and reads the immutable
+snapshot returned by `game.view()` exactly as the text UI does.
 
 **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** goes module by module: the layer
 diagram and the dependency rules, what each file owns, the tick loop and the party
 state machine, the exact engine API the adapter uses, how seeding keeps a run
 reproducible, and where to add a new theme, holding, item or renderer.
+**[docs/ARCHITECTURE-INTERFACES.md](docs/ARCHITECTURE-INTERFACES.md)** maps the
+current modules and their callable interfaces, state changes and usage contracts.
 **[CHANGELOG.md](CHANGELOG.md)** lists what landed, by day.
 
 ## Credits and licence

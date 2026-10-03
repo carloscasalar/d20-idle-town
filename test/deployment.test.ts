@@ -3,6 +3,8 @@ import { createHero } from '../src/adventurers/hero';
 import { runCombat } from '../src/combat/battlecast';
 import { Rng } from '../src/core/rng';
 import type { EncounterSpec } from '../src/quests/encounters';
+import { LONG_SIMULATION_TIMEOUT_MS } from './helpers/simulation';
+import { COMBAT_RULES } from './helpers/supplied-config';
 
 const goblins: EncounterSpec = { difficulty: 'intermediate', monsters: [{ name: 'Goblin Warrior', count: 4, xpEach: 50 }, { name: 'Goblin Boss', count: 1, xpEach: 200 }], totalXp: 400, tier: 'Moderate' };
 
@@ -12,14 +14,14 @@ describe('how a fight opens', () => {
     const seen = new Set<string>();
     for (let seed = 1; seed <= 60; seed++) {
       const party = ['Fighter', 'Cleric', 'Rogue', 'Wizard'].map((c) => createHero(rng, 3, c as 'Fighter'));
-      const out = runCombat(party, goblins, seed);
+      const out = runCombat(party, goblins, seed, { ...COMBAT_RULES });
       expect(out.opening.length).toBeGreaterThan(10);
       expect(out.lines[0]).toBe(out.opening);
       seen.add(out.ambush ?? 'none');
     }
     expect(seen.has('none')).toBe(true);
     expect(seen.has('monsters') || seen.has('party')).toBe(true);
-  });
+  }, LONG_SIMULATION_TIMEOUT_MS);
 
   it('deep in a lair the defenders are the ones watching', () => {
     const rng = new Rng(4);
@@ -27,7 +29,7 @@ describe('how a fight opens', () => {
     const trials = 80;
     for (let seed = 100; seed < 100 + trials; seed++) {
       const party = ['Fighter', 'Cleric', 'Rogue', 'Wizard'].map((c) => createHero(rng, 5, c as 'Fighter'));
-      const out = runCombat(party, goblins, seed, { lairDepth: { index: 4, total: 5 } });
+      const out = runCombat(party, goblins, seed, { ...COMBAT_RULES, lairDepth: { index: 4, total: 5 } });
       if (/catch the company unawares|try to sneak up/.test(out.opening)) monstersFirst++;
     }
     expect(monstersFirst / trials).toBeGreaterThan(0.6);

@@ -6,10 +6,10 @@ const g = new Game({ seed: Number(process.env.SEED ?? 42) });
 for (let i = 0; i < Number(process.env.TICKS ?? 600); i++) g.step();
 const kinds = new Map<string, number>();
 let fights = 0;
-for (const q of g.quests) {
-  for (const e of q.encounters) {
-    fights++;
-    for (const m of e.monsters) kinds.set(m.name, (kinds.get(m.name) ?? 0) + 1);
+for (const encounter of g.encounterSamples()) {
+  fights++;
+  for (const monster of encounter.monsters) {
+    kinds.set(monster.name, (kinds.get(monster.name) ?? 0) + monster.count);
   }
 }
 const sorted = [...kinds.entries()].sort((a, b) => b[1] - a[1]);
