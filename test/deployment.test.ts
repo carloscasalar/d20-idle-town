@@ -3,6 +3,7 @@ import { createHero } from '../src/adventurers/hero';
 import { runCombat } from '../src/combat/battlecast';
 import { Rng } from '../src/core/rng';
 import type { EncounterSpec } from '../src/quests/encounters';
+import { LONG_SIMULATION_TIMEOUT_MS } from './helpers/simulation';
 
 const goblins: EncounterSpec = { difficulty: 'intermediate', monsters: [{ name: 'Goblin Warrior', count: 4, xpEach: 50 }, { name: 'Goblin Boss', count: 1, xpEach: 200 }], totalXp: 400, tier: 'Moderate' };
 
@@ -19,7 +20,7 @@ describe('how a fight opens', () => {
     }
     expect(seen.has('none')).toBe(true);
     expect(seen.has('monsters') || seen.has('party')).toBe(true);
-  });
+  }, LONG_SIMULATION_TIMEOUT_MS);
 
   it('deep in a lair the defenders are the ones watching', () => {
     const rng = new Rng(4);

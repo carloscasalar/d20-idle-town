@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { HERO_CLASS_NAMES } from 'battlecast-engine';
 import { createHero, killHero, MAX_ARMOR_TIER, type Hero } from '../src/adventurers/hero';
 import {
   buryDead,
@@ -226,6 +227,21 @@ describe('companies arriving', () => {
 });
 
 describe('who arrives', () => {
+  it.each([5, 6])('a band of %i has its requested size, with four roles followed by random classes', (size) => {
+    const extraClasses = new Set<string>();
+    for (let seed = 1; seed <= 40; seed++) {
+      const party = createParty(new Rng(seed), 4, size, 17);
+      expect(party.members, `seed ${seed}`).toHaveLength(size);
+      expect(party.members.every((hero) => hero.level === 4)).toBe(true);
+      expect(coversFourRoles(party.members.slice(0, 4).map((hero) => hero.heroClass))).toBe(true);
+      for (const hero of party.members.slice(4)) {
+        expect(HERO_CLASS_NAMES).toContain(hero.heroClass);
+        extraClasses.add(hero.heroClass);
+      }
+    }
+    expect(extraClasses.size).toBeGreaterThan(1);
+  });
+
   it.each([1, 2, 3, 4])('a company asked for %i adventurers has that many, at the level asked', (size) => {
     const party = createParty(new Rng(size), 4, size, 17);
     expect(party.members).toHaveLength(size);
@@ -395,6 +411,29 @@ describe('strangers for a company that has waited', () => {
 });
 
 describe('raising the dead', () => {
+  it('a ruined temple leaves the fallen dead and takes no payment', () => {
+    let party!: Party;
+    let temple!: Employer;
+    let ada!: Hero;
+    const game = scene((scenario, rng) => {
+      temple = serviceOf(scenario.town, 'temple');
+      temple.ruined = true;
+      party = company(rng, 1, ['Bev', 'Cid', 'Dot'], ['Ada']);
+      ada = party.members[3]!;
+      party.gold = 190;
+      scenario.parties = [party];
+    });
+    game.step();
+    expect(shown(game, party.id).members.find((hero) => hero.name === 'Ada')!.alive).toBe(false);
+    expect(ada.goldSpent).toBe(0);
+    expect(shown(game, party.id).gold).toBe(190);
+    expect(shown(game, party.id).spent).toBe(0);
+    expect(temple.treasury).toBe(0);
+    expect(game.view().stats).toMatchObject({ resurrections: 0, goldSpentByHeroes: 0 });
+    expect(game.view().chronicle.filter((event) => event.kind === 'temple')).toEqual([]);
+    expect(game.view().events.filter((event) => event.kind === 'temple')).toEqual([]);
+  });
+
   it('pays for each fallen adventurer the purse can cover', () => {
     let temple!: Employer;
     let ada!: Hero;
@@ -959,6 +998,41 @@ describe('merging and burying', () => {
 });
 
 describe('retirement', () => {
+  it('equal-level veterans retire by experience, then by their order in the company', () => {
+    let party!: Party;
+    const game = scene((scenario, rng) => {
+      party = company(rng, 8, ['Ada', 'Bev', 'Cid', 'Dot']);
+      party.members[0]!.xp = 20_000;
+      party.members[1]!.xp = 40_000;
+      party.members[2]!.xp = 40_000;
+      party.members[3]!.xp = 30_000;
+      party.gold = 100_000;
+      scenario.parties = [party];
+    });
+    game.step();
+    expect(namesOf(game, party.id)).toEqual(['Ada', 'Cid', 'Dot']);
+    expect(game.view().town.employers.find((employer) => employer.title === 'Retired adventurer')?.name).toBe('Bev');
+    expect(game.view().stats.retirements).toBe(1);
+  });
+
+  it('the highest-level living veteran retires even when earlier members have more experience', () => {
+    let party!: Party;
+    const game = scene((scenario, rng) => {
+      party = company(rng, 8, ['Ada', 'Bev', 'Cid', 'Dot'], ['Eve']);
+      party.members[0]!.xp = 50_000;
+      party.members[1]!.level = 10;
+      party.members[2]!.level = 9;
+      party.members[2]!.xp = 40_000;
+      party.members[4]!.level = 12;
+      party.gold = 100_000;
+      scenario.parties = [party];
+    });
+    game.step();
+    expect(namesOf(game, party.id)).toEqual(['Ada', 'Cid', 'Dot', 'Eve']);
+    expect(game.view().town.employers.find((employer) => employer.title === 'Retired adventurer')?.name).toBe('Bev');
+    expect(game.view().stats.retirements).toBe(1);
+  });
+
   it('a company below level 8 does not retire', () => {
     let party!: Party;
     const game = scene((scenario, rng) => {

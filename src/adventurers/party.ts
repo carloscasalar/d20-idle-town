@@ -1,7 +1,7 @@
 import { partyName } from '../core/names';
 import type { Rng } from '../core/rng';
 import type { MagicItem } from '../items/items';
-import type { HeroClassName } from 'battlecast-engine';
+import { HERO_CLASS_NAMES, type HeroClassName } from 'battlecast-engine';
 import { coinReasons, purse, transfer, type GoldStatistics } from '../town/coin';
 import { createHero, type Hero } from './hero';
 
@@ -68,6 +68,7 @@ export function rollClasses(rng: Rng, size: number): HeroClassName[] {
     const options = role.filter((c) => !chosen.includes(c));
     chosen.push(rng.pick(options.length > 0 ? options : role));
   }
+  while (chosen.length < size) chosen.push(rng.pick(HERO_CLASS_NAMES));
   return chosen;
 }
 

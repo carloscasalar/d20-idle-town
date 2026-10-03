@@ -910,9 +910,11 @@ export class Game {
     });
   }
 
-  /** The richest, most seasoned adventurer in town may hang up the sword and buy a business. */
+  /** The most seasoned living veteran may retire when the company can afford a business. */
   private retire(p: Party): boolean {
-    const veteran = aliveMembers(p).find((h) => h.level >= RETIREMENT_LEVEL);
+    const veteran = aliveMembers(p)
+      .filter((h) => h.level >= RETIREMENT_LEVEL)
+      .sort((a, b) => b.level - a.level || b.xp - a.xp)[0];
     if (!veteran || p.gold < RETIREMENT_PRICE + resurrectionCost(partyLevel(p))) return false;
     p.members = p.members.filter((h) => h !== veteran);
     for (const item of veteran.items) p.stash.push(item);
@@ -936,14 +938,16 @@ export class Game {
     const temple = serviceOf(this.town, 'temple');
     const raised: Hero[] = [];
     let bill = 0;
-    for (const dead of deadMembers(p)) {
-      const cost = resurrectionCost(dead.level);
-      if (p.gold < cost) continue;
-      transfer(purse(p), treasury(temple), cost, 'service', this.stats, coinReasons, dead);
-      resurrectHero(dead);
-      this.stats.resurrections += 1;
-      raised.push(dead);
-      bill += cost;
+    if (!temple.ruined) {
+      for (const dead of deadMembers(p)) {
+        const cost = resurrectionCost(dead.level);
+        if (p.gold < cost) continue;
+        transfer(purse(p), treasury(temple), cost, 'service', this.stats, coinReasons, dead);
+        resurrectHero(dead);
+        this.stats.resurrections += 1;
+        raised.push(dead);
+        bill += cost;
+      }
     }
     if (raised.length > 0) {
       this.chronicleLog('temple', `${p.name} pay ${bill} gp at the ${temple.name}. ${listNames(raised.map(describeHero))} ${raised.length === 1 ? 'draws' : 'draw'} breath again.`);
