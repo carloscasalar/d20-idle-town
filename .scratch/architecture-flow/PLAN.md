@@ -24,7 +24,7 @@ Status values: `todo`, `in-progress`, `done`, `blocked`.
 | 09b | A ruined tavern still hears the free Persuasion attempt | bug fix | done | 64db8e7 (Cursor; checked by the orchestrator, 2-file diff) |
 | 10 | Job intel: deepen the module, remove the string-keyed `investigations`; take `learnIntel`/`revealAll` off the Board and `recordInvestigation`/`payService` off the roster | refactor | done | b3d36c4, 3c8407b (Cursor; 1 correction round) |
 | 11a | Configuration: one `GameConfig` in sections, every tunable value in one home, deep partial overrides, JSON round trip, validation | refactor | done | 518f324, 87d5ce3 (Cursor; 1 correction round) |
-| 11b | Kinds of work, steps and gold reasons as named data | refactor | in-progress | Codex |
+| 11b | Kinds of work, steps and gold reasons as named data | refactor | in-progress | Cursor (Codex still at its limit until 1:32 PM; the orchestrator misread the time) |
 | 11 (scope notes) | Configuration: `GameConfig` in sections per module, plain data, ready to load from YAML; remaining `'assault'` branches in `Game` and the expedition; a coin object built once with its statistics and reason table, named effect fields instead of five positional booleans; town service steps as named entries instead of one positional slot; `GameConfig` sections (`board`, `roster`, ...) instead of flat-merged renamed fields | refactor | todo | |
 
 Not planned: typed domain events (candidate 6). It waits for a second renderer.
