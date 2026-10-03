@@ -15,7 +15,7 @@ Status values: `todo`, `in-progress`, `done`, `blocked`.
 | 04b | Board: configuration, behaviour per kind of work by data, and three interface leaks | refactor | done | 091a2c8, 37cb0ca, db154f6 (Codex; 1 correction round) |
 | 05 | Coin transfers: audit and characterisation tests, plus two counter bugs they exposed | tests + bug fix | done | f78a95f, e2ad6f4, 3e02d62 (Codex, then Cursor; 1 correction round) |
 | 06 | Coin transfers: one module moves gold, with reasons as data | refactor | done | 0288d2a, f11e248 (bug fix), a7ed2a9, 991b039 (Cursor; 2 correction rounds) |
-| 06c | A fight crashes when a Gargantuan monster does not fit (seed 75) | bug fix | in-progress | Cursor |
+| 06c | A fight crashes when a Gargantuan monster does not fit (seed 75) | bug fix | done | b615320 (Cursor; reviewed by Sonnet, no corrections) |
 | 07 | Company roster: characterisation tests (arrivals, recruiting, merging, retirement) | tests | in-progress | Cursor |
 | 08 | Company roster: deepen the module, remove the `tryRetire` callback | refactor | todo | |
 | 09 | Job intel: characterisation tests (investigation, divination, reading the road) | tests | todo | |
@@ -49,3 +49,5 @@ Bugs found during a task get a new row inserted before the task continues.
 - Turn 06: the reviewer's 1,500-hour sweep over 150 seeds found that a guild in debt posts a Bounty with a negative reward; the coin module's new refusal turned that old bug into a crash on five seeds. Fixed first (f11e248: Bounties use the Contract posting threshold), then two corrections typed the gold statistics and froze the reason table. Fixture edits were allowed only to move where an expected value is read from.
 - Lesson: a long random sweep (150 seeds × 1,500 hours) found what the three 400-hour regression seeds never reach. Worth running once per refactor.
 - The same sweep found an older crash (seed 75: a Gargantuan Roc does not fit the red team's zone). Bug-fix turn 06c before the roster work.
+- Turn 06c: the engine's placement scan gave up although the field had room; the adapter now tries every in-bounds origin only after the engine throws, so fights that placed before are unchanged. A 150-seed, 1,500-hour sweep runs clean. First review on Sonnet instead of the default model: it verified the same depth of claims (fallback reached only on the placement error, no random draw, tests fail without the fix) at a lower cost. One non-blocking weakness noted: the focused test asserts only the sixth Roc's name.
+- Lesson: a Sonnet reviewer is enough for a contained bug fix; keep the default model for refactor reviews where design judgement matters.
