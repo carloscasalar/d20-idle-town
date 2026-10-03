@@ -40,7 +40,7 @@ export interface CoinEffects {
 /** A table of reasons. A movement's reason must be one of its keys. */
 export type CoinTable<Reason extends string> = Readonly<Record<Reason, CoinEffects>>;
 
-/** A company pays an employer, including paying to learn about work. */
+/** A company pays an employer. Paying to learn about work is that same payment. */
 const purchase: CoinEffects = freeze({
   spent: true,
   earned: true,
@@ -49,8 +49,8 @@ const purchase: CoinEffects = freeze({
   adventurer: true,
 });
 
-/** Gold arriving that is not a payment: income, a windfall, or spoils. */
-const receipt: CoinEffects = freeze({
+/** Daily income from a Holding. A windfall is that income, recovered when the Holding is freed. */
+const income: CoinEffects = freeze({
   spent: false,
   earned: true,
   goldPaid: false,
@@ -58,19 +58,10 @@ const receipt: CoinEffects = freeze({
   adventurer: false,
 });
 
-/** Gold leaving that is not a purchase: upkeep, a forfeit, looting, or a wipe. */
-const loss: CoinEffects = freeze({
+/** An employer's daily costs. A forfeit is that same loss when no Lair receives an unanswered Contract. */
+const upkeep: CoinEffects = freeze({
   spent: true,
   earned: false,
-  goldPaid: false,
-  goldSpentByHeroes: false,
-  adventurer: false,
-});
-
-/** Gold moving between holders without counting as pay or a hero's spending. */
-const exchange: CoinEffects = freeze({
-  spent: true,
-  earned: true,
   goldPaid: false,
   goldSpentByHeroes: false,
   adventurer: false,
@@ -79,7 +70,6 @@ const exchange: CoinEffects = freeze({
 /**
  * One entry per reason. Similar movements that the world treats differently
  * stay different keys; nothing in the movement code branches on the name.
- * Reasons that must touch the same counters share one effect object.
  * Frozen: a new reason is a new key, and a typo is a compile error.
  *
  * These effects are the accounting identity of each movement, not a tunable
@@ -88,28 +78,28 @@ const exchange: CoinEffects = freeze({
 export const coinReasons = freeze({
   /** A company pays an employer for a service. */
   service: purchase,
-  /** A company pays to learn about a Contract or Bounty. Same counters as a service. */
+  /** A company pays to learn about a Contract or Bounty. */
   intel: purchase,
   /** An employer buys gear back from a company. */
-  resale: exchange,
+  resale: freeze({ spent: true, earned: true, goldPaid: false, goldSpentByHeroes: false, adventurer: false }),
   /** An employer pays a completed Contract or Bounty. */
   reward: freeze({ spent: true, earned: true, goldPaid: true, goldSpentByHeroes: false, adventurer: false }),
   /** Daily income from a Holding. */
-  income: receipt,
-  /** Income recovered when a Holding is freed. Same counters as daily income. */
-  windfall: receipt,
-  /** Gold taken from a Lair's hoard or a Holding's loot. Same counters as income. */
-  spoils: receipt,
-  /** An unanswered Contract's loss, taken by an active Lair. Same counters as upkeep. */
-  looting: loss,
-  /** That same loss when no active Lair receives it. Same counters as upkeep. */
-  forfeit: loss,
-  /** A wiped company's purse, left in the field. Same counters as upkeep. */
-  wipe: loss,
-  /** Survivors bring their company's purse to the host company. Same counters as a resale. */
-  merger: exchange,
+  income,
+  /** Income recovered when a Holding is freed. */
+  windfall: income,
+  /** Gold taken from a Lair's hoard or a Holding's loot. */
+  spoils: freeze({ spent: false, earned: true, goldPaid: false, goldSpentByHeroes: false, adventurer: false }),
+  /** An unanswered Contract's loss, taken by an active Lair. */
+  looting: freeze({ spent: true, earned: false, goldPaid: false, goldSpentByHeroes: false, adventurer: false }),
+  /** That same loss when no active Lair receives it. */
+  forfeit: upkeep,
+  /** A wiped company's purse, left in the field. */
+  wipe: freeze({ spent: true, earned: false, goldPaid: false, goldSpentByHeroes: false, adventurer: false }),
+  /** Survivors bring their company's purse to the host company. */
+  merger: freeze({ spent: true, earned: true, goldPaid: false, goldSpentByHeroes: false, adventurer: false }),
   /** An employer's daily costs. The treasury may go into debt. */
-  upkeep: loss,
+  upkeep,
   /** Buying a business. The new treasury is opening capital, not earnings. */
   retirement: freeze({ spent: true, earned: false, goldPaid: false, goldSpentByHeroes: true, adventurer: false }),
 });
@@ -226,7 +216,7 @@ export function heldGold(holders: readonly Holder[]): number {
 }
 
 /** Move gold from one holder to another. The sum over holders is unchanged. */
-export function transfer<Reason extends string>(
+function transfer<Reason extends string>(
   from: Holder,
   to: Holder,
   amount: number,
@@ -239,7 +229,7 @@ export function transfer<Reason extends string>(
 }
 
 /** Gold enters the world and is credited to one holder. */
-export function source<Reason extends string>(
+function source<Reason extends string>(
   to: Holder,
   amount: number,
   reason: Reason,
@@ -250,7 +240,7 @@ export function source<Reason extends string>(
 }
 
 /** Gold leaves the world from one holder. */
-export function sink<Reason extends string>(
+function sink<Reason extends string>(
   from: Holder,
   amount: number,
   reason: Reason,

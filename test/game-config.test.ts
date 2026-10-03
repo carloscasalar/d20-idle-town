@@ -28,7 +28,7 @@ describe('game configuration', () => {
     if (!resolved.ok) return;
     expect(resolved.config.board.travelTicks).toBe(9);
     expect(resolved.config.board.windfallDays).toBe(DEFAULT_CONFIG.board.windfallDays);
-    expect(resolved.config.board.contractOpenTicks).toBe(DEFAULT_CONFIG.board.contractOpenTicks);
+    expect(resolved.config.kinds.contract.openTicks).toBe(DEFAULT_CONFIG.kinds.contract.openTicks);
     expect(resolved.config.roster).toEqual(DEFAULT_CONFIG.roster);
     expect(resolved.config.world).toEqual(DEFAULT_CONFIG.world);
   });

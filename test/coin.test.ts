@@ -7,10 +7,8 @@ import {
   heldGold,
   hoard,
   loot,
+  openCoin,
   purse,
-  sink,
-  source,
-  transfer,
   treasury,
   type CoinEffects,
   type Holder,
@@ -48,13 +46,13 @@ describe('coin movements', () => {
     for (const kind of ['purse', 'treasury', 'hoard', 'loot'] as const) {
       const sourced = accounts();
       const before = heldGold(Object.values(sourced.holders));
-      source(sourced.holders[kind], AMOUNT, 'probe', sourced.statistics, PROBE);
+      openCoin(sourced.statistics, PROBE).source(sourced.holders[kind], AMOUNT, 'probe');
       expect(balance(sourced.holders[kind])).toBe(balance(accounts().holders[kind]) + AMOUNT);
       expect(heldGold(Object.values(sourced.holders))).toBe(before + AMOUNT);
 
       const sunk = accounts();
       const sunkBefore = heldGold(Object.values(sunk.holders));
-      sink(sunk.holders[kind], AMOUNT, 'probe', sunk.statistics, PROBE, sunk.adventurer);
+      openCoin(sunk.statistics, PROBE).sink(sunk.holders[kind], AMOUNT, 'probe', sunk.adventurer);
       expect(balance(sunk.holders[kind])).toBe(balance(accounts().holders[kind]) - AMOUNT);
       expect(heldGold(Object.values(sunk.holders))).toBe(sunkBefore - AMOUNT);
     }
@@ -65,7 +63,7 @@ describe('coin movements', () => {
     for (let i = 0; i < cycle.length; i++) {
       const from = cycle[i]!;
       const to = cycle[(i + 1) % cycle.length]!;
-      transfer(moved.holders[from], moved.holders[to], AMOUNT, 'probe', moved.statistics, PROBE, moved.adventurer);
+      openCoin(moved.statistics, PROBE).transfer(moved.holders[from], moved.holders[to], AMOUNT, 'probe', moved.adventurer);
     }
     expect(heldGold(Object.values(moved.holders))).toBe(sum);
     expect(balance(moved.holders.purse)).toBe(40);
@@ -86,27 +84,27 @@ describe('coin movements', () => {
   it('lets a treasury go into debt and a purse go below zero', () => {
     const employer = { treasury: 5, earned: 1, spent: 2 };
     const statistics = books();
-    sink(treasury(employer), 8, 'upkeep', statistics, coinReasons);
+    openCoin(statistics, coinReasons).sink(treasury(employer), 8, 'upkeep');
     expect(employer).toEqual({ treasury: -3, earned: 1, spent: 10 });
     expect(statistics).toEqual(books());
 
     const company = { gold: 3, earned: 1, spent: 2 };
     const shop = { treasury: 4, earned: 0, spent: 0 };
-    transfer(purse(company), treasury(shop), AMOUNT, 'service', statistics, coinReasons);
+    openCoin(statistics, coinReasons).transfer(purse(company), treasury(shop), AMOUNT, 'service');
     expect(company.gold).toBe(-7);
     expect(shop.treasury).toBe(14);
   });
 
   it('accepts a zero amount', () => {
     const { company, statistics } = accounts();
-    source(purse(company), 0, 'income', statistics, coinReasons);
+    openCoin(statistics, coinReasons).source(purse(company), 0, 'income');
     expect(company).toEqual({ gold: 40, earned: 3, spent: 5 });
     expect(statistics).toEqual(books());
   });
 
   it.each([-1, 1.5])('refuses %s', (amount) => {
     const { company, employer, statistics, adventurer } = accounts();
-    expect(() => transfer(purse(company), treasury(employer), amount, 'service', statistics, coinReasons, adventurer)).toThrow(/whole number/);
+    expect(() => openCoin(statistics, coinReasons).transfer(purse(company), treasury(employer), amount, 'service', adventurer)).toThrow(/whole number/);
     expect(company).toEqual({ gold: 40, earned: 3, spent: 5 });
     expect(employer).toEqual({ treasury: 80, earned: 7, spent: 11 });
     expect(statistics).toEqual(books());
@@ -131,7 +129,7 @@ describe('coin movements', () => {
     '%s moves only the counters and statistics named for it',
     (reason, purseGold, purseSpent, purseEarned, treasuryBalance, treasuryEarned, treasurySpent, goldPaid, goldSpentByHeroes, goldSpent) => {
       const { company, employer, statistics, adventurer } = accounts();
-      transfer(purse(company), treasury(employer), AMOUNT, reason, statistics, coinReasons, adventurer);
+      openCoin(statistics, coinReasons).transfer(purse(company), treasury(employer), AMOUNT, reason, adventurer);
       expect(company).toEqual({ gold: purseGold, earned: purseEarned, spent: purseSpent });
       expect(employer).toEqual({ treasury: treasuryBalance, earned: treasuryEarned, spent: treasurySpent });
       expect(statistics).toEqual({ goldPaid, goldSpentByHeroes });
@@ -146,21 +144,21 @@ describe('coin movements', () => {
     });
 
     const gifted = accounts();
-    source(hoard(gifted.lair), AMOUNT, 'tribute', gifted.statistics, tribute);
+    openCoin(gifted.statistics, tribute).source(hoard(gifted.lair), AMOUNT, 'tribute');
     expect(gifted.lair.hoard.gold).toBe(19);
     expect(gifted.lair).toEqual({ hoard: { gold: 19 } });
     expect(gifted.statistics).toEqual({ goldPaid: 23, goldSpentByHeroes: 17 });
     expect(counters(hoard(gifted.lair))).toBeUndefined();
 
     const lost = accounts();
-    sink(loot(lost.holding), AMOUNT, 'tribute', lost.statistics, tribute, lost.adventurer);
+    openCoin(lost.statistics, tribute).sink(loot(lost.holding), AMOUNT, 'tribute', lost.adventurer);
     expect(lost.holding.loot.gold).toBe(-6);
     expect(lost.adventurer.goldSpent).toBe(2);
     expect(lost.statistics.goldPaid).toBe(23);
     expect(lost.statistics.goldSpentByHeroes).toBe(17);
 
     const moved = accounts();
-    transfer(purse(moved.company), treasury(moved.employer), AMOUNT, 'tribute', moved.statistics, tribute);
+    openCoin(moved.statistics, tribute).transfer(purse(moved.company), treasury(moved.employer), AMOUNT, 'tribute');
     expect(moved.company).toEqual({ gold: 30, earned: 3, spent: 5 });
     expect(moved.employer).toEqual({ treasury: 90, earned: 17, spent: 11 });
     expect(moved.statistics).toEqual({ goldPaid: 23, goldSpentByHeroes: 17 });
@@ -183,12 +181,13 @@ describe('coin movements', () => {
       const from = holders[rng.int(0, holders.length - 1)]!;
       const to = holders[rng.int(0, holders.length - 1)]!;
       const kind = rng.int(0, 2);
-      if (kind === 0) transfer(from, to, amount, 'probe', statistics, quiet);
+      const coin = openCoin(statistics, quiet);
+      if (kind === 0) coin.transfer(from, to, amount, 'probe');
       else if (kind === 1) {
-        source(to, amount, 'probe', statistics, quiet);
+        coin.source(to, amount, 'probe');
         expected += amount;
       } else {
-        sink(from, amount, 'probe', statistics, quiet);
+        coin.sink(from, amount, 'probe');
         expected -= amount;
       }
       expect(heldGold(holders)).toBe(expected);

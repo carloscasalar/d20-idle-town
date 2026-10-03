@@ -61,7 +61,7 @@ const surveyBehavior: WorkBehavior = {
     theme: 'goblins',
     level: 1,
     encounters: [encounter],
-    ...knowledgeAtPosting(survey.countAtPosting, context.intel),
+    ...knowledgeAtPosting(survey.countAtPosting, context.intel.revealedAtPosting, false),
     reward: 40,
     itemReward: null,
     guildOnly: false,

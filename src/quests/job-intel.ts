@@ -53,8 +53,6 @@ export interface JobIntelConfig {
   maxRounds: number;
   /** Encounters revealed when a job is posted. */
   revealedAtPosting: number;
-  /** A bounty shows its encounter count as soon as it is posted. */
-  assaultRevealsCount: boolean;
   /** Idle-hour order, by step name. */
   steps: readonly string[];
 }
@@ -67,7 +65,6 @@ export const DEFAULT_JOB_INTEL_CONFIG: JobIntelConfig = freeze({
   roundReserveFactor: 1,
   maxRounds: 2,
   revealedAtPosting: 1,
-  assaultRevealsCount: true,
   steps: ['freeAttempt', 'divination', 'paidRound'],
 });
 
@@ -149,14 +146,15 @@ export function difficultyCode(work: {
 
 /**
  * How much is public when work is posted.
- * `configured` follows assaultRevealsCount; a boolean is that kind's own rule.
+ * `configured` follows that kind's `revealsCount`; a boolean is the kind's own rule.
  */
 export function knowledgeAtPosting(
   countAtPosting: boolean | 'configured',
-  config: JobIntelConfig,
+  revealedAtPosting: number,
+  revealsCount: boolean,
 ): { revealed: number; countRevealed: boolean } {
-  const countRevealed = countAtPosting === 'configured' ? config.assaultRevealsCount : countAtPosting;
-  return { revealed: config.revealedAtPosting, countRevealed };
+  const countRevealed = countAtPosting === 'configured' ? revealsCount : countAtPosting;
+  return { revealed: revealedAtPosting, countRevealed };
 }
 
 /** One try per job, while the tavern stands. Success and failure both spend the hour. */
@@ -256,3 +254,6 @@ export const JOB_INTEL_STEPS: Readonly<Record<string, JobIntelStep>> = Object.fr
   divination,
   paidRound,
 });
+
+/** Every step a configuration may name. The default list is `INTEL_STEP_NAMES`. */
+export const INTEL_STEP_REGISTRY: readonly string[] = Object.freeze(Object.keys(JOB_INTEL_STEPS));

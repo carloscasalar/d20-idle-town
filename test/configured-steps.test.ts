@@ -28,7 +28,7 @@ describe('configured steps', () => {
     if (!checked.ok) expect(checked.errors).toContain('services.steps: unknown step "shoe-shine"');
   });
 
-  it('rejects a holding that does not exist and a weight list of all zeroes', () => {
+  it('rejects a holding that does not exist, a weight list of all zeroes, and an unknown kind', () => {
     const holdings = document();
     (holdings.town as { retiredHoldings: string[] }).retiredHoldings = ['castle'];
     const unknownHolding = validateGameConfig(holdings);
@@ -40,6 +40,12 @@ describe('configured steps', () => {
     const zero = validateGameConfig(weights);
     expect(zero.ok).toBe(false);
     if (!zero.ok) expect(zero.errors).toContain('quests.encounterCounts: every weight is zero');
+
+    const kinds = document();
+    (kinds.kinds as Record<string, unknown>).survey = { renown: 1 };
+    const unknownKind = validateGameConfig(kinds);
+    expect(unknownKind.ok).toBe(false);
+    if (!unknownKind.ok) expect(unknownKind.errors).toContain('kinds: unknown kind "survey"');
   });
 });
 

@@ -7,6 +7,7 @@ import type { Lair } from '../town/lairs';
 import type { Employer, EmployerKind } from '../town/town';
 import { buildEncounter, type Difficulty, type EncounterConfig, type EncounterSpec } from './encounters';
 import { knowledgeAtPosting, type JobIntelConfig } from './job-intel';
+import type { WorkKindConfigs } from '../sim/kind-config';
 import { assaultProfile, contractProfile, type QuestKind } from '../sim/work-kinds';
 import { THEMES, themeMonsters, type ThemeId } from './themes';
 
@@ -63,9 +64,6 @@ export interface QuestConfig {
   nobleItemChance: number;
   guildOnlyKinds: EmployerKind[];
   guildOnlyLevel: number;
-  assaultEncounters: [number, number];
-  assaultDifficultyWeights: { difficulty: Difficulty; weight: number }[];
-  bountyPerLevel: number;
   bossLootLevelBonus: number;
   bossGuardCount: number;
 }
@@ -96,13 +94,6 @@ export const DEFAULT_QUEST_CONFIG: QuestConfig = freeze({
   nobleItemChance: 0.04,
   guildOnlyKinds: ['noble', 'faction'],
   guildOnlyLevel: 2,
-  assaultEncounters: [3, 5],
-  assaultDifficultyWeights: [
-    { difficulty: 'easy', weight: 2 },
-    { difficulty: 'intermediate', weight: 4 },
-    { difficulty: 'hard', weight: 2 },
-  ],
-  bountyPerLevel: 150,
   bossLootLevelBonus: 2,
   bossGuardCount: 1,
 });
@@ -112,6 +103,7 @@ export interface QuestGeneration {
   encounters: EncounterConfig;
   intel: JobIntelConfig;
   items: ItemConfig;
+  kinds: DeepReadonly<WorkKindConfigs>;
 }
 
 /** Short jobs are common, long ones rare. */
@@ -171,7 +163,7 @@ export function generateQuest(rng: Rng, terms: QuestTerms, generation: QuestGene
     theme,
     level,
     encounters,
-    ...knowledgeAtPosting(contractProfile.countAtPosting, intel),
+    ...knowledgeAtPosting(contractProfile.countAtPosting, intel.revealedAtPosting, false),
     reward,
     itemReward,
     guildOnly,
@@ -188,13 +180,14 @@ const ASSAULT_TITLES = ['Break {lair}', 'End the reign of {boss}', 'Storm {place
  * its guard at the end. The lair's own hoard is the prize, plus the guild's bounty.
  */
 export function generateAssault(rng: Rng, lair: Lair, guild: Employer, partySize: number, tick: number, difficultyScale: number, generation: QuestGeneration): Quest {
-  const { quests, encounters: encountersRules, intel, items } = generation;
-  const count = rng.int(...quests.assaultEncounters);
-  const assaultWeights = quests.assaultDifficultyWeights.map((entry) => ({ item: entry.difficulty, weight: entry.weight }));
+  const { quests, encounters: encountersRules, intel, items, kinds } = generation;
+  const assault = kinds.assault;
+  const count = rng.int(...assault.encounters);
+  const assaultWeights = assault.difficultyWeights.map((entry) => ({ item: entry.difficulty, weight: entry.weight }));
   const difficulties: Difficulty[] = Array.from({ length: count - 1 }, () => rng.weighted(assaultWeights));
   const encounters = difficulties.map((d) => buildEncounter(rng, lair.theme, partySize, lair.level, d, difficultyScale, encountersRules));
   encounters.push(buildBossEncounter(rng, lair, partySize, difficultyScale, quests, encountersRules));
-  const bounty = Math.min(guild.treasury, quests.bountyPerLevel * lair.level);
+  const bounty = Math.min(guild.treasury, assault.rewardPerLevel * lair.level);
   const title = rng.pick(ASSAULT_TITLES).replace('{lair}', lair.name).replace('{boss}', lair.boss).replace('{place}', lair.place);
   return {
     id: rng.id('quest'),
@@ -207,7 +200,7 @@ export function generateAssault(rng: Rng, lair: Lair, guild: Employer, partySize
     theme: lair.theme,
     level: lair.level,
     encounters,
-    ...knowledgeAtPosting(assaultProfile.countAtPosting, intel),
+    ...knowledgeAtPosting(assaultProfile.countAtPosting, intel.revealedAtPosting, assault.revealsCount),
     reward: bounty,
     itemReward: rollLootItem(rng, lair.level + quests.bossLootLevelBonus, items),
     // The guild wants the lair gone more than it wants dues: anyone may take the bounty.

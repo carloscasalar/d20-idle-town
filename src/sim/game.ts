@@ -31,7 +31,8 @@ import {
   type Employer,
   type Town,
 } from '../town/town';
-import { Board, type BoardContext } from './board';
+import { Board, WORK_KINDS, type BoardContext } from './board';
+import { appetiteOf } from './kind-config';
 import { resolveGameConfig, TICKS_PER_DAY, type DeepPartial, type GameConfig } from './config';
 
 export { TICKS_PER_DAY, type GameConfig, type DeepPartial };
@@ -263,7 +264,7 @@ export class Game {
     const resolved = resolveGameConfig(partial);
     if (!resolved.ok) throw new Error(resolved.errors.join('\n'));
     this.config = resolved.config;
-    this.board = new Board(this.config.board);
+    this.board = new Board(this.config.board, WORK_KINDS, this.config.kinds);
     this.rng = new Rng(this.config.seed);
     this.town = generateTown(this.rng, this.config.town, this.config.holdings);
     this.roster = new CompanyRoster(this.config.roster, this.config.heroes, this.config.town, this.config.holdings);
@@ -641,7 +642,7 @@ export class Game {
     for (const lair of this.activeLairs) {
       if (lair.questId) continue;
       const strongest = Math.max(0, ...this.activeParties.map(partyLevel));
-      if (strongest < lair.level - this.config.world.bountyLevelGap) continue;
+      if (strongest < lair.level - this.config.kinds.assault.levelGap) continue;
       this.board.postBounty(lair, this.boardContext());
     }
   }
@@ -725,7 +726,7 @@ export class Game {
     // never more: the small jobs are for the companies that need them.
     const stretch = p.idleTicks >= this.config.world.idleStretchTicks ? this.config.world.levelStretch : 0;
     const standing = this.openQuests.find((q) => this.board.profile(q.kind).offer === 'lair' && q.level <= level);
-    if (standing && p.gold >= resurrectionCost(level, this.config.heroes) && this.rng.chance(this.config.world.assaultAppetite)) {
+    if (standing && p.gold >= resurrectionCost(level, this.config.heroes) && this.rng.chance(appetiteOf(this.config.kinds, standing.kind))) {
       this.acceptQuest(p, standing);
       return;
     }

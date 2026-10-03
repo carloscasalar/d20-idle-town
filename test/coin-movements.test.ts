@@ -7,6 +7,7 @@ import { Rng } from '../src/core/rng';
 import { instantiate, ITEM_CATALOGUE } from '../src/items/items';
 import type { Quest } from '../src/quests/quest';
 import { Board, DEFAULT_BOARD_CONFIG } from '../src/sim/board';
+import { profilesById } from '../src/sim/work-kinds';
 import { advanceExpedition, type ExpeditionContext } from '../src/sim/expedition';
 import { openCoin } from '../src/town/coin';
 import { Game, mergeConfig, resolveGameConfig, TICKS_PER_DAY, type DeepPartial, type GameConfig, type GameScenario, type GameStats } from '../src/sim/game';
@@ -366,7 +367,7 @@ describe('homecoming payments', () => {
     const board = new Board(DEFAULT_BOARD_CONFIG);
     board.replaceForScenario([q]);
     const context: ExpeditionContext = {
-      town, quest: q, rng, ledger, coin: openCoin(statistics), ...expeditionRules({ travelTicks: 2, restTicks: 8, skillDc: 15 }),
+      town, quest: q, rng, ledger, coin: openCoin(statistics), kinds: profilesById(), ...expeditionRules({ travelTicks: 2, restTicks: 8, skillDc: 15 }),
       combat: () => { throw new Error('Homecoming does not fight'); }, report: (event) => { reports.push(event.text); },
       disband: (company) => roster.disband(company),
       knowledge: () => board.knowledge(q), leaveLoot: () => {},

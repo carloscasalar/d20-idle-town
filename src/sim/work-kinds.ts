@@ -1,20 +1,18 @@
 /**
  * Named data for each kind of work. A new kind is one profile plus one
- * behaviour entry on the Board. Game, the expedition and job intelligence
- * read these fields; they do not branch on the kind's name.
+ * behaviour entry on the Board, and a posting rule in Game. The expedition
+ * and job intelligence read these fields.
  */
+
+import type { DeepReadonly } from '../core/readonly';
+import { renownOf, type WorkKindConfigs } from './kind-config';
 
 export type QuestKind = 'contract' | 'assault' | (string & {});
 
-export interface RenownAmounts {
-  contractRenown: number;
-  bountyRenown: number;
-}
-
 export interface WorkProfile {
   readonly id: QuestKind;
-  /** Gold of renown this kind grants when it succeeds. `none` grants nothing. */
-  readonly renown: 'contractRenown' | 'bountyRenown' | 'none';
+  /** `configured` grants the renown in this kind's configuration. `none` grants nothing. */
+  readonly renown: 'configured' | 'none';
   /** Badge on the board card. Empty means no badge. The kind's id is the badge's CSS class. */
   readonly badge: string;
   /** Phrase before a lair's name on the board card. */
@@ -27,7 +25,7 @@ export interface WorkProfile {
   readonly lairDepth: boolean;
   /**
    * Whether the encounter count is public when the work is posted.
-   * `configured` follows the intel section's assaultRevealsCount flag.
+   * `configured` follows that kind's `revealsCount`.
    */
   readonly countAtPosting: boolean | 'configured';
   /**
@@ -39,20 +37,14 @@ export interface WorkProfile {
   readonly offer: 'lair' | 'holding' | 'none';
 }
 
-export function renownGain(profile: WorkProfile, amounts: RenownAmounts): number {
-  switch (profile.renown) {
-    case 'contractRenown':
-      return amounts.contractRenown;
-    case 'bountyRenown':
-      return amounts.bountyRenown;
-    default:
-      return 0;
-  }
+export function renownGain(profile: WorkProfile, kinds: DeepReadonly<WorkKindConfigs>): number {
+  if (profile.renown === 'none') return 0;
+  return renownOf(kinds, profile.id);
 }
 
 export const contractProfile: WorkProfile = Object.freeze({
   id: 'contract',
-  renown: 'contractRenown',
+  renown: 'configured',
   badge: '',
   lairRelation: 'raid out of',
   lairFigure: 'strength',
@@ -64,7 +56,7 @@ export const contractProfile: WorkProfile = Object.freeze({
 
 export const assaultProfile: WorkProfile = Object.freeze({
   id: 'assault',
-  renown: 'bountyRenown',
+  renown: 'configured',
   badge: 'lair',
   lairRelation: 'assault on',
   lairFigure: 'hoard',

@@ -9,7 +9,8 @@ import { THEMES, type ThemeId } from '../quests/themes';
 import { ASSET_KINDS, type Asset } from '../town/assets';
 import type { Lair } from '../town/lairs';
 import { describeEncounter, type EncounterConfig, type EncounterSpec } from '../quests/encounters';
-import { assaultProfile, contractProfile, EMPTY_PROFILE, renownGain, type WorkProfile } from './work-kinds';
+import { DEFAULT_KIND_CONFIGS, type WorkKindConfigs } from './kind-config';
+import { assaultProfile, contractProfile, renownGain, type WorkProfile } from './work-kinds';
 import type { ItemConfig } from '../items/items';
 import { assetById, serviceOf, type Employer, type Town } from '../town/town';
 
@@ -17,14 +18,11 @@ import { assetById, serviceOf, type Employer, type Town } from '../town/town';
 export interface BoardConfig {
   windfallDays: number;
   lootingDays: number;
-  bountyRenown: number;
-  contractRenown: number;
   failureRenownLoss: number;
   reputationGain: number;
   expiryCooldown: [number, number];
   failureCooldown: [number, number];
   pruningThreshold: number;
-  contractOpenTicks: number;
   travelTicks: number;
   difficultyScale: number;
   lairStrengthGain: number;
@@ -33,14 +31,11 @@ export interface BoardConfig {
 export const DEFAULT_BOARD_CONFIG: BoardConfig = freeze({
   windfallDays: 4,
   lootingDays: 2,
-  bountyRenown: 3,
-  contractRenown: 1,
   failureRenownLoss: 1,
   reputationGain: 1,
   expiryCooldown: [4, 10],
   failureCooldown: [2, 8],
   pruningThreshold: 200,
-  contractOpenTicks: 72,
   travelTicks: 2,
   difficultyScale: 1.15,
   lairStrengthGain: 1,
@@ -56,6 +51,8 @@ export interface WorkPosting {
 
 export interface WorkContext extends BoardContext {
   config: DeepReadonly<BoardConfig>;
+  kindTuning: DeepReadonly<WorkKindConfigs>;
+  profileOf: (kind: QuestKind) => WorkProfile;
   breakLair: (lair: Lair, company: Party, work: ReadonlyQuest, context: BoardContext) => void;
 }
 
@@ -70,8 +67,8 @@ export interface WorkBehavior {
   expire?: (work: ReadonlyQuest, context: WorkContext) => () => void;
   /** Absence means a broken lair does not withdraw this kind of work. */
   withdrawOnLairBreak?: (work: ReadonlyQuest, context: WorkContext) => void;
-  /** Named differences from the other kinds. Absence means the empty profile. */
-  profile?: WorkProfile;
+  /** Named differences from the other kinds. Required, so a registered kind cannot fall through to an empty profile. */
+  profile: WorkProfile;
 }
 
 export type WorkKinds = Readonly<Record<string, WorkBehavior>>;
@@ -108,7 +105,11 @@ export interface TakenWork {
 export class Board {
   private work: Quest[] = [];
 
-  constructor(private readonly config: DeepReadonly<BoardConfig>, private readonly kinds: WorkKinds = WORK_KINDS) {}
+  constructor(
+    private readonly config: DeepReadonly<BoardConfig>,
+    private readonly kinds: WorkKinds = WORK_KINDS,
+    private readonly kindTuning: DeepReadonly<WorkKindConfigs> = DEFAULT_KIND_CONFIGS,
+  ) {}
 
   /** Mutable escape hatches used only during Game.forTesting scenario setup. */
   replaceForScenario(work: Quest[]): void {
@@ -153,16 +154,14 @@ export class Board {
     return this.post(assaultProfile.id, { employer: serviceOf(context.town, 'guild'), lair }, context);
   }
 
-  /** Named rules for a kind. An unregistered kind has none of the built-in differences. */
+  /** Named rules for a kind. An unregistered kind throws. */
   profile(kind: QuestKind): WorkProfile {
-    return this.kinds[kind]?.profile ?? EMPTY_PROFILE;
+    return this.behavior(kind).profile;
   }
 
   /** Profiles of the kinds registered on this Board. The expedition reads this table. */
   profiles(): Readonly<Record<string, WorkProfile>> {
-    return Object.fromEntries(
-      Object.entries(this.kinds).flatMap(([kind, behavior]) => (behavior.profile ? [[kind, behavior.profile]] : [])),
-    );
+    return Object.fromEntries(Object.entries(this.kinds).map(([kind, behavior]) => [kind, behavior.profile]));
   }
 
   /** Link company and work; Expedition owns the journey and Game publishes acceptance. */
@@ -192,7 +191,7 @@ export class Board {
   expireContracts(context: BoardContext): void {
     const rules = this.rules(context);
     for (const work of this.work) {
-      if (work.status !== 'open' || context.tick - work.postedAt <= this.config.contractOpenTicks) continue;
+      if (work.status !== 'open' || context.tick - work.postedAt <= this.kindTuning.contract.openTicks) continue;
       const expire = this.behavior(work.kind).expire;
       if (!expire) continue;
       const consequences = expire(work, rules);
@@ -237,7 +236,13 @@ export class Board {
   }
 
   private rules(context: BoardContext): WorkContext {
-    return { ...context, config: this.config, breakLair: (lair, company, work, context) => this.breakLair(lair, company, work, context) };
+    return {
+      ...context,
+      config: this.config,
+      kindTuning: this.kindTuning,
+      profileOf: (kind) => this.profile(kind),
+      breakLair: (lair, company, work, context) => this.breakLair(lair, company, work, context),
+    };
   }
 
   private breakLair(lair: Lair, company: Party, work: ReadonlyQuest, context: BoardContext): void {
@@ -245,7 +250,7 @@ export class Board {
     lair.clearedAt = context.tick;
     context.ledger.lairsCleared += 1;
     const found = context.payHoard(lair, company);
-    company.renown = Math.min(context.renownCap, company.renown + renownGain(this.profile(work.kind), this.config));
+    company.renown = Math.min(context.renownCap, company.renown + renownGain(this.profile(work.kind), this.kindTuning));
     for (const candidate of this.work) {
       if (candidate.lairId !== lair.id || candidate.status !== 'open') continue;
       const consequences = this.behavior(candidate.kind).withdrawOnLairBreak;
@@ -392,7 +397,7 @@ function payContract(work: Readonly<Quest>, company: Party, employer: Employer, 
   employer.questsCompleted += 1;
   employer.reputation += context.config.reputationGain;
   company.questsDone += 1;
-  company.renown = Math.min(context.renownCap, company.renown + renownGain(contractProfile, context.config));
+  company.renown = Math.min(context.renownCap, company.renown + renownGain(context.profileOf(work.kind), context.kindTuning));
   context.ledger.questsCompleted += 1;
   let inKind = '';
   if (work.itemReward) {
@@ -489,8 +494,8 @@ function unansweredRaid(lair: Lair, context: WorkContext): void {
   lair.strength = Math.min(context.lairStrengthCap, lair.strength + context.config.lairStrengthGain);
 }
 
-function generationOf(context: BoardContext): QuestGeneration {
-  return { quests: context.quests, encounters: context.encounters, intel: context.intel, items: context.items };
+function generationOf(context: WorkContext): QuestGeneration {
+  return { quests: context.quests, encounters: context.encounters, intel: context.intel, items: context.items, kinds: context.kindTuning };
 }
 
 function report(context: BoardContext, kind: BoardEvent['kind'], text: string, chronicle = false): void {

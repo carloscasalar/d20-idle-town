@@ -9,6 +9,7 @@ import type { EncounterSpec } from '../src/quests/encounters';
 import { jobInquiry } from '../src/quests/job-intel';
 import type { Quest } from '../src/quests/quest';
 import { Board, DEFAULT_BOARD_CONFIG } from '../src/sim/board';
+import { profilesById } from '../src/sim/work-kinds';
 import { advanceExpedition, type CombatResolver, type ExpeditionContext, type ExpeditionEvent } from '../src/sim/expedition';
 import { openCoin } from '../src/town/coin';
 import { generateTown, serviceOf } from '../src/town/town';
@@ -63,7 +64,7 @@ function setup(level = 1) {
   const board = new Board(DEFAULT_BOARD_CONFIG);
   board.replaceForScenario([quest]);
   const context: ExpeditionContext = {
-    quest, town, rng, ledger, coin: openCoin(statistics), ...expeditionRules({ travelTicks: 2, restTicks: 2, skillDc: 15 }),
+    quest, town, rng, ledger, coin: openCoin(statistics), kinds: profilesById(), ...expeditionRules({ travelTicks: 2, restTicks: 2, skillDc: 15 }),
     combat,
     disband: (company) => roster.disband(company),
     report: (event) => { events.push(event); calls.push(`event:${event.kind}`); },

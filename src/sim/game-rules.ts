@@ -12,8 +12,6 @@ export interface WorldConfig {
   postingThreshold: number;
   postingCooldown: [number, number];
   ruinDays: number;
-  assaultAppetite: number;
-  bountyLevelGap: number;
   idleLevelWeight: number;
   busyLevelWeight: number;
   stretchReputation: number;
@@ -35,8 +33,6 @@ export const DEFAULT_WORLD_CONFIG: WorldConfig = freeze({
   postingThreshold: 25,
   postingCooldown: [12, 30],
   ruinDays: 3,
-  assaultAppetite: 0.35,
-  bountyLevelGap: 1,
   idleLevelWeight: 3,
   busyLevelWeight: 1,
   stretchReputation: 3,

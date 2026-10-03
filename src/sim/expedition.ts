@@ -9,7 +9,7 @@ import { describeEncounter, scaleEncounter, type EncounterConfig, type Encounter
 import { learnOnArrival, readTheRoad, type JobIntelConfig, type JobKnowledge } from '../quests/job-intel';
 import { difficultyCode, type ReadonlyQuest } from '../quests/quest';
 import { purse, treasury, type Coin } from '../town/coin';
-import { EMPTY_PROFILE, profilesById, type WorkProfile } from './work-kinds';
+import type { WorkProfile } from './work-kinds';
 import { serviceOf, type Town } from '../town/town';
 
 /** Recovery, rooms and the decision to turn back. Travel time is received from the Board. */
@@ -46,7 +46,7 @@ export interface ExpeditionEvent {
   chronicle?: boolean;
 }
 
-/** Expedition statistics. Gold statistics live on `ExpeditionContext.statistics`. */
+/** Expedition statistics. Gold movements use `ExpeditionContext.coin`. */
 export interface ExpeditionLedger {
   heroesDied: number;
   partiesWiped: number;
@@ -59,8 +59,8 @@ export interface ExpeditionContext {
   rng: Rng;
   ledger: ExpeditionLedger;
   coin: Coin;
-  /** Kind rules for this expedition. Defaults to the built-in table. */
-  kinds?: Readonly<Record<string, WorkProfile>>;
+  /** Kind profiles for this expedition. A missing kind is an error. */
+  kinds: Readonly<Record<string, WorkProfile>>;
   /** Received from the Board. */
   travelTicks: number;
   config: ExpeditionConfig;
@@ -300,8 +300,9 @@ function arriveHome(p: Party, q: ReadonlyQuest, context: ExpeditionContext): voi
 }
 
 function fightProfile(q: ReadonlyQuest, context: ExpeditionContext): WorkProfile {
-  const table = context.kinds ?? profilesById();
-  return table[q.kind] ?? EMPTY_PROFILE;
+  const profile = context.kinds[q.kind];
+  if (!profile) throw new Error(`No profile for kind of work "${q.kind}".`);
+  return profile;
 }
 
 function shouldRetreat(p: Party, startedWith: number, config: ExpeditionConfig): boolean {

@@ -8,6 +8,7 @@ import { DEFAULT_JOB_INTEL_CONFIG } from '../src/quests/job-intel';
 import { openCoin } from '../src/town/coin';
 import { difficultyCode, isFullyKnown, type Quest } from '../src/quests/quest';
 import { Board, DEFAULT_BOARD_CONFIG } from '../src/sim/board';
+import { profilesById } from '../src/sim/work-kinds';
 import { advanceExpedition, type ExpeditionContext, type ExpeditionEvent } from '../src/sim/expedition';
 import { Game, mergeConfig, type DeepPartial, type GameConfig, type GameScenario } from '../src/sim/game';
 import { createAsset } from '../src/town/assets';
@@ -121,7 +122,7 @@ function road(work = job(), skillDc = DEFAULT_JOB_INTEL_CONFIG.skillDc, seed = 1
   const events: ExpeditionEvent[] = [];
   const context: ExpeditionContext = {
     quest: board.byId(work.id), town: generateTown(rng, DEFAULT_TOWN_CONFIG, DEFAULT_HOLDING_CONFIG), rng: new Rng(seed),
-    ledger: { heroesDied: 0, partiesWiped: 0 }, coin: openCoin({ goldPaid: 0, goldSpentByHeroes: 0 }),
+    ledger: { heroesDied: 0, partiesWiped: 0 }, coin: openCoin({ goldPaid: 0, goldSpentByHeroes: 0 }), kinds: profilesById(),
     ...expeditionRules({ travelTicks: 4, skillDc }),
     combat: () => { throw new Error('Travel does not fight'); },
     disband: () => { throw new Error('Travel does not disband'); },

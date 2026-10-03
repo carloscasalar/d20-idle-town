@@ -28,7 +28,7 @@ export const DEFAULT_TOWN_SERVICE_CONFIG: TownServiceConfig = freeze({
   steps: ['potions', 'loot', 'items', 'dues', 'blessing', 'retirement', 'armour'],
 });
 
-/** Names a configuration may use for an idle hour in town, including the roster's retirement step. */
+/** The default idle-hour order. */
 export const SERVICE_STEP_NAMES = DEFAULT_TOWN_SERVICE_CONFIG.steps;
 
 /** Item statistics for a service visit. Gold statistics live on the context. */
@@ -68,6 +68,9 @@ export const TOWN_SERVICE_STEPS: Readonly<Record<string, TownServiceStep>> = {
   blessing: buyBlessing,
   armour: buyArmour,
 };
+
+/** Every step a configuration may name, including the roster's retirement step. */
+export const SERVICE_STEP_REGISTRY: readonly string[] = Object.freeze([...Object.keys(TOWN_SERVICE_STEPS), 'retirement']);
 
 /**
  * The default order, including a retirement step that does nothing.

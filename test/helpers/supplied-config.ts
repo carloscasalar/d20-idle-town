@@ -2,6 +2,7 @@ import { DEFAULT_HERO_ECONOMY } from '../../src/adventurers/hero';
 import { DEFAULT_COMBAT_CONFIG } from '../../src/combat/battlecast';
 import { DEFAULT_ENCOUNTER_CONFIG } from '../../src/quests/encounters';
 import { DEFAULT_JOB_INTEL_CONFIG } from '../../src/quests/job-intel';
+import { DEFAULT_KIND_CONFIGS } from '../../src/sim/kind-config';
 import { DEFAULT_QUEST_CONFIG, type QuestGeneration } from '../../src/quests/quest';
 import { DEFAULT_ITEM_CONFIG } from '../../src/items/items';
 import { DEFAULT_TOWN_SERVICE_CONFIG } from '../../src/town/services';
@@ -15,6 +16,7 @@ export const QUEST_GENERATION: QuestGeneration = {
   encounters: DEFAULT_ENCOUNTER_CONFIG,
   intel: DEFAULT_JOB_INTEL_CONFIG,
   items: DEFAULT_ITEM_CONFIG,
+  kinds: DEFAULT_KIND_CONFIGS,
 };
 
 export const COMBAT_RULES = { rules: DEFAULT_COMBAT_CONFIG, heroes: DEFAULT_HERO_ECONOMY };

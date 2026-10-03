@@ -426,3 +426,29 @@ the branches already had.
 across 29 files. The regression snapshot has no diff. Its SHA-256 remains
 `cbbf8cc5c7c6a321866dd4db3b27bef401a39557a003c05d7480ce703d2d7343`.
 `scripts/combat-sweep.ts` reported no crashes in seeds 1–150 for 1,500 hours.
+
+### Correction 1
+
+**Problem.** `transfer`, `source` and `sink` were still exported, and only the
+coin test called them. Contract payment added renown from the Contract profile,
+so a kind that reused that payment ignored its own `renown`. A missing
+expedition kind table, or a behaviour with no profile, became the empty profile
+with no error. The validator checked step names against the default lists, so a
+registered step outside those lists could not be configured. The documents said
+Game gained no branch, while Game still only posts contracts and bounties.
+Fields named after a kind (`assaultRevealsCount`, `assaultAppetite`,
+`bountyRenown`, and the rest) sat in other sections. Effect objects were also
+shared where the flags only happened to match.
+
+**Change.** The free movement functions are private; the coin test uses
+`openCoin`. Contract payment uses the work's own profile. A behaviour's profile
+and an expedition's kind table are required, and a missing profile throws.
+Step names are checked against the registry, with `retirement` for services.
+`kinds`, keyed by kind id, holds each kind's tunables, and an unknown kind is
+rejected. `intel` shares with `service`, income with windfall, and a forfeit
+with upkeep; spoils, looting, a wipe and a merger each have their own object.
+The documents say a new kind needs a table entry and a posting rule in Game.
+
+**Verification.** `pnpm typecheck` passed. `pnpm test` passed all 579 tests
+across 29 files. The regression snapshot has no diff. Its SHA-256 remains
+`cbbf8cc5c7c6a321866dd4db3b27bef401a39557a003c05d7480ce703d2d7343`.

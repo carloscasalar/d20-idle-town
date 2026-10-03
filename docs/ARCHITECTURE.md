@@ -101,11 +101,11 @@ RNG argument. Interleaving two worlds cannot change either world's IDs.
   Game still chooses idle work; neither it nor Expedition writes membership.
   Expedition calls its supplied `disband` operation on a wipe; Game connects
   that operation to the roster. Scenario
-  setup alone uses `recordsForScenario` and `replaceForScenario`.
+  setup alone uses the test-only `recordsForScenario` and `replaceForScenario`.
   `CompanyRosterConfig` and `DEFAULT_COMPANY_ROSTER_CONFIG` hold plain data.
   Game's `roster` section is that object. Company size and the renown cap are
   defined here; the Board and Expedition receive them. Context is last and supplies only the operation’s required
-  town, Board query, RNG, tick, ledger, coin statistics and synchronous report.
+  town, Board query, RNG, tick, ledger, the coin and synchronous report.
   `retirementStep` contributes a service function for the caller’s ordered list.
 
 ### `src/items` — the magic-item economy
@@ -134,11 +134,14 @@ enchanter buys back.
 
 - **`services.ts`** — `visitTownServices(party, context, steps)` tries the
   caller's ordered list of steps until one spends the hour. A step is the
-  generic `(company, context) => boolean`, and `runSteps` is the one function
-  that walks a list. The named steps are `potions`, `loot`, `items`, `dues`,
-  `blessing` and `armour`. `retirement` is the roster's step, registered under
-  that name when the list is resolved; services does not know what retirement
-  does. The default order is `services.steps` in the configuration. Each step
+  generic `(company, context) => boolean`. `resolveSteps` turns the configured
+  names into that list, and `runSteps` walks it. The registry names are
+  `potions`, `loot`, `items`, `dues`, `blessing` and `armour`, plus
+  `retirement`. `retirement` is the roster's step, registered under that name
+  when the list is resolved; services does not know what retirement does. The
+  default order is `services.steps` in the configuration. A configuration may
+  name any registered step, including one that is not in the default list.
+  Each step
   keeps the existing reserve, equipment allocation and synchronous reporting.
   Gold moves through the world's coin object. The blessing's hit points per
   level live on the services configuration and are passed into combat setup.
@@ -148,9 +151,11 @@ enchanter buys back.
   reason table. Callers name a purse, treasury, hoard or loot and one of three
   operations on that coin: `transfer`, `source` or `sink`, each with an amount
   and a reason. A reason's effects are named fields. Reasons that must touch
-  the same counters share one effect object: `intel` with `service`, income
-  with a windfall and with spoils, and upkeep with a forfeit, looting and a
-  wipe. A hoard and a loot store have no earned/spent counters. The module
+  the same counters share one effect object, and the comment on that object
+  says why: `intel` with `service`, income with a windfall, and a forfeit with
+  upkeep. Spoils, looting, a wipe and a merger each have their own object.
+  Callers use the coin; `transfer`, `source` and `sink` are private to the
+  module. A hoard and a loot store have no earned/spent counters. The module
   does not decide whether anyone can afford the amount, and it does not import
   `Game`. The reason table stays in code: the effects are the accounting
   identity of a movement, not a tunable of the world. Factories still set a
@@ -183,8 +188,9 @@ enchanter buys back.
   `Board.knowledge` is the only way to obtain the two operations knowledge
   allows: learn the next fact, or reveal every fact. Knowledge only grows.
   An idle hour tries an ordered list of named steps — `freeAttempt`, then
-  `divination`, then `paidRound` — resolved from `intel.steps` and run by the
-  same `runSteps` as town services. Reading the road and taking stock on
+  `divination`,   then `paidRound` — resolved from `intel.steps` with `resolveSteps`, then
+  walked by the same `runSteps` as town services. The validator accepts any
+  name in that registry, including one left out of the default list. Reading the road and taking stock on
   arrival call those same operations themselves. `JobIntelConfig` holds the
   skill difficulty, the price per level of divination and of a round, each
   reserve as a multiple of the resurrection price, the limit on paid rounds,
@@ -237,16 +243,21 @@ The **Board** (`board.ts`) owns the contracts and bounties. It is the only
 code that posts them, accepts them, ends them, or writes the links between a
 holding, a lair, a company and that work. Its `BoardConfig` is plain numerical
 configuration (including inclusive cooldown ranges). Game's `board` section is
-that object: `contractOpenTicks` stays in ticks, and `travelTicks` and
-`difficultyScale` are not restated anywhere else. The exported
+that object: `travelTicks` and
+`difficultyScale` are not restated anywhere else. How long unanswered work
+stays open, and the renown a kind grants, live on `kinds`, keyed by the kind's
+id. The exported
 `DEFAULT_BOARD_CONFIG` is the one definition of those defaults. The `WORK_KINDS` table
 selects small, named Contract and Bounty behaviors for creation, posting,
 acceptance wording, success, failure, expiry and withdrawal after a lair falls.
 Each entry carries a profile: which renown it grants, the board-card narration,
 whether the last fight forbids retreat, whether fights report a lair's depth,
 what is known when the work is posted, and how an idle company is offered it.
-Game, the expedition and job intelligence read those fields. An injected table
-can add a kind through `Board.post` without changing those modules. Kind
+The expedition and job intelligence read those fields. A profile is required
+on every kind, and an expedition is given that table; a missing profile is an
+error. Game still posts only through `postContract` and `postBounty`. A new
+kind needs a table entry and a posting rule in Game before the world offers
+it. Kind
 entries do not do gold arithmetic: a Contract's reward and
 windfall, a Bounty's payment, an expiry loss and a hoard's payout are coin
 movements with reasons. Creators receive the kind, and posting rules receive the original
@@ -257,8 +268,8 @@ and the renown cap arrive on the context from the roster; the lair strength
 cap arrives from the lair module. Overriding any of those changes every module
 that uses it. Query results are deeply read-only TypeScript views, including
 encounters and rewards. `knowledge` hands back learn-next and reveal-all;
-those operations live in job intelligence, and knowledge only grows. Only scenario setup uses `recordsForScenario` and
-`replaceForScenario`; regression serialization uses `all()`.
+those operations live in job intelligence, and knowledge only grows. `recordsForScenario` and
+`replaceForScenario` are test-only, used by scenario setup; regression serialization uses `all()`.
 
 The ordering of `step()` is the game:
 
@@ -410,17 +421,23 @@ touching `difficultyScale` or the XP bands.
   the weights of an asset kind in `src/town/assets.ts`, and into `LAIR_THEMES`
   if it should be able to hold a lair.
 - **A new kind of work** — add one profile and one `WorkBehavior` to the Board's
-  kind table. The profile names the renown, the narration, whether the last
-  fight forbids retreat, whether fights report a lair's depth, what is known
-  at posting, and how an idle company is offered it. Creation, posting,
-  success, failure, acceptance, and optional expiry or withdrawal supply the
-  rest. `post`, `take`, `settle`, the expedition and job intelligence dispatch
-  it. Game does not gain a branch.
-- **A new town service** — add a named step to the town-service registry and
-  to `services.steps`. `runSteps` does not change. Retirement is the name
+  kind table, and a posting rule in `Game`. The profile names whether it grants
+  the renown in `kinds.<id>`, the narration, whether the last fight forbids
+  retreat, whether fights report a lair's depth, what is known at posting, and
+  how an idle company is offered it. Creation, posting, success, failure,
+  acceptance, and optional expiry or withdrawal supply the rest. `post`,
+  `take` and `settle` dispatch the table entry. The expedition reads the
+  profile it is given. Today `Game` only posts through `postContract` and
+  `postBounty`, so a kind that is only in the table is never offered by the
+  world until `Game` has a rule that posts it. Its tunables go in `kinds`,
+  under its id.
+- **A new town service** — add a named step to the town-service registry.
+  `services.steps` names which of those run, in
+  order; `resolveSteps` looks the names up. Retirement is the name
   `retirement`, not a slot in the list.
 - **A new way of learning in an idle hour** — add a named step to the job-intel
-  registry and to `intel.steps`. The same `runSteps` runs it.
+  registry. `intel.steps` names which of those run; `resolveSteps` looks the
+  names up, and `runSteps` walks the result.
 - **A new holding** — add an `AssetKind` and its `AssetKindDef` (income, titles,
   threat weights) in `src/town/assets.ts`. Nothing else needs to change.
 - **A new magic item** — add an `ItemTemplate` to `ITEM_CATALOGUE` in

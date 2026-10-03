@@ -11,6 +11,8 @@ import { Rng } from '../src/core/rng';
 import { openCoin } from '../src/town/coin';
 import { generateAssault, generateQuest } from '../src/quests/quest';
 import { Board, WORK_KINDS, DEFAULT_BOARD_CONFIG, type BoardConfig, type BoardContext, type BoardLedger, type WorkKinds, type WorkBehavior } from '../src/sim/board';
+import { DEFAULT_KIND_CONFIGS, type AssaultKindConfig, type ContractKindConfig } from '../src/sim/kind-config';
+import { EMPTY_PROFILE } from '../src/sim/work-kinds';
 import { Game } from '../src/sim/game';
 import { createAsset, type Asset } from '../src/town/assets';
 import { createLair, type Lair } from '../src/town/lairs';
@@ -99,7 +101,11 @@ function employer(rng: Rng, service: ServiceKind | null = null): Employer {
   };
 }
 
-function world(config: Partial<BoardConfig> & { renownCap?: number; companySize?: number; lairStrengthCap?: number } = {}, kinds: WorkKinds = WORK_KINDS) {
+function world(
+  config: Partial<BoardConfig> & { renownCap?: number; companySize?: number; lairStrengthCap?: number } = {},
+  kinds: WorkKinds = WORK_KINDS,
+  kindTuning: { contract?: Partial<ContractKindConfig>; assault?: Partial<AssaultKindConfig> } = {},
+) {
   const { renownCap, companySize, lairStrengthCap, ...boardConfig } = config;
   const rng = new Rng(4);
   const patron = employer(rng);
@@ -137,7 +143,10 @@ function world(config: Partial<BoardConfig> & { renownCap?: number; companySize?
       return found;
     },
   };
-  const board = new Board({ ...DEFAULT_BOARD_CONFIG, difficultyScale: 1, ...boardConfig }, kinds);
+  const board = new Board({ ...DEFAULT_BOARD_CONFIG, difficultyScale: 1, ...boardConfig }, kinds, {
+    contract: { ...DEFAULT_KIND_CONFIGS.contract, ...kindTuning.contract },
+    assault: { ...DEFAULT_KIND_CONFIGS.assault, ...kindTuning.assault },
+  });
   const check = () => assertBoardInvariant({ quests: board.all(), town, lairs, parties });
   return { rng, patron, guild, holding, town, lairs, parties, context, board, check };
 }
@@ -439,7 +448,7 @@ describe('Board configuration', () => {
   });
 
   it.each([{ before: 1, after: 6 }, { before: 5, after: 7 }])('uses Bounty renown and its cap: $before becomes $after', ({ before, after }) => {
-    const { board, rng, lairs, parties, context, check } = world({ bountyRenown: 5, renownCap: 7 });
+    const { board, rng, lairs, parties, context, check } = world({ renownCap: 7 }, WORK_KINDS, { assault: { renown: 5 } });
     const work = board.postBounty(lairOf(rng, lairs), context);
     check();
     const company = companyOf(rng, parties);
@@ -452,7 +461,7 @@ describe('Board configuration', () => {
   });
 
   it.each([{ before: 1, after: 5 }, { before: 5, after: 6 }])('uses Contract renown and its cap: $before becomes $after', ({ before, after }) => {
-    const { board, patron, holding, rng, parties, context, check } = world({ contractRenown: 4, renownCap: 6 });
+    const { board, patron, holding, rng, parties, context, check } = world({ renownCap: 6 }, WORK_KINDS, { contract: { renown: 4 } });
     const work = board.postContract(patron, holding, 'goblins', 5, null, context);
     check();
     const company = companyOf(rng, parties);
@@ -541,7 +550,7 @@ describe('Board configuration', () => {
   });
 
   it('keeps a Contract open for the configured ticks and never expires a Bounty', () => {
-    const { board, patron, holding, rng, lairs, context, check } = world({ contractOpenTicks: 5 });
+    const { board, patron, holding, rng, lairs, context, check } = world({}, WORK_KINDS, { contract: { openTicks: 5 } });
     const contract = board.postContract(patron, holding, 'goblins', 5, null, context);
     check();
     const bounty = board.postBounty(lairOf(rng, lairs), context);
@@ -626,6 +635,7 @@ describe('Board configuration', () => {
 
 function escortBehavior(expires = false): WorkBehavior {
   return {
+    profile: EMPTY_PROFILE,
     create: (kind, { employer, holding, lair }, context) => {
       if (!holding) throw new Error('An Escort needs a holding.');
       if (holding.questId !== null) throw new Error('The holding already has work.');

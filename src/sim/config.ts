@@ -3,14 +3,15 @@ import { DEFAULT_HERO_ECONOMY, type HeroEconomyConfig } from '../adventurers/her
 import { freeze } from '../core/freeze';
 import { DEFAULT_COMBAT_CONFIG, type CombatConfig } from '../combat/battlecast';
 import { DEFAULT_ENCOUNTER_CONFIG, type EncounterConfig } from '../quests/encounters';
-import { DEFAULT_JOB_INTEL_CONFIG, INTEL_STEP_NAMES, type JobIntelConfig } from '../quests/job-intel';
+import { DEFAULT_JOB_INTEL_CONFIG, INTEL_STEP_REGISTRY, type JobIntelConfig } from '../quests/job-intel';
 import { DEFAULT_QUEST_CONFIG, type QuestConfig } from '../quests/quest';
 import { ASSET_KINDS, DEFAULT_HOLDING_CONFIG, type HoldingConfig } from '../town/assets';
 import { DEFAULT_ITEM_CONFIG, type ItemConfig } from '../items/items';
 import { DEFAULT_LAIR_CONFIG, type LairConfig } from '../town/lairs';
-import { DEFAULT_TOWN_SERVICE_CONFIG, SERVICE_STEP_NAMES, type TownServiceConfig } from '../town/services';
+import { DEFAULT_TOWN_SERVICE_CONFIG, SERVICE_STEP_REGISTRY, type TownServiceConfig } from '../town/services';
 import { DEFAULT_TOWN_CONFIG, EMPLOYER_KINDS, type TownConfig } from '../town/town';
 import { DEFAULT_BOARD_CONFIG, type BoardConfig } from './board';
+import { DEFAULT_KIND_CONFIGS, type WorkKindConfigs } from './kind-config';
 import { DEFAULT_EXPEDITION_CONFIG, type ExpeditionConfig } from './expedition';
 import { DEFAULT_WORLD_CONFIG, TICKS_PER_DAY, type WorldConfig } from './game-rules';
 
@@ -23,6 +24,7 @@ import { DEFAULT_WORLD_CONFIG, TICKS_PER_DAY, type WorldConfig } from './game-ru
  */
 export interface GameConfig {
   seed: number;
+  kinds: WorkKindConfigs;
   board: BoardConfig;
   roster: CompanyRosterConfig;
   intel: JobIntelConfig;
@@ -41,6 +43,7 @@ export interface GameConfig {
 
 export const DEFAULT_CONFIG: GameConfig = freeze({
   seed: 20260907,
+  kinds: DEFAULT_KIND_CONFIGS,
   board: DEFAULT_BOARD_CONFIG,
   roster: DEFAULT_COMPANY_ROSTER_CONFIG,
   intel: DEFAULT_JOB_INTEL_CONFIG,
@@ -98,8 +101,8 @@ const GAME_SPEC: Spec = {
   fields: {
     seed: { kind: 'number' },
     board: numberSection([
-      'windfallDays', 'lootingDays', 'bountyRenown', 'contractRenown', 'failureRenownLoss',
-      'reputationGain', 'pruningThreshold', 'contractOpenTicks', 'travelTicks', 'lairStrengthGain',
+      'windfallDays', 'lootingDays', 'failureRenownLoss',
+      'reputationGain', 'pruningThreshold', 'travelTicks', 'lairStrengthGain',
     ], count),
     roster: numberSection([
       'maxCompanies', 'arrivalInterval', 'patienceTicks', 'disbandTicks', 'companySize', 'maxCompanySize',
@@ -115,7 +118,7 @@ const GAME_SPEC: Spec = {
     holdings: numberSection(['incomeSpreadMin', 'incomeSpreadSpan'], fraction),
     items: numberSection(['resaleDivisor'], whole(1)),
     world: numberSection([
-      'maxOpenQuests', 'postingThreshold', 'ruinDays', 'bountyLevelGap', 'idleLevelWeight', 'busyLevelWeight',
+      'maxOpenQuests', 'postingThreshold', 'ruinDays', 'idleLevelWeight', 'busyLevelWeight',
       'stretchReputation', 'idleStretchTicks', 'levelStretch', 'firstRefusalTicks', 'lairRespawnDays',
       'eventLogLimit', 'chronicleLimit',
     ]),
@@ -144,7 +147,6 @@ const rosterSpec = withFields(sectionField(GAME_SPEC, 'roster'), {
 const intelSpec = withFields(sectionField(GAME_SPEC, 'intel'), {
   divinationCostPerLevel: price,
   roundCostPerLevel: price,
-  assaultRevealsCount: flag,
   steps: { kind: 'strings' },
 });
 
@@ -201,9 +203,6 @@ const questsSpec: Spec = {
     nobleItemChance: chance,
     guildOnlyKinds: { kind: 'strings' },
     guildOnlyLevel: count,
-    assaultEncounters: wholeRange,
-    assaultDifficultyWeights: { kind: 'list', weights: true, item: { kind: 'section', fields: { difficulty, weight: count } } },
-    bountyPerLevel: price,
     bossLootLevelBonus: count,
     bossGuardCount: count,
   },
@@ -281,7 +280,6 @@ const combatSpec: Spec = {
 };
 
 const worldSpec = withFields(sectionField(GAME_SPEC, 'world'), {
-  assaultAppetite: chance,
   stretchPostChance: chance,
   lairRespawnSameThemeChance: chance,
   postingCooldown: wholeRange,
@@ -297,10 +295,32 @@ const itemsSpec = withFields(sectionField(GAME_SPEC, 'items'), {
   lootRareCap: chance,
 });
 
+const difficultyWeights: Spec = { kind: 'list', weights: true, item: { kind: 'section', fields: { difficulty, weight: count } } };
+
+const kindsSpec: Spec = {
+  kind: 'section',
+  fields: {
+    contract: { kind: 'section', fields: { renown: count, openTicks: count } },
+    assault: {
+      kind: 'section',
+      fields: {
+        renown: count,
+        revealsCount: flag,
+        appetite: chance,
+        levelGap: count,
+        encounters: wholeRange,
+        difficultyWeights,
+        rewardPerLevel: price,
+      },
+    },
+  },
+};
+
 const SPEC: Spec = {
   kind: 'section',
   fields: {
     seed: { kind: 'number' },
+    kinds: kindsSpec,
     board: boardSpec,
     roster: rosterSpec,
     intel: intelSpec,
@@ -376,8 +396,8 @@ const NAME_LISTS: readonly { path: string; label: string; allowed: readonly stri
   { path: 'town.retiredHoldings', label: 'holding', allowed: Object.keys(ASSET_KINDS) },
   { path: 'quests.relicHoldings', label: 'holding', allowed: Object.keys(ASSET_KINDS) },
   { path: 'quests.guildOnlyKinds', label: 'employer kind', allowed: EMPLOYER_KINDS },
-  { path: 'services.steps', label: 'step', allowed: SERVICE_STEP_NAMES },
-  { path: 'intel.steps', label: 'step', allowed: INTEL_STEP_NAMES },
+  { path: 'services.steps', label: 'step', allowed: SERVICE_STEP_REGISTRY },
+  { path: 'intel.steps', label: 'step', allowed: INTEL_STEP_REGISTRY },
 ];
 
 function checkNames(value: Record<string, unknown>, errors: string[]): void {
@@ -411,7 +431,9 @@ function check(value: unknown, spec: Spec, path: string, errors: string[]): void
       return;
     }
     for (const key of Object.keys(value)) {
-      if (!(key in spec.fields)) errors.push(`unknown field ${path ? `${path}.${key}` : key}`);
+      if (!(key in spec.fields)) {
+        errors.push(path === 'kinds' ? `kinds: unknown kind "${key}"` : `unknown field ${path ? `${path}.${key}` : key}`);
+      }
     }
     for (const [key, field] of Object.entries(spec.fields)) {
       const next = path ? `${path}.${key}` : key;

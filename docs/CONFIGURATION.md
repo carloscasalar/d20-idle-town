@@ -30,10 +30,12 @@ type, a count that is not a whole number, an empty weight list, a weight list
 whose weights are all zero, a negative price, or a range whose minimum exceeds
 its maximum. It also checks every name against the catalogue that defines it:
 `town.retiredHoldings` and `quests.relicHoldings` against holding kinds,
-`quests.guildOnlyKinds` against employer kinds, `services.steps` against town
-service steps (including `retirement`), and `intel.steps` against job-intel
-steps. An unknown name is a readable error, for example
-`services.steps: unknown step "shoe-shine"`. Coin reasons are not configuration:
+`quests.guildOnlyKinds` against employer kinds, `services.steps` against the
+town-service registry (including `retirement`), and `intel.steps` against the
+job-intel registry. A step that is registered but left out of the default list
+is still a valid name. An unknown name is a readable error, for example
+`services.steps: unknown step "shoe-shine"`. A key under `kinds` that is not a
+registered kind is `kinds: unknown kind "survey"`. Coin reasons are not configuration:
 a reason's effects are the accounting identity of that movement, kept in code.
 `new Game(partial)` and
 `Game.forTesting` merge the partial onto these defaults first, then use that
@@ -46,6 +48,30 @@ argument, so an override of that section reaches every use.
 | --- | --- | --- |
 | `seed` | 20260907 | World seed. Any finite number. |
 
+## `kinds`
+
+Tunables that belong to one kind of work, keyed by that kind's id. Defined in
+`src/sim/kind-config.ts`. A key that is not `contract` or `assault` is rejected.
+
+### `kinds.contract`
+
+| Field | Default | Meaning |
+| --- | --- | --- |
+| `renown` | 1 | Renown gained when a Contract succeeds |
+| `openTicks` | 72 | Hours unanswered work of a kind that expires may stay open |
+
+### `kinds.assault`
+
+| Field | Default | Meaning |
+| --- | --- | --- |
+| `renown` | 3 | Renown gained for breaking a lair |
+| `revealsCount` | true | When the profile says `configured`, posting reveals the encounter count |
+| `appetite` | 0.35 | Chance an idle company that can pay a resurrection takes this work |
+| `levelGap` | 1 | A bounty is posted once some company is within this many levels of the lair |
+| `encounters` | [3, 5] | Fights before the boss, inclusive, plus the boss |
+| `difficultyWeights` | easy 2, intermediate 4, hard 2 | Weight of each difficulty on a bounty |
+| `rewardPerLevel` | 150 | Guild gold per lair level, limited by the guild's treasury |
+
 ## `board`
 
 The Board. Defined in `src/sim/board.ts`.
@@ -54,14 +80,11 @@ The Board. Defined in `src/sim/board.ts`.
 | --- | --- | --- |
 | `windfallDays` | 4 | Days of holding income recovered when a Contract succeeds |
 | `lootingDays` | 2 | Days of holding income lost when an unanswered Contract expires |
-| `bountyRenown` | 3 | Renown gained for breaking a lair |
-| `contractRenown` | 1 | Renown gained when a Contract succeeds |
 | `failureRenownLoss` | 1 | Renown lost when work fails |
 | `reputationGain` | 1 | Employer reputation gained on success |
 | `expiryCooldown` | [4, 10] | Hours an employer waits after a Contract expires |
 | `failureCooldown` | [2, 8] | Hours an employer waits after a Contract fails |
 | `pruningThreshold` | 200 | Finished jobs kept before older ones are dropped |
-| `contractOpenTicks` | 72 | Hours an unanswered Contract stays open |
 | `travelTicks` | 2 | Hours of outbound travel, handed to the expedition |
 | `difficultyScale` | 1.15 | Multiplier on every encounter's XP budget. The browser's `?difficulty=` sets this. |
 | `lairStrengthGain` | 1 | Strength a lair gains after an unanswered raid or a failed bounty |
@@ -103,8 +126,7 @@ road at `skillDc`.
 | `roundReserveFactor` | 1 | Resurrection prices that must remain after a paid round |
 | `maxRounds` | 2 | Paid rounds one company may buy about one job |
 | `revealedAtPosting` | 1 | Encounters already known when a job is posted |
-| `assaultRevealsCount` | true | When a kind's profile says `configured`, posting reveals the encounter count |
-| `steps` | freeAttempt, divination, paidRound | Idle-hour order, by step name |
+| `steps` | freeAttempt, divination, paidRound | Idle-hour order, by step name. Any name in the job-intel registry |
 
 ## `expedition`
 
@@ -133,7 +155,7 @@ An idle hour in town. Defined in `src/town/services.ts`.
 | `blessingCostPerLevel` | 40 | Gold per company level for a blessing |
 | `blessingHpPerLevel` | 3 | Bonus hit points per level while blessed. Expedition receives this. |
 | `blessingReserveFactor` | 1.5 | Resurrection prices that must remain after a blessing |
-| `steps` | potions, loot, items, dues, blessing, retirement, armour | Idle-hour order, by step name. `retirement` is the roster's step |
+| `steps` | potions, loot, items, dues, blessing, retirement, armour | Idle-hour order, by step name. Any name in the town-service registry, including `retirement` |
 
 ## `lairs`
 
@@ -172,9 +194,6 @@ How a Contract or Bounty is sized and paid. Defined in `src/quests/quest.ts`.
 | `nobleItemChance` | 0.04 | Added when the employer is a noble |
 | `guildOnlyKinds` | noble, faction | Employers who post higher-level work through the guild |
 | `guildOnlyLevel` | 2 | Level at which that restriction starts |
-| `assaultEncounters` | [3, 5] | Fights before the boss, inclusive, plus the boss |
-| `assaultDifficultyWeights` | easy 2, intermediate 4, hard 2 | Weight of each difficulty on a bounty |
-| `bountyPerLevel` | 150 | Guild gold per lair level, limited by the guild's treasury |
 | `bossLootLevelBonus` | 2 | Levels added when rolling the boss's item |
 | `bossGuardCount` | 1 | Guards beside the boss |
 
@@ -320,8 +339,6 @@ Defined in `src/sim/game-rules.ts`.
 | `postingThreshold` | 25 | Treasury an employer needs before posting a contract, and before a lair will raid one of their holdings. The guild also needs it before posting a bounty. |
 | `postingCooldown` | [12, 30] | Hours an employer waits after posting |
 | `ruinDays` | 3 | Days in debt before an employer is ruined |
-| `assaultAppetite` | 0.35 | Chance an idle company that can pay a resurrection takes an open bounty at or below its level |
-| `bountyLevelGap` | 1 | A bounty is posted once some company is within this many levels of the lair |
 | `idleLevelWeight` | 3 | Weight of an idle or resting company's level when choosing what to post |
 | `busyLevelWeight` | 1 | Weight of a company that is away, when choosing what to post |
 | `stretchReputation` | 3 | Reputation at which an employer may post above the best company in town |
