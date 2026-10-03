@@ -20,9 +20,9 @@ Status values: `todo`, `in-progress`, `done`, `blocked`.
 | 07b | The long simulation tests time out on a slow machine | test fix | done | 1d5e6ef (Codex; per-tick checking cut from about 5 s to under 2 s a run) |
 | 07c | Roster bugs found by turn 07 (band of five arrives as four; ruined temple still raises the dead; retirement does not pick the most seasoned veteran) | bug fix | done | 63a1b43 (Codex; snapshot unchanged; review folded into turn 08's) |
 | 08 | Company roster module; town services as an ordered list of steps (removes `tryRetire`) | refactor | done | e6f1112, 8366971 (Codex; 1 correction round) |
-| 09 | Job intel: characterisation tests (investigation, divination, reading the road) | tests | done | 77ee846 (Codex, then Cursor); review pending |
-| 09b | A ruined tavern still hears the free Persuasion attempt | bug fix | in-progress | Cursor |
-| 10 | Job intel: deepen the module, remove the string-keyed `investigations`; take `learnIntel`/`revealAll` off the Board and `recordInvestigation`/`payService` off the roster | refactor | todo | |
+| 09 | Job intel: characterisation tests (investigation, divination, reading the road) | tests | done | 77ee846, 57918d4 (Codex, then Cursor; 1 correction round) |
+| 09b | A ruined tavern still hears the free Persuasion attempt | bug fix | done | 64db8e7 (Cursor; checked by the orchestrator, 2-file diff) |
+| 10 | Job intel: deepen the module, remove the string-keyed `investigations`; take `learnIntel`/`revealAll` off the Board and `recordInvestigation`/`payService` off the roster | refactor | in-progress | Cursor |
 | 11 | Configuration: `GameConfig` in sections per module, plain data, ready to load from YAML; remaining `'assault'` branches in `Game` and the expedition; a coin object built once with its statistics and reason table, named effect fields instead of five positional booleans; town service steps as named entries instead of one positional slot; `GameConfig` sections (`board`, `roster`, ...) instead of flat-merged renamed fields | refactor | todo | |
 
 Not planned: typed domain events (candidate 6). It waits for a second renderer.
