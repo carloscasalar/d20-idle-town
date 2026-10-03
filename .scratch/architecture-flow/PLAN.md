@@ -16,7 +16,7 @@ Status values: `todo`, `in-progress`, `done`, `blocked`.
 | 05 | Coin transfers: audit and characterisation tests, plus two counter bugs they exposed | tests + bug fix | done | f78a95f, e2ad6f4, 3e02d62 (Codex, then Cursor; 1 correction round) |
 | 06 | Coin transfers: one module moves gold, with reasons as data | refactor | done | 0288d2a, f11e248 (bug fix), a7ed2a9, 991b039 (Cursor; 2 correction rounds) |
 | 06c | A fight crashes when a Gargantuan monster does not fit (seed 75) | bug fix | in-progress | Cursor |
-| 07 | Company roster: characterisation tests (arrivals, recruiting, merging, retirement) | tests | todo | |
+| 07 | Company roster: characterisation tests (arrivals, recruiting, merging, retirement) | tests | in-progress | Cursor |
 | 08 | Company roster: deepen the module, remove the `tryRetire` callback | refactor | todo | |
 | 09 | Job intel: characterisation tests (investigation, divination, reading the road) | tests | todo | |
 | 10 | Job intel: deepen the module, remove the string-keyed `investigations`; take `learnIntel`/`revealAll` off the Board | refactor | todo | |
