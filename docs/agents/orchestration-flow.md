@@ -91,6 +91,14 @@ The wrapper creates a chat with `cursor-agent create-chat` and runs
 (2026.10.01) rejects the bracket form `grok-4.7[context=500k,effort=high,fast=false]`
 and lists no 500k-context variant.
 
+## Prompts and files carry no machine details
+
+Every agent is started in the root of the repository, and every prompt, report
+and script refers to files by paths relative to it. Nothing committed names a
+user's home folder, a temporary directory, an account or a machine; temporary
+locations are written as `$TMPDIR` and the repository root as `$PWD` when a
+command needs an absolute path.
+
 ## The loop for one task
 
 1. The orchestrator writes the turn prompt and records the checkpoint commit.
