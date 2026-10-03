@@ -16,7 +16,9 @@ Status values: `todo`, `in-progress`, `done`, `blocked`.
 | 05 | Coin transfers: audit and characterisation tests, plus two counter bugs they exposed | tests + bug fix | done | f78a95f, e2ad6f4, 3e02d62 (Codex, then Cursor; 1 correction round) |
 | 06 | Coin transfers: one module moves gold, with reasons as data | refactor | done | 0288d2a, f11e248 (bug fix), a7ed2a9, 991b039 (Cursor; 2 correction rounds) |
 | 06c | A fight crashes when a Gargantuan monster does not fit (seed 75) | bug fix | done | b615320 (Cursor; reviewed by Sonnet, no corrections) |
-| 07 | Company roster: characterisation tests (arrivals, recruiting, merging, retirement) | tests | in-progress | Cursor |
+| 07 | Company roster: characterisation tests (arrivals, recruiting, merging, retirement) | tests | in-progress | beb00ac (Cursor); review pending |
+| 07b | The long simulation tests time out on a slow machine | test fix | in-progress | Cursor |
+| 07c | Roster bugs found by turn 07 (band of five arrives as four; ruined temple still raises the dead; retirement does not pick the most seasoned veteran) | bug fix | todo | |
 | 08 | Company roster: deepen the module, remove the `tryRetire` callback | refactor | todo | |
 | 09 | Job intel: characterisation tests (investigation, divination, reading the road) | tests | todo | |
 | 10 | Job intel: deepen the module, remove the string-keyed `investigations`; take `learnIntel`/`revealAll` off the Board | refactor | todo | |
@@ -51,3 +53,5 @@ Bugs found during a task get a new row inserted before the task continues.
 - The same sweep found an older crash (seed 75: a Gargantuan Roc does not fit the red team's zone). Bug-fix turn 06c before the roster work.
 - Turn 06c: the engine's placement scan gave up although the field had room; the adapter now tries every in-bounds origin only after the engine throws, so fights that placed before are unchanged. A 150-seed, 1,500-hour sweep runs clean. First review on Sonnet instead of the default model: it verified the same depth of claims (fallback reached only on the placement error, no random draw, tests fail without the fix) at a lower cost. One non-blocking weakness noted: the focused test asserts only the sixth Roc's name.
 - Lesson: a Sonnet reviewer is enough for a contained bug fix; keep the default model for refactor reviews where design judgement matters.
+- Turn 07: Cursor took about an hour. It reported five suspected bugs. Three are bugs (a band of five is built as four by `rollClasses`; a ruined temple is still paid to raise the dead, unlike every other service; retirement takes the first level-8 veteran, not the most seasoned as the code's own comment says) and go to turn 07c. Two are rule questions for an issue (the temple raises the fallen in company order, not the cheapest first; a partial merge moves the whole purse, potions and stash to the host, leaving those who stay behind with nothing).
+- The suite now times out on this machine: a 400-hour run takes 4-5 s at every commit tonight (about 1 s earlier), so the machine is slower, not the code. Per-tick checkers make the long tests several times slower than the simulation. Turn 07b.
