@@ -195,21 +195,24 @@ services module's fixed sequence and a callback into Game for retirement.
 recruitment, joining other companies, disbanding and retirement. Queries expose
 deeply read-only companies through `all`, `active` and `byId`, with frozen
 array copies and live records. Operations accept query views and resolve owned
-records. `updateActive` lends records to Game's hourly actions in the existing
+records. `updateActive` supplies deeply read-only records to Game's hourly actions in the existing
 stable renown order over the population at the start of the hour; a donor
 absorbed during that hour still receives its original scheduled update.
 `recordsForScenario` and `replaceForScenario` back `scenario.parties` during
 setup, and disbanded history remains in the roster. Game keeps idle work
-selection, investigation and Board acceptance. Expedition's wipe now calls the
-roster module's `disbandCompany`; `mergeParties` and `buryDead` remain compatible
-imports from `party.ts`, re-exporting the roster implementations.
+selection, investigation and acceptance reporting. Explicit roster operations
+apply idle waiting, services, investigation bookkeeping/payments, Board
+acceptance and Expedition advancement to owned records. Expedition's wipe
+calls its supplied `disband` operation, connected to the roster by Game.
+Merging, burial and disbanding helpers are private; there are no compatibility
+exports or duplicate readiness/capacity rules.
 
 All roster tuning is plain `CompanyRosterConfig` data, with exported defaults.
 Game builds it from `GameConfig`, keeping the existing names (`maxParties`,
 `arrivalInterval`, `patienceTicks`) and converting the new `disbandDays` to
 `disbandTicks`. Shared sizes and retirement thresholds retain one definition.
-`company-size.ts` supplies the sizes to both Party and the roster without
-requiring initialization through their compatibility re-exports. Operations
+`party.ts` defines the shared sizes once and imports no roster code; the
+workaround `company-size.ts` has been deleted. Operations
 receive only their required town, Board query, RNG, tick, counters, gold
 statistics and synchronous event reporter; context goes last. The full
 interface and numerical configuration are listed in
@@ -217,14 +220,16 @@ interface and numerical configuration are listed in
 
 `visitTownServices` tries caller-supplied `TownServiceStep` functions until one
 spends the hour. Six small steps retain the existing purchases and equipment
-rules. Game's default list is potions, loot, magic items, guild dues, blessing,
-the roster's contributed retirement step, then armour. Adding or reordering a
+rules. `defaultTownServiceSteps` constructs the sole default list: potions,
+loot, magic items, guild dues, blessing, a caller-contributed company step,
+then armour. Game contributes roster retirement; standalone visits contribute
+no action. Adding or reordering a
 service means editing the supplied list. The services module has no retirement
 rule or callback. Coin reasons, synchronous event points, statistics and random
 draw order are preserved, including spending an arrival before checking the
 company cap and transferring all supplies in a partial merge.
 
-**Files.** `src/adventurers/company-roster.ts`, `company-size.ts`, Party, Game,
+**Files.** `src/adventurers/company-roster.ts`, Party, Hero, Game,
 Expedition and town services; `test/company-roster-interface.test.ts` and
 `test/town-service-steps.test.ts`; the permitted coin-movement call and its list
 import; `CONTEXT.md` and the architecture references.
@@ -232,7 +237,7 @@ import; `CONTEXT.md` and the architecture references.
 **Evidence.** The existing 468 tests passed against the old code before the
 extraction, then passed unchanged except the permitted no-retirement service
 call. Twenty-three new tests exercise roster queries and every operation,
-configuration, event-time visibility, compatibility exports, and a made-up
+configuration, event-time visibility, owned merger/burial/disbanding, and a made-up
 service placed between potions and armour. Compile-time assertions prohibit
 membership, status, hero and item mutations through roster queries. A search
 of `src/` finds company additions, member removals/transfers and disbanding
@@ -244,3 +249,18 @@ its SHA-256 remains
 `84469c230e1e08ca637af7dc7bdec70af68e619b7d04a1ef6f04c8899763c39a`.
 `scripts/combat-sweep.ts` completed seeds 1–150 for 1,500 hours each
 (225,000 simulated hours) with no crashes.
+
+**Correction 1.** The first review found public free mutators, mutable hourly
+iteration, a Party/roster import cycle, duplicate readiness rules and two
+service-order definitions. These have been removed. Existing tests now use
+owned roster operations and roster-supplied Expedition disbanding, retaining
+all expected values and test cases. Ownership refusal and compile-time hourly
+view checks cover the closed boundary; the two roster rule-question issues
+now point to the moved code. The prior sweep above belongs to the original
+extraction; this correction is checked with the existing regression suite.
+
+Correction verification: `pnpm typecheck` and `pnpm test` passed all 493 tests
+across 23 files; the regression snapshot is byte-for-byte unchanged and
+`git diff --check` passed. All 589 existing matchers and their expected values
+in the adapted files are unchanged. Every edited test is named in the
+[correction report](../.scratch/architecture-flow/turns/08-company-roster-correction-1-report.md).

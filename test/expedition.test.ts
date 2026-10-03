@@ -1,3 +1,4 @@
+import { CompanyRoster } from '../src/adventurers/company-roster';
 import { describe, expect, it, vi } from 'vitest';
 import { fixedHp, killHero, resurrectionCost } from '../src/adventurers/hero';
 import { aliveMembers, createParty, MAX_RENOWN, partyLevel, type Party } from '../src/adventurers/party';
@@ -49,9 +50,12 @@ function setup(level = 1) {
   const combat = vi.fn<CombatResolver>(() => outcome(party, 'party'));
   const settleQuest = vi.fn<ExpeditionContext['settleQuest']>((_quest, _party, success) => { calls.push(`settle:${success}`); });
   const leaveLoot = vi.fn<ExpeditionContext['leaveLoot']>((_quest, _party, fallen) => { calls.push(`loot:${fallen.length}`); });
+  const roster = new CompanyRoster();
+  roster.replaceForScenario([party]);
   const context: ExpeditionContext = {
     quest, town, rng, ledger, statistics, travelTicks: 2, restTicks: 2, shortRestHealFraction: 0.5, skillDc: 15,
     combat,
+    disband: (company) => roster.disband(company),
     report: (event) => { events.push(event); calls.push(`event:${event.kind}`); },
     learnIntel: () => learnQuestIntel(quest),
     revealAll: () => revealAll(quest),

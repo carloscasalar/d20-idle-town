@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CompanyRoster, DEFAULT_COMPANY_ROSTER_CONFIG, buryDead, disbandCompany, mergeParties, type CompanyRosterConfig, type RosterEvent, type RosterContext } from '../src/adventurers/company-roster';
+import { CompanyRoster, DEFAULT_COMPANY_ROSTER_CONFIG, type CompanyRosterConfig, type RosterEvent, type RosterContext } from '../src/adventurers/company-roster';
 import { aliveMembers, createParty, type Party, type ReadonlyParty } from '../src/adventurers/party';
 import { killHero, resurrectionCost } from '../src/adventurers/hero';
 import { Rng } from '../src/core/rng';
@@ -349,16 +349,17 @@ describe('CompanyRoster retirement and compatibility operations', () => {
     expect(p.members).toHaveLength(3);
   });
 
-  it('keeps legacy merge and burial imports implemented through the roster module', () => {
-    const { company, context } = setup();
+  it('merges, buries and disbands owned companies through the roster', () => {
+    const { roster, company, context } = setup();
     const host = company(1, 3);
     const donor = company(1, 2);
     const dead = donor.members[0]!;
     killHero(dead);
-    expect(mergeParties(host, donor, context.statistics)).toEqual([]);
-    expect(buryDead(donor)).toEqual([dead]);
+    roster.replaceForScenario([host, donor]);
+    expect(roster.merge(host, donor, context)).toEqual([]);
+    expect(roster.bury(donor)).toEqual([dead]);
     expect(donor.members).toEqual([]);
-    disbandCompany(donor);
+    roster.disband(donor);
     expect(donor.status).toBe('disbanded');
   });
 });

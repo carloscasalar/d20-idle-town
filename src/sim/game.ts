@@ -1,5 +1,5 @@
 import { coinReasons, emptyGoldStatistics, hoard, loot, purse, sink, source, transfer, treasury } from '../town/coin';
-import { buyPotions, sellLoot, buyMagicItem, payGuildDues, buyBlessing, buyArmour, visitTownServices } from '../town/services';
+import { defaultTownServiceSteps } from '../town/services';
 import { CompanyRoster, DEFAULT_COMPANY_ROSTER_CONFIG, type CompanyRosterConfig, type RosterContext } from '../adventurers/company-roster';
 import {
   resurrectionCost,
@@ -34,7 +34,6 @@ import {
   type Town,
 } from '../town/town';
 import { Board, DEFAULT_BOARD_CONFIG, type BoardConfig, type BoardContext } from './board';
-import { advanceExpedition, startExpedition } from './expedition';
 
 export type EventKind = 'town' | 'quest' | 'party' | 'combat' | 'death' | 'levelup' | 'temple' | 'reward' | 'economy' | 'shop';
 
@@ -754,9 +753,9 @@ export class Game {
 
   // ---------------------------------------------------------------- parties
 
-  private updateParty(p: Party): void {
+  private updateParty(p: ReadonlyParty): void {
     if (p.status === 'idle') return this.idle(p);
-    advanceExpedition(p, {
+    this.roster.advance(p, {
       quest: this.questById(p.questId),
       town: this.town,
       rng: this.rng,
@@ -767,6 +766,7 @@ export class Game {
       shortRestHealFraction: this.config.shortRestHealFraction,
       skillDc: SKILL_DC,
       combat: runCombat,
+      disband: (company) => this.roster.disband(company),
       report: ({ kind, text, detail, chronicle }) => {
         if (chronicle) this.chronicleLog(kind, text);
         else this.log(kind, text, detail);
@@ -778,8 +778,8 @@ export class Game {
     });
   }
 
-  private idle(p: Party): void {
-    p.idleTicks += 1;
+  private idle(p: ReadonlyParty): void {
+    this.roster.wait(p);
     if (!this.roster.isReady(p)) {
       this.roster.recruit(p, this.rosterContext());
       if (!this.roster.isReady(p)) return;
@@ -810,10 +810,9 @@ export class Game {
     this.acceptQuest(p, quest);
   }
 
-  private acceptQuest(p: Party, quest: ReadonlyQuest): void {
+  private acceptQuest(p: ReadonlyParty, quest: ReadonlyQuest): void {
     const context = this.boardContext();
-    const departure = this.board.take(p, quest, context);
-    startExpedition(p, departure.travelTicks);
+    const departure = this.roster.depart(p, quest, { board: this.board, work: context });
     context.report(departure.acceptance);
   }
 
@@ -822,7 +821,7 @@ export class Game {
    * asks around: first how long the job is, then what else waits out there.
    * Returns true if the hour went on that.
    */
-  private investigate(p: Party, quest: ReadonlyQuest): boolean {
+  private investigate(p: ReadonlyParty, quest: ReadonlyQuest): boolean {
     if (isFullyKnown(quest)) return false;
     const level = partyLevel(p);
     const reserve = resurrectionCost(level);
@@ -830,7 +829,7 @@ export class Game {
 
     // Talk first: a good tongue gets the regulars talking for free. One try per job.
     if (!p.investigations[`${quest.id}:talk`]) {
-      p.investigations[`${quest.id}:talk`] = 1;
+      this.roster.recordInvestigation(p, `${quest.id}:talk`, 1);
       const check = rollSkill(this.rng, aliveMembers(p), 'Persuasion', SKILL_DC);
       if (check) {
         const dice = `${check.roll}${check.bonus >= 0 ? '+' : ''}${check.bonus} = ${check.total}${check.advantage ? ', with advantage' : ''}`;
@@ -847,7 +846,7 @@ export class Game {
     const temple = serviceOf(this.town, 'temple');
     const divination = DIVINATION_COST_PER_LEVEL * level;
     if (!temple.ruined && p.gold - divination >= reserve * 2) {
-      transfer(purse(p), treasury(temple), divination, 'service', this.stats, coinReasons);
+      this.roster.payService(p, temple, divination, { statistics: this.stats });
       this.board.revealAll(quest);
       this.log('temple', `${p.name} pay ${divination} gp for a divination at the ${temple.name}. The priests see "${quest.title}" whole: ${quest.encounters.length} fights [${difficultyCode(quest)}].`);
       return true;
@@ -858,14 +857,14 @@ export class Game {
     if (done >= MAX_INVESTIGATIONS) return false;
     const cost = INVESTIGATION_COST_PER_LEVEL * level;
     if (tavern.ruined || p.gold - cost < reserve) return false;
-    transfer(purse(p), treasury(tavern), cost, 'service', this.stats, coinReasons);
-    p.investigations[quest.id] = done + 1;
+    this.roster.payService(p, tavern, cost, { statistics: this.stats });
+    this.roster.recordInvestigation(p, quest.id, done + 1);
     this.log('shop', `${p.name} buy a round at ${tavern.name} (${cost} gp) and ask about "${quest.title}": ${this.board.learnIntel(quest)}.`);
     return true;
   }
 
   /** A retired adventurer's contracts are held a day for their old company. */
-  private hasFirstRefusal(q: ReadonlyQuest, p: Party): boolean {
+  private hasFirstRefusal(q: ReadonlyQuest, p: ReadonlyParty): boolean {
     const employer = this.employerById(q.giverId);
     if (!employer?.favoredPartyId || employer.favoredPartyId === p.id) return true;
     const friends = this.roster.byId(employer.favoredPartyId);
@@ -874,8 +873,8 @@ export class Game {
   }
 
   /** The complete service order is data supplied by Game. */
-  private shop(p: Party): boolean {
-    return visitTownServices(p, {
+  private shop(p: ReadonlyParty): boolean {
+    return this.roster.visitServices(p, defaultTownServiceSteps(this.roster.retirementStep(this.rosterContext())), {
       town: this.town,
       day: this.day,
       ledger: this.stats,
@@ -884,10 +883,7 @@ export class Game {
         if (chronicle) this.chronicleLog(kind, text);
         else this.log(kind, text);
       },
-    }, [
-      buyPotions, sellLoot, buyMagicItem, payGuildDues, buyBlessing,
-      this.roster.retirementStep(this.rosterContext()), buyArmour,
-    ]);
+    });
   }
 
   private rosterContext(): RosterContext {

@@ -1,12 +1,9 @@
+import { CompanyRoster } from '../src/adventurers/company-roster';
 import { describe, expect, it } from 'vitest';
 import { HERO_CLASS_NAMES } from 'battlecast-engine';
 import { createHero, killHero, MAX_ARMOR_TIER, type Hero } from '../src/adventurers/hero';
 import {
-  buryDead,
   createParty,
-  hasRoom,
-  isFull,
-  mergeParties,
   partyLevel,
   ROLES,
   rollClasses,
@@ -17,6 +14,12 @@ import { instantiate, ITEM_CATALOGUE, type MagicItem } from '../src/items/items'
 import type { Quest } from '../src/quests/quest';
 import { Game, type GameConfig, type GameScenario } from '../src/sim/game';
 import { serviceOf, type Employer } from '../src/town/town';
+
+function rosterFor(...companies: Party[]): CompanyRoster {
+  const roster = new CompanyRoster();
+  roster.replaceForScenario(companies);
+  return roster;
+}
 
 const TICK = 100;
 const DAY = Math.floor(TICK / 24) + 1;
@@ -864,25 +867,25 @@ describe('company level and capacity', () => {
 
   it('four living adventurers are a full company, and the dead do not count', () => {
     const party = createParty(new Rng(3), 1, 4, 0);
-    expect(isFull(party)).toBe(true);
+    expect(rosterFor(party).isReady(party)).toBe(true);
     killHero(party.members[0]!);
-    expect(isFull(party)).toBe(false);
+    expect(rosterFor(party).isReady(party)).toBe(false);
     party.members.push(createHero(new Rng(4), 1, 'Fighter'));
-    expect(isFull(party)).toBe(true);
+    expect(rosterFor(party).isReady(party)).toBe(true);
   });
 
   it('a company has room until six living adventurers, and the dead do not count', () => {
     const rng = new Rng(5);
     const party = createParty(rng, 1, 4, 0);
-    expect(hasRoom(party)).toBe(true);
+    expect(rosterFor(party).hasRoom(party)).toBe(true);
     party.members.push(createHero(rng, 1, 'Fighter'));
     expect(aliveCount(party)).toBe(5);
-    expect(hasRoom(party)).toBe(true);
+    expect(rosterFor(party).hasRoom(party)).toBe(true);
     party.members.push(createHero(rng, 1, 'Fighter'));
-    expect(hasRoom(party)).toBe(false);
+    expect(rosterFor(party).hasRoom(party)).toBe(false);
     killHero(party.members[0]!);
     expect(aliveCount(party)).toBe(5);
-    expect(hasRoom(party)).toBe(true);
+    expect(rosterFor(party).hasRoom(party)).toBe(true);
   });
 });
 
@@ -894,7 +897,7 @@ describe('merging and burying', () => {
     const fallen = donor.members[2]!;
     killHero(fallen);
     const survivors = donor.members.filter((hero) => hero.alive);
-    const leftover = mergeParties(host, donor, { goldPaid: 0, goldSpentByHeroes: 0 });
+    const leftover = rosterFor(host, donor).merge(host, donor, { statistics: { goldPaid: 0, goldSpentByHeroes: 0 } });
     expect(leftover).toEqual([]);
     expect(aliveCount(host)).toBe(6);
     expect(host.members).toEqual(expect.arrayContaining(survivors));
@@ -907,7 +910,7 @@ describe('merging and burying', () => {
     const donor = createParty(rng, 2, 3, 0);
     const fallen = donor.members[2]!;
     killHero(fallen);
-    mergeParties(host, donor, { goldPaid: 0, goldSpentByHeroes: 0 });
+    rosterFor(host, donor).merge(host, donor, { statistics: { goldPaid: 0, goldSpentByHeroes: 0 } });
     expect(donor.members).toEqual([fallen]);
     expect(host.members).not.toContain(fallen);
   });
@@ -918,7 +921,7 @@ describe('merging and burying', () => {
     const donor = createParty(rng, 2, 2, 0);
     host.gold = 10;
     donor.gold = 7;
-    mergeParties(host, donor, { goldPaid: 0, goldSpentByHeroes: 0 });
+    rosterFor(host, donor).merge(host, donor, { statistics: { goldPaid: 0, goldSpentByHeroes: 0 } });
     expect(host.gold).toBe(17);
     expect(donor.gold).toBe(0);
   });
@@ -929,7 +932,7 @@ describe('merging and burying', () => {
     const donor = createParty(rng, 2, 2, 0);
     host.potions = 1;
     donor.potions = 3;
-    mergeParties(host, donor, { goldPaid: 0, goldSpentByHeroes: 0 });
+    rosterFor(host, donor).merge(host, donor, { statistics: { goldPaid: 0, goldSpentByHeroes: 0 } });
     expect(host.potions).toBe(4);
     expect(donor.potions).toBe(0);
   });
@@ -942,7 +945,7 @@ describe('merging and burying', () => {
     const donorFind = sword(rng);
     host.stash = [hostFind];
     donor.stash = [donorFind];
-    mergeParties(host, donor, { goldPaid: 0, goldSpentByHeroes: 0 });
+    rosterFor(host, donor).merge(host, donor, { statistics: { goldPaid: 0, goldSpentByHeroes: 0 } });
     expect(host.stash).toEqual([hostFind, donorFind]);
     expect(donor.stash).toEqual([]);
   });
@@ -956,7 +959,7 @@ describe('merging and burying', () => {
     const donor = createParty(rng, 2, 2, 0);
     host.renown = hostRenown;
     donor.renown = donorRenown;
-    mergeParties(host, donor, { goldPaid: 0, goldSpentByHeroes: 0 });
+    rosterFor(host, donor).merge(host, donor, { statistics: { goldPaid: 0, goldSpentByHeroes: 0 } });
     expect(host.renown).toBe(9);
   });
 
@@ -967,7 +970,7 @@ describe('merging and burying', () => {
     const donor = createParty(rng, 2, 4, 0);
     const [first, second, third, fallen] = donor.members;
     killHero(fallen!);
-    const leftover = mergeParties(host, donor, { goldPaid: 0, goldSpentByHeroes: 0 });
+    const leftover = rosterFor(host, donor).merge(host, donor, { statistics: { goldPaid: 0, goldSpentByHeroes: 0 } });
     expect(leftover).toEqual([second, third]);
     expect(aliveCount(host)).toBe(6);
     expect(host.members).toContain(first);
@@ -980,7 +983,7 @@ describe('merging and burying', () => {
     host.members.push(createHero(rng, 2, 'Fighter'), createHero(rng, 2, 'Fighter'));
     const donor = createParty(rng, 2, 2, 0);
     const staying = [...donor.members];
-    const leftover = mergeParties(host, donor, { goldPaid: 0, goldSpentByHeroes: 0 });
+    const leftover = rosterFor(host, donor).merge(host, donor, { statistics: { goldPaid: 0, goldSpentByHeroes: 0 } });
     expect(leftover).toEqual(staying);
     expect(aliveCount(host)).toBe(6);
     expect(donor.members).toEqual(staying);
@@ -991,9 +994,9 @@ describe('merging and burying', () => {
     const [ada, bev, cid, dot] = party.members;
     killHero(bev!);
     killHero(dot!);
-    expect(buryDead(party)).toEqual([bev, dot]);
+    expect(rosterFor(party).bury(party)).toEqual([bev, dot]);
     expect(party.members).toEqual([ada, cid]);
-    expect(buryDead(party)).toEqual([]);
+    expect(rosterFor(party).bury(party)).toEqual([]);
   });
 });
 

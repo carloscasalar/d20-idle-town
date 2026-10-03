@@ -1,3 +1,4 @@
+import type { DeepReadonly } from '../core/readonly';
 import { buildHero, HERO_CLASS_NAMES, type HeroClassName } from 'battlecast-engine';
 import { heroName } from '../core/names';
 import type { Rng } from '../core/rng';
@@ -158,7 +159,7 @@ const ABILITY_FOR_SKILL: Record<string, keyof ReturnType<typeof buildHero>['abil
 };
 
 /** The hero's total bonus on a skill: proficiency where the class has it, else the bare ability modifier. */
-export function skillBonus(hero: Hero, skill: string): number {
+export function skillBonus(hero: DeepReadonly<Hero>, skill: string): number {
   const data = buildHero(hero.heroClass, hero.level);
   const trained = data.skills?.[skill];
   if (typeof trained === 'number') return trained;
@@ -176,7 +177,9 @@ export interface SkillRoll {
 }
 
 /** The best member attempts the check; d20 (twice, keep the best, if their class has advantage) plus their bonus. */
-export function rollSkill(rng: Rng, members: Hero[], skill: string, dc: number): SkillRoll | null {
+export function rollSkill(rng: Rng, members: Hero[], skill: string, dc: number): SkillRoll | null;
+export function rollSkill(rng: Rng, members: readonly DeepReadonly<Hero>[], skill: string, dc: number): DeepReadonly<SkillRoll> | null;
+export function rollSkill(rng: Rng, members: readonly DeepReadonly<Hero>[], skill: string, dc: number): DeepReadonly<SkillRoll> | null {
   const alive = members.filter((h) => h.alive);
   if (alive.length === 0) return null;
   const hero = [...alive].sort((a, b) => skillBonus(b, skill) + (SKILL_ADVANTAGE[skill]?.includes(b.heroClass) ? 3 : 0) - (skillBonus(a, skill) + (SKILL_ADVANTAGE[skill]?.includes(a.heroClass) ? 3 : 0)))[0]!;

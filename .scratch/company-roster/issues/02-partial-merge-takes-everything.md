@@ -7,7 +7,8 @@ Category: enhancement
 
 ## Current behaviour
 
-`mergeParties` in `src/adventurers/party.ts` moves living adventurers into the
+`CompanyRoster.merge` (through private `mergeMembers`) in
+`src/adventurers/company-roster.ts` moves living adventurers into the
 host until its six places are filled. Survivors who do not fit stay in their
 original company. The host nevertheless receives that company's entire purse,
 all healing potions and the whole stash; those who stay behind retain none of

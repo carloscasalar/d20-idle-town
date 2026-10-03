@@ -1,13 +1,14 @@
 import { describeHero, resurrectHero, resurrectionCost, type Hero } from './hero';
-import { aliveMembers, createParty, deadMembers, describeParty, partyLevel, type Party, type ReadonlyParty } from './party';
-import { PARTY_SIZE, MAX_PARTY_SIZE } from './company-size';
+import { aliveMembers, createParty, deadMembers, describeParty, partyLevel, PARTY_SIZE, MAX_PARTY_SIZE, type Party, type ReadonlyParty } from './party';
 import { listNames } from '../core/names';
 import type { DeepReadonly } from '../core/readonly';
 import type { Rng } from '../core/rng';
 import type { ReadonlyQuest } from '../quests/quest';
 import { coinReasons, purse, sink, transfer, treasury, type GoldStatistics } from '../town/coin';
-import type { TownServiceStep } from '../town/services';
-import { RETIREMENT_LEVEL, RETIREMENT_PRICE, retiredEmployer, serviceOf, type Town } from '../town/town';
+import { visitTownServices, type TownServiceStep, type TownServiceContext } from '../town/services';
+import { advanceExpedition, startExpedition, type ExpeditionContext } from '../sim/expedition';
+import type { Board, BoardContext, TakenWork } from '../sim/board';
+import { RETIREMENT_LEVEL, RETIREMENT_PRICE, retiredEmployer, serviceOf, type Employer, type Town } from '../town/town';
 
 /** Plain data; all durations are in ticks. Shared defaults retain their one definition. */
 export interface CompanyRosterConfig {
@@ -116,11 +117,43 @@ export class CompanyRoster {
     this.companies = companies;
   }
 
-  /** Borrow each active company for its hourly action, in the existing renown order.
+  /** Visit read-only companies for their hourly action, in the existing renown order.
    * Snapshot iteration intentionally includes donors disbanded earlier in this hour.
    */
-  updateActive(update: (company: Party) => void): void {
+  updateActive(update: (company: ReadonlyParty) => void): void {
     for (const company of [...this.activeCompanies].sort((a, b) => b.renown - a.renown)) update(company);
+  }
+
+  /** Mutating activity operations resolve roster-owned records, never lending them to Game. */
+  wait(company: ReadonlyParty): void {
+    this.owned(company).idleTicks += 1;
+  }
+
+  advance(company: ReadonlyParty, context: ExpeditionContext): void {
+    advanceExpedition(this.owned(company), context);
+  }
+
+  depart(company: ReadonlyParty, work: ReadonlyQuest, context: { board: Pick<Board, 'take'>; work: BoardContext }): TakenWork {
+    const p = this.owned(company);
+    const departure = context.board.take(p, work, context.work);
+    startExpedition(p, departure.travelTicks);
+    return departure;
+  }
+
+  visitServices(company: ReadonlyParty, steps: readonly TownServiceStep[], context: TownServiceContext): boolean {
+    return visitTownServices(this.owned(company), context, steps);
+  }
+
+  recordInvestigation(company: ReadonlyParty, key: string, count: number): void {
+    this.owned(company).investigations[key] = count;
+  }
+
+  payService(company: ReadonlyParty, employer: Employer, amount: number, context: Pick<RosterEventContext, 'statistics'>): void {
+    transfer(purse(this.owned(company)), treasury(employer), amount, 'service', context.statistics, coinReasons);
+  }
+
+  bury(company: ReadonlyParty): readonly DeepReadonly<Hero>[] {
+    return buryDead(this.owned(company));
   }
 
   isReady(company: ReadonlyParty): boolean { return aliveMembers(company).length >= this.config.companySize; }
@@ -257,14 +290,6 @@ export class CompanyRoster {
   }
 }
 
-/**
- * Moves survivors of `donor` into `host` while there is room (six at most).
- * Returns the survivors that did not fit (the donor keeps them).
- */
-export function mergeParties(host: Party, donor: Party, statistics: GoldStatistics): Hero[] {
-  return mergeMembers(host, donor, MAX_PARTY_SIZE, statistics);
-}
-
 function mergeMembers(host: Party, donor: Party, maxCompanySize: number, statistics: GoldStatistics): Hero[] {
   const moved: Hero[] = [];
   for (const h of aliveMembers(donor)) {
@@ -283,14 +308,14 @@ function mergeMembers(host: Party, donor: Party, maxCompanySize: number, statist
 }
 
 /** Drops fallen members who will never be raised (party gave up on them). */
-export function buryDead(p: Party): Hero[] {
+function buryDead(p: Party): Hero[] {
   const dead = deadMembers(p);
   p.members = p.members.filter((m) => m.alive);
   return dead;
 }
 
-/** Shared disband operation, also used by Expedition on a wipe. */
-export function disbandCompany(company: Party): void { company.status = 'disbanded'; }
+/** Private disbanding, reached only through roster ownership checks. */
+function disbandCompany(company: Party): void { company.status = 'disbanded'; }
 
 function log(context: Pick<RosterEventContext, 'report'>, kind: RosterEvent['kind'], text: string): void {
   context.report({ kind, text });

@@ -20,7 +20,9 @@ Three properties shape every decision below:
 
 ## Layers
 
-Dependencies point downward only. Nothing below imports from anything above it.
+The UI depends on the simulation. Domain modules reference one another; the
+Company roster also dispatches company activities through Expedition and town
+services using narrow contexts. No domain module imports Game.
 
 ```
                       ┌──────────────┐
@@ -82,20 +84,23 @@ RNG argument. Interleaving two worlds cannot change either world's IDs.
 - **`party.ts`** — a `Party` is members, shared gold, potions, stash, renown,
   guild membership and a `PartyStatus`. Four to six strong. `rollClasses` fills
   the four classic roles (front line, support, skirmisher, arcane).
-  Pure queries also accept deeply read-only companies. `mergeParties` and
-  `buryDead` are compatibility re-exports implemented by the roster.
-- **`company-size.ts`** — the single definitions of `PARTY_SIZE` and
-  `MAX_PARTY_SIZE`, re-exported by `party.ts`. The roster reads these directly
-  so its defaults do not depend on initialization of the compatibility exports.
+  Pure queries also accept deeply read-only companies. It defines the shared
+  `PARTY_SIZE` and `MAX_PARTY_SIZE` defaults once and imports no roster code.
+  Readiness and room rules belong to the configured roster.
 - **`company-roster.ts`** — the Company roster owns the company list, arrival
   schedule, strangers, temple recruitment, merging, absorption, disbanding and
   retirement. It exposes deeply read-only `all`, `active` and `byId` queries
   with frozen array copies and live records. Operations accept those views and
   resolve owned companies; a company absent from the roster is an error.
-  `updateActive` lends mutable companies for Game’s hourly actions in descending
-  renown order, preserving the original population snapshot and stable ties.
+  `updateActive` supplies deeply read-only companies in descending renown
+  order, preserving the original population snapshot and stable ties. Game
+  uses explicit `wait`, `advance`, `depart`, `visitServices`,
+  `recordInvestigation` and `payService` operations to act on owned companies.
+  `bury` removes fallen members through the same ownership check; no free
+  membership or disbanding mutator is exported.
   Game still chooses idle work; neither it nor Expedition writes membership.
-  Expedition calls the roster module’s `disbandCompany` on a wipe. Scenario
+  Expedition calls its supplied `disband` operation on a wipe; Game connects
+  that operation to the roster. Scenario
   setup alone uses `recordsForScenario` and `replaceForScenario`.
   `CompanyRosterConfig` and `DEFAULT_COMPANY_ROSTER_CONFIG` hold plain data;
   Game maps its existing `maxParties` to `maxCompanies` and converts the new
@@ -131,9 +136,10 @@ enchanter buys back.
 - **`services.ts`** — `visitTownServices(party, context, steps)` tries the
   caller's ordered list of `TownServiceStep` functions until one spends the
   hour. The regular steps are potions, loot sharing/sales, magic items, guild
-  dues, blessing and armour; `TOWN_PURCHASE_STEPS` is that list for standalone
-  visits. Game supplies its full default list with the roster's retirement
-  step between blessing and armour. Adding or reordering a service changes
+  dues, blessing and armour. `defaultTownServiceSteps(companyStep?)` builds
+  the one named default list, with a caller-contributed step between blessing
+  and armour (no action for standalone visits). Game contributes the roster’s
+  retirement step. Adding or reordering a service changes
   the supplied list; services has no knowledge of retirement. Each step keeps
   the existing reserve, equipment allocation, coin reasons and synchronous
   reporting. `BLESSING_HP_PER_LEVEL` remains shared with combat setup.
@@ -230,9 +236,9 @@ step()
  └─ expireQuests()   nobody answered; looters move in
 ```
 
-`Game.acceptQuest` is the single place that takes work through the Board,
-then calls Expedition's `startExpedition`, then publishes the returned
-acceptance event. The Board links work and company; Expedition sets traveling
+`Game.acceptQuest` chooses the work and calls the roster’s `depart` operation,
+which takes that work through the Board and calls Expedition’s `startExpedition`
+on the owned company. Game then publishes the returned acceptance event. The Board links work and company; Expedition sets traveling
 status, travel ticks and idle ticks. Event subscribers see the same linked,
 traveling company as before.
 
@@ -259,7 +265,7 @@ combat resolver through an interface: `runCombat` is the production adapter,
 while tests supply scripted outcomes. A wipe or homecoming resets expedition
 progress and hands the finished work and outcome to settlement exactly once.
 Game forwards that callback to the Board, which alone releases the company.
-On a wipe, Expedition first asks the roster module to disband the company at
+On a wipe, Expedition first invokes its roster-supplied `disband` operation at
 the same point before loot storage, wipe counting and settlement as before.
 Expedition's road intelligence callbacks also go through the Board. Expiring
 a Contract without its employer or holding is an error before it is closed or

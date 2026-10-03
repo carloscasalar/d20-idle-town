@@ -1,4 +1,3 @@
-import { disbandCompany } from '../adventurers/company-roster';
 import { describeHero, gainXp, healHero, isBloodied, killHero, potionHeal, resurrectionCost, rollSkill, type Hero } from '../adventurers/hero';
 import { aliveMembers, deadMembers, MAX_RENOWN, partyLevel, type Party } from '../adventurers/party';
 import type { CombatOptions, CombatOutcome } from '../combat/battlecast';
@@ -40,6 +39,8 @@ export interface ExpeditionContext {
   shortRestHealFraction: number;
   skillDc: number;
   combat: CombatResolver;
+  /** Roster-owned disbanding, called at the existing wipe point. */
+  disband: (company: Party) => void;
   /** Publish immediately so observers see state at the point of the event. */
   report: (event: ExpeditionEvent) => void;
   learnIntel: (quest: ReadonlyQuest) => string;
@@ -185,7 +186,7 @@ function resolveFight(p: Party, q: ReadonlyQuest, context: ExpeditionContext): v
       log(context, 'combat', `${p.name}: ${summary} Defeat. Nobody comes back from ${q.place}.`, outcome.lines);
       deathNotes();
       chronicleLog(context, 'death', `${p.name} are wiped out at ${q.place}.`);
-      disbandCompany(p);
+      context.disband(p);
       ledger.partiesWiped += 1;
       leaveLoot(q, p, p.members);
       p.progress = 0;

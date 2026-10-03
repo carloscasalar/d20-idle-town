@@ -1,3 +1,4 @@
+import { CompanyRoster } from '../src/adventurers/company-roster';
 import assert from 'node:assert/strict';
 import { describe, expect, it } from 'vitest';
 import { createHero, killHero } from '../src/adventurers/hero';
@@ -9,7 +10,7 @@ import { advanceExpedition, type ExpeditionContext } from '../src/sim/expedition
 import { DEFAULT_CONFIG, Game, TICKS_PER_DAY, type GameConfig, type GameScenario, type GameStats } from '../src/sim/game';
 import { createAsset } from '../src/town/assets';
 import { createLair, type Lair } from '../src/town/lairs';
-import { TOWN_PURCHASE_STEPS, visitTownServices } from '../src/town/services';
+import { defaultTownServiceSteps, visitTownServices } from '../src/town/services';
 import { generateTown, RETIREMENT_PRICE, serviceOf, type Town } from '../src/town/town';
 import { LONG_SIMULATION_TIMEOUT_MS, readSimulationState } from './helpers/simulation';
 
@@ -252,7 +253,7 @@ describe('service purchase ledgers', () => {
     const ledger = { itemsSold: 3 };
     const statistics = { goldPaid: 0, goldSpentByHeroes: 7 };
 
-    expect(visitTownServices(p, { town, day: 1, ledger, statistics, report: () => {} }, TOWN_PURCHASE_STEPS)).toBe(true);
+    expect(visitTownServices(p, { town, day: 1, ledger, statistics, report: () => {} }, defaultTownServiceSteps())).toBe(true);
 
     expect(p).toMatchObject({ gold: left, earned: 30, spent });
     expect(shop).toMatchObject({ treasury, earned, spent: 5 });
@@ -350,9 +351,12 @@ describe('homecoming payments', () => {
     const ledger = { heroesDied: 0, partiesWiped: 0 };
     const statistics = { goldPaid: 0, goldSpentByHeroes: 0 };
     const reports: string[] = [];
+    const roster = new CompanyRoster();
+    roster.replaceForScenario([p]);
     const context: ExpeditionContext = {
       town, quest: q, rng, ledger, statistics, travelTicks: 2, restTicks: 8, shortRestHealFraction: 0.5, skillDc: 15,
       combat: () => { throw new Error('Homecoming does not fight'); }, report: (event) => { reports.push(event.text); },
+      disband: (company) => roster.disband(company),
       learnIntel: () => '', revealAll: () => {}, leaveLoot: () => {},
       settleQuest: (_q, company) => { company.questId = null; },
     };

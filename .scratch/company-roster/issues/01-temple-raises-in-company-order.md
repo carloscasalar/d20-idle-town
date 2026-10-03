@@ -7,7 +7,7 @@ Category: enhancement
 
 ## Current behaviour
 
-`Game.recruit` in `src/sim/game.ts` visits the fallen in company order.
+`CompanyRoster.recruit` in `src/adventurers/company-roster.ts` visits the fallen in company order.
 At an operating temple, it pays to raise each adventurer the remaining purse
 can afford, skipping anyone whose fee is too high. It does not sort by price
 or choose a combination that raises as many adventurers as possible.

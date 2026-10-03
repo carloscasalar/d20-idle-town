@@ -33,10 +33,14 @@ export interface TownServiceContext {
 /** One service may spend the hour; false allows the following step to try. */
 export type TownServiceStep = (company: Party, context: TownServiceContext) => boolean;
 
-/** Regular services; Game supplies the complete ordered list for its world. */
-export const TOWN_PURCHASE_STEPS: readonly TownServiceStep[] = Object.freeze([
-  buyPotions, sellLoot, buyMagicItem, payGuildDues, buyBlessing, buyArmour,
-]);
+/** One default order, with a caller-contributed company step before armour.
+ * The standalone default contributes no action; Game supplies its roster step.
+ */
+export function defaultTownServiceSteps(companyStep: TownServiceStep = () => false): readonly TownServiceStep[] {
+  return Object.freeze([
+    buyPotions, sellLoot, buyMagicItem, payGuildDues, buyBlessing, companyStep, buyArmour,
+  ]);
+}
 
 /** Try caller-supplied steps in order, stopping as soon as one spends the hour.
  * A false result may still change state, such as a lapsed guild membership.

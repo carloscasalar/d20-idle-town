@@ -3,12 +3,11 @@ import type { Rng } from '../core/rng';
 import type { MagicItem } from '../items/items';
 import { HERO_CLASS_NAMES, type HeroClassName } from 'battlecast-engine';
 import type { DeepReadonly } from '../core/readonly';
-import { PARTY_SIZE, MAX_PARTY_SIZE } from './company-size';
 import { createHero, type Hero } from './hero';
 
-// Compatibility exports: membership mutations are implemented only by the roster.
-export { mergeParties, buryDead } from './company-roster';
-export { PARTY_SIZE, MAX_PARTY_SIZE } from './company-size';
+/** Shared default company sizes; roster and encounter configuration read these definitions. */
+export const PARTY_SIZE = 4;
+export const MAX_PARTY_SIZE = 6;
 
 /** Maximum fame from expeditions; Board configuration uses the same default. */
 export const MAX_RENOWN = 10;
@@ -114,15 +113,6 @@ export function deadMembers(p: Party): Hero[];
 export function deadMembers(p: ReadonlyParty): DeepReadonly<Hero>[];
 export function deadMembers(p: ReadonlyParty): DeepReadonly<Hero>[] {
   return p.members.filter((m) => !m.alive);
-}
-
-/** Enough to take a contract. */
-export function isFull(p: ReadonlyParty): boolean {
-  return aliveMembers(p).length >= PARTY_SIZE;
-}
-
-export function hasRoom(p: ReadonlyParty): boolean {
-  return aliveMembers(p).length < MAX_PARTY_SIZE;
 }
 
 export function partyLevel(p: ReadonlyParty): number {

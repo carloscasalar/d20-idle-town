@@ -1,6 +1,7 @@
+import { CompanyRoster } from '../src/adventurers/company-roster';
 import { describe, expect, it } from 'vitest';
 import { createHero, gainXp, killHero, resurrectHero, resurrectionCost } from '../src/adventurers/hero';
-import { aliveMembers, createParty, isFull, mergeParties, partyLevel } from '../src/adventurers/party';
+import { aliveMembers, createParty, partyLevel } from '../src/adventurers/party';
 import { Rng } from '../src/core/rng';
 
 describe('hero progression', () => {
@@ -38,8 +39,10 @@ describe('party merging', () => {
     killHero(donor.members[0]!);
     host.gold = 10;
     donor.gold = 5;
-    const leftover = mergeParties(host, donor, { goldPaid: 0, goldSpentByHeroes: 0 });
-    expect(isFull(host)).toBe(true);
+    const roster = new CompanyRoster();
+    roster.replaceForScenario([host, donor]);
+    const leftover = roster.merge(host, donor, { statistics: { goldPaid: 0, goldSpentByHeroes: 0 } });
+    expect(roster.isReady(host)).toBe(true);
     expect(aliveMembers(host).length).toBe(5); // 2 + 3: room for six, so everyone comes along
     expect(leftover.length).toBe(0);
     expect(aliveMembers(donor).length).toBe(0);
