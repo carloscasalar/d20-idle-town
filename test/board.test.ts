@@ -15,6 +15,8 @@ import { createAsset, type Asset } from '../src/town/assets';
 import { createLair, type Lair } from '../src/town/lairs';
 import { serviceOf, type Employer, type ServiceKind, type Town } from '../src/town/town';
 import { LONG_SIMULATION_TIMEOUT_MS, readSimulationState } from './helpers/simulation';
+import { STARTING_GOLD, QUEST_GENERATION } from './helpers/supplied-config';
+import { DEFAULT_HOLDING_CONFIG } from '../src/town/assets';
 
 interface BoardWorld {
   quests: readonly {
@@ -101,7 +103,7 @@ function world(config: Partial<BoardConfig> & { renownCap?: number; companySize?
   const rng = new Rng(4);
   const patron = employer(rng);
   const guild = employer(rng, 'guild');
-  const holding = createAsset(rng, 'watchtower', patron.id);
+  const holding = createAsset(rng, 'watchtower', patron.id, DEFAULT_HOLDING_CONFIG);
   patron.assets.push(holding);
   const town: Town = { name: 'Testtown', tavernName: 'The Inn', deity: 'A Test', employers: [patron, guild] };
   const lairs: Lair[] = [];
@@ -140,13 +142,13 @@ function world(config: Partial<BoardConfig> & { renownCap?: number; companySize?
 }
 
 function companyOf(rng: Rng, parties: Party[]): Party {
-  const company = createParty(rng, 5, 4, 0);
+  const company = createParty(rng, 5, 4, 0, STARTING_GOLD);
   parties.push(company);
   return company;
 }
 
 function lairOf(rng: Rng, lairs: Lair[]): Lair {
-  const lair = createLair(rng, 'goblins', 5, 0, DEFAULT_COMPANY_ROSTER_CONFIG.companySize);
+  const lair = createLair(rng, 'goblins', 5, 0, DEFAULT_COMPANY_ROSTER_CONFIG.companySize, DEFAULT_LAIR_CONFIG);
   lairs.push(lair);
   return lair;
 }
@@ -382,7 +384,7 @@ describe('the Board', () => {
     const company = companyOf(rng, parties);
     board.take(company, taken, context);
     check();
-    const otherHolding = createAsset(rng, 'watchtower', patron.id);
+    const otherHolding = createAsset(rng, 'watchtower', patron.id, DEFAULT_HOLDING_CONFIG);
     patron.assets.push(otherHolding);
     const open = board.postContract(patron, otherHolding, 'goblins', 5, null, context);
     check();
@@ -528,7 +530,7 @@ describe('Board configuration', () => {
     board.expireContracts(context);
     check();
     expect(board.all()).toEqual([finished, taken]);
-    const other = createAsset(rng, 'watchtower', patron.id);
+    const other = createAsset(rng, 'watchtower', patron.id, DEFAULT_HOLDING_CONFIG);
     patron.assets.push(other);
     const open = board.postContract(patron, other, 'goblins', 5, null, context);
     check();
@@ -811,14 +813,14 @@ describe('Game and Board expedition ownership', () => {
       }
       const patron = scenario.town.employers[0]!;
       const holding = patron.assets[0]!;
-      const company = createParty(rng, 5, 4, scenario.tick);
+      const company = createParty(rng, 5, 4, scenario.tick, STARTING_GOLD);
       Object.assign(company, { gold: kind === 'assault' ? 2000 : 0, potions: 100, blessed: true, duesPaidDay: 5, guildMember: true, idleTicks: 12 });
       for (const hero of company.members) hero.armorTier = 3;
-      const lair = createLair(rng, 'goblins', 5, scenario.tick, DEFAULT_COMPANY_ROSTER_CONFIG.companySize);
+      const lair = createLair(rng, 'goblins', 5, scenario.tick, DEFAULT_COMPANY_ROSTER_CONFIG.companySize, DEFAULT_LAIR_CONFIG);
       lair.raidCooldown = 10_000;
       const work = kind === 'contract'
-        ? generateQuest(rng, { employer: patron, asset: holding, theme: 'goblins', level: 5, partySize: 4, tick: scenario.tick })
-        : generateAssault(rng, lair, serviceOf(scenario.town, 'guild'), 4, scenario.tick);
+        ? generateQuest(rng, { employer: patron, asset: holding, theme: 'goblins', level: 5, partySize: 4, tick: scenario.tick }, QUEST_GENERATION)
+        : generateAssault(rng, lair, serviceOf(scenario.town, 'guild'), 4, scenario.tick, 1, QUEST_GENERATION);
       work.countRevealed = true;
       work.revealed = work.encounters.length;
       work.guildOnly = false;
@@ -861,12 +863,12 @@ describe('Game and Board expedition ownership', () => {
       const rng = new Rng(71);
       const patron = scenario.town.employers[0]!;
       const holding = patron.assets[0]!;
-      const lair = createLair(rng, 'goblins', 5, 0, DEFAULT_COMPANY_ROSTER_CONFIG.companySize);
+      const lair = createLair(rng, 'goblins', 5, 0, DEFAULT_COMPANY_ROSTER_CONFIG.companySize, DEFAULT_LAIR_CONFIG);
       lair.raidCooldown = 10_000;
-      const company = createParty(rng, 1, 4, 0);
+      const company = createParty(rng, 1, 4, 0, STARTING_GOLD);
       const work = kind === 'contract'
-        ? generateQuest(rng, { employer: patron, asset: holding, theme: 'goblins', level: 1, partySize: 4, tick: 0 })
-        : generateAssault(rng, lair, serviceOf(scenario.town, 'guild'), 4, 0);
+        ? generateQuest(rng, { employer: patron, asset: holding, theme: 'goblins', level: 1, partySize: 4, tick: 0 }, QUEST_GENERATION)
+        : generateAssault(rng, lair, serviceOf(scenario.town, 'guild'), 4, 0, 1, QUEST_GENERATION);
       work.encounters = [{ difficulty: 'hard', monsters: [{ name: 'Ancient Red Dragon', count: 6, xpEach: 62_000 }], totalXp: 372_000, tier: 'High' }];
       work.status = 'taken';
       work.partyId = company.id;

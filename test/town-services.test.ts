@@ -2,21 +2,23 @@ import { describe, expect, it } from 'vitest';
 import { DEFAULT_COMPANY_ROSTER_CONFIG } from '../src/adventurers/company-roster';
 import { Game } from '../src/sim/game';
 import { createParty } from '../src/adventurers/party';
-import { armorUpgradeCost, createHero, MAX_ARMOR_TIER, potionCost, resurrectionCost } from '../src/adventurers/hero';
+import { armorUpgradeCost, createHero, potionCost, resurrectionCost } from '../src/adventurers/hero';
 import { Rng } from '../src/core/rng';
 import { instantiate, ITEM_CATALOGUE } from '../src/items/items';
 import { DEFAULT_TOWN_CONFIG, type Employer } from '../src/town/town';
+import { STARTING_GOLD } from './helpers/supplied-config';
+import { DEFAULT_HERO_ECONOMY } from '../src/adventurers/hero';
 
 // Exercise the public hourly tick, with unrelated arrivals, raids and restocking disabled.
 function setup(level = 1, tick = 0) {
   const rng = new Rng(8);
-  const party = createParty(rng, level, 4, 0);
+  const party = createParty(rng, level, 4, 0, STARTING_GOLD);
   party.members = Array.from({ length: 4 }, () => createHero(rng, level, 'Fighter'));
   party.potions = 4;
   party.blessed = true;
   party.guildMember = true;
   party.duesPaidDay = 1;
-  for (const hero of party.members) hero.armorTier = MAX_ARMOR_TIER;
+  for (const hero of party.members) hero.armorTier = DEFAULT_HERO_ECONOMY.maxArmorTier;
   const shops = new Map<NonNullable<Employer['service']>, Employer>();
   const game = Game.forTesting({ seed: 42, roster: { maxCompanies: 1 }, world: { maxOpenQuests: 0 } }, (scenario) => {
     scenario.tick = tick;
@@ -28,7 +30,7 @@ function setup(level = 1, tick = 0) {
       if (employer.service) shops.set(employer.service, employer);
     }
   });
-  return { game, party, reserve: resurrectionCost(level), shop: (service: NonNullable<Employer['service']>) => shops.get(service)! };
+  return { game, party, reserve: resurrectionCost(level, DEFAULT_HERO_ECONOMY), shop: (service: NonNullable<Employer['service']>) => shops.get(service)! };
 }
 const itemRng = new Rng(9);
 const item = (name: string) => instantiate(itemRng, ITEM_CATALOGUE.find((i) => i.name === name)!);
@@ -39,14 +41,14 @@ describe('town services through an hourly tick', () => {
     party.potions = 0;
     party.guildMember = false;
     party.duesPaidDay = -1;
-    party.gold = reserve + potionCost(1) * 2;
+    party.gold = reserve + potionCost(1, DEFAULT_HERO_ECONOMY) * 2;
     const apothecary = shop('apothecary');
     const treasury = apothecary.treasury;
     const earned = apothecary.earned;
     game.step();
     expect(party.potions).toBe(2);
     expect(party.gold).toBe(reserve);
-    expect(party.spent).toBe(potionCost(1) * 2);
+    expect(party.spent).toBe(potionCost(1, DEFAULT_HERO_ECONOMY) * 2);
     expect(game.view().stats.goldSpentByHeroes).toBe(party.spent);
     expect(apothecary.treasury).toBe(treasury + party.spent);
     expect(apothecary.earned).toBe(earned + party.spent);
@@ -196,11 +198,11 @@ describe('town services through an hourly tick', () => {
     const { game, party, reserve, shop } = setup();
     party.members[0]!.armorTier = 1;
     party.members[1]!.armorTier = 0;
-    const cost = armorUpgradeCost(0, 1);
+    const cost = armorUpgradeCost(0, 1, DEFAULT_HERO_ECONOMY);
     party.gold = reserve + cost;
     const treasury = shop('smith').treasury;
     game.step();
-    expect(party.members.map((h) => h.armorTier)).toEqual([1, 1, MAX_ARMOR_TIER, MAX_ARMOR_TIER]);
+    expect(party.members.map((h) => h.armorTier)).toEqual([1, 1, DEFAULT_HERO_ECONOMY.maxArmorTier, DEFAULT_HERO_ECONOMY.maxArmorTier]);
     expect(party.members[1]!.goldSpent).toBe(cost);
     expect(party.gold).toBe(reserve);
     expect(shop('smith').treasury).toBe(treasury + cost);
@@ -210,7 +212,7 @@ describe('town services through an hourly tick', () => {
   it('fits multiple members in one hour, upgrading each only once', () => {
     const { game, party, reserve } = setup();
     for (const hero of party.members) hero.armorTier = 0;
-    party.gold = reserve + 4 * armorUpgradeCost(0, 1);
+    party.gold = reserve + 4 * armorUpgradeCost(0, 1, DEFAULT_HERO_ECONOMY);
     game.step();
     expect(party.members.map((h) => h.armorTier)).toEqual([1, 1, 1, 1]);
     expect(party.gold).toBe(reserve);

@@ -91,7 +91,7 @@ export function pickBoss(theme: ThemeId, level: number, companySize: number): Mo
   return fits[0] ?? roster.sort((a, b) => a.xp - b.xp)[0]!;
 }
 
-export function createLair(rng: Rng, theme: ThemeId, level: number, tick: number, companySize: number, rules: LairConfig = DEFAULT_LAIR_CONFIG): Lair {
+export function createLair(rng: Rng, theme: ThemeId, level: number, tick: number, companySize: number, rules: LairConfig): Lair {
   const kind = KINDS[theme];
   return {
     id: rng.id('lair'),
@@ -116,7 +116,7 @@ export function createLair(rng: Rng, theme: ThemeId, level: number, tick: number
 export const LAIR_THEMES: ThemeId[] = ['bandits', 'goblins', 'undead', 'cultists', 'giants', 'dragons', 'fiends', 'sea', 'fey', 'monstrosities'];
 
 /** Hours between raids: a fresh lair strikes every four days or so, a strong one every day and a half. */
-export function raidInterval(lair: Lair, rules: LairConfig = DEFAULT_LAIR_CONFIG): number {
+export function raidInterval(lair: Lair, rules: LairConfig): number {
   return Math.max(rules.minRaidInterval, rules.baseRaidInterval - Math.min(rules.strengthCap, lair.strength) * rules.raidIntervalPerStrength);
 }
 

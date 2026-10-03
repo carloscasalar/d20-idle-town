@@ -6,6 +6,8 @@ import { generateAssault, generateQuest, type Quest } from '../src/quests/quest'
 import { Game, TICKS_PER_DAY } from '../src/sim/game';
 import { createLair } from '../src/town/lairs';
 import { serviceOf, type Town } from '../src/town/town';
+import { STARTING_GOLD, QUEST_GENERATION } from './helpers/supplied-config';
+import { DEFAULT_LAIR_CONFIG } from '../src/town/lairs';
 
 describe('employer ruin', () => {
   it.each(['threatened', 'ravaged'] as const)('releases all open contracts from %s holdings without changing their status', (status) => {
@@ -18,14 +20,14 @@ describe('employer ruin', () => {
       employer.upkeepPerDay = 10_000;
       scenario.tick = TICKS_PER_DAY - 1;
       scenario.parties = [];
-      const lair = createLair(rng, 'goblins', 5, scenario.tick, DEFAULT_COMPANY_ROSTER_CONFIG.companySize);
+      const lair = createLair(rng, 'goblins', 5, scenario.tick, DEFAULT_COMPANY_ROSTER_CONFIG.companySize, DEFAULT_LAIR_CONFIG);
       lair.raidCooldown = 100;
-      const bounty = generateAssault(rng, lair, serviceOf(scenario.town, 'guild'), 4, scenario.tick);
+      const bounty = generateAssault(rng, lair, serviceOf(scenario.town, 'guild'), 4, scenario.tick, 1, QUEST_GENERATION);
       lair.questId = bounty.id;
       scenario.lairs = [lair];
       scenario.quests = [bounty, ...employer.assets.map((asset) => {
         asset.status = status;
-        const quest = generateQuest(rng, { employer, asset, theme: lair.theme, lair, level: 1, partySize: 4, tick: scenario.tick });
+        const quest = generateQuest(rng, { employer, asset, theme: lair.theme, lair, level: 1, partySize: 4, tick: scenario.tick }, QUEST_GENERATION);
         asset.questId = quest.id;
         return quest;
       })];
@@ -55,14 +57,14 @@ describe('employer ruin', () => {
       guild.treasury = 0;
       guild.upkeepPerDay = 10_000;
       scenario.tick = TICKS_PER_DAY - 1;
-      const lairs = [createLair(rng, 'goblins', 5, scenario.tick, DEFAULT_COMPANY_ROSTER_CONFIG.companySize), createLair(rng, 'undead', 5, scenario.tick, DEFAULT_COMPANY_ROSTER_CONFIG.companySize)];
+      const lairs = [createLair(rng, 'goblins', 5, scenario.tick, DEFAULT_COMPANY_ROSTER_CONFIG.companySize, DEFAULT_LAIR_CONFIG), createLair(rng, 'undead', 5, scenario.tick, DEFAULT_COMPANY_ROSTER_CONFIG.companySize, DEFAULT_LAIR_CONFIG)];
       const bounties = lairs.map((lair) => {
         lair.raidCooldown = 100;
-        const bounty = generateAssault(rng, lair, guild, 4, scenario.tick);
+        const bounty = generateAssault(rng, lair, guild, 4, scenario.tick, 1, QUEST_GENERATION);
         lair.questId = bounty.id;
         return bounty;
       });
-      const company = createParty(rng, 5, 4, scenario.tick);
+      const company = createParty(rng, 5, 4, scenario.tick, STARTING_GOLD);
       const taken = bounties[1]!;
       taken.status = 'taken';
       taken.partyId = company.id;

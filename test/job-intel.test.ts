@@ -13,6 +13,10 @@ import { createAsset } from '../src/town/assets';
 import { createLair } from '../src/town/lairs';
 import { generateTown, serviceOf, type ServiceKind } from '../src/town/town';
 import { expeditionRules } from './helpers/expedition-rules';
+import { STARTING_GOLD } from './helpers/supplied-config';
+import { DEFAULT_LAIR_CONFIG } from '../src/town/lairs';
+import { DEFAULT_TOWN_CONFIG } from '../src/town/town';
+import { DEFAULT_HOLDING_CONFIG } from '../src/town/assets';
 
 const encounters: EncounterSpec[] = [
   { difficulty: 'easy', monsters: [{ name: 'Goblin Warrior', count: 1, xpEach: 50 }], totalXp: 50, tier: 'Low' },
@@ -31,7 +35,7 @@ function job(overrides: Partial<Quest> = {}): Quest {
 }
 
 function company(rng: Rng, level = 1, gold = 300, name = 'Lanterns'): Party {
-  const result = createParty(rng, level, 4, 0);
+  const result = createParty(rng, level, 4, 0, STARTING_GOLD);
   result.name = name;
   result.members = Array.from({ length: 4 }, (_, index) => {
     const hero = createHero(rng, level, 'Fighter');
@@ -109,7 +113,7 @@ function road(work = job(), skillDc = DEFAULT_JOB_INTEL_CONFIG.skillDc, seed = 1
   board.replaceForScenario([work]);
   const events: ExpeditionEvent[] = [];
   const context: ExpeditionContext = {
-    quest: board.byId(work.id), town: generateTown(rng), rng: new Rng(seed),
+    quest: board.byId(work.id), town: generateTown(rng, DEFAULT_TOWN_CONFIG, DEFAULT_HOLDING_CONFIG), rng: new Rng(seed),
     ledger: { heroesDied: 0, partiesWiped: 0 }, statistics: { goldPaid: 0, goldSpentByHeroes: 0 },
     ...expeditionRules({ travelTicks: 4, skillDc }),
     combat: () => { throw new Error('Travel does not fight'); },
@@ -130,7 +134,7 @@ describe('intelligence on newly posted work', () => {
       scenario.quests = [];
       const employer = scenario.town.employers[0]!;
       employer.cooldown = 0;
-      employer.assets.push(createAsset(rng, 'watchtower', employer.id));
+      employer.assets.push(createAsset(rng, 'watchtower', employer.id, DEFAULT_HOLDING_CONFIG));
     }, { world: { maxOpenQuests: 1 } });
 
     game.step();
@@ -148,7 +152,7 @@ describe('intelligence on newly posted work', () => {
   it('posts a Bounty with its count public but only its first encounter described', () => {
     const game = scene((scenario, rng) => {
       scenario.quests = [];
-      const lair = createLair(rng, 'goblins', 1, 0, DEFAULT_COMPANY_ROSTER_CONFIG.companySize);
+      const lair = createLair(rng, 'goblins', 1, 0, DEFAULT_COMPANY_ROSTER_CONFIG.companySize, DEFAULT_LAIR_CONFIG);
       lair.raidCooldown = 10_000;
       scenario.lairs = [lair];
       scenario.parties[0]!.status = 'resting';
@@ -684,7 +688,7 @@ describe('separate companies and jobs', () => {
   it('allows fresh tavern attempts and two fresh rounds when the company considers another job', () => {
     const game = scene((scenario, rng) => {
       const employer = scenario.town.employers[0]!;
-      const holding = createAsset(rng, 'watchtower', employer.id);
+      const holding = createAsset(rng, 'watchtower', employer.id, DEFAULT_HOLDING_CONFIG);
       holding.status = 'threatened';
       holding.questId = 'tower';
       employer.assets.push(holding);

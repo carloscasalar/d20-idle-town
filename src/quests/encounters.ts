@@ -75,7 +75,7 @@ export const DEFAULT_ENCOUNTER_CONFIG: EncounterConfig = freeze({
  * DMG tier down reads as "easy / intermediate / hard" in practice:
  * easy sits below "Low", intermediate is "Low", hard is "Moderate".
  */
-export function xpBand(partySize: number, level: number, difficulty: Difficulty, scale = 1, rules: EncounterConfig = DEFAULT_ENCOUNTER_CONFIG): { min: number; max: number } {
+export function xpBand(partySize: number, level: number, difficulty: Difficulty, scale: number, rules: EncounterConfig): { min: number; max: number } {
   const t = calculateDifficulty(partySize, level, 0).thresholds;
   const band = (min: number, max: number) => ({ min: Math.round(min * scale), max: Math.round(max * scale) });
   switch (difficulty) {
@@ -103,8 +103,8 @@ export function buildEncounter(
   partySize: number,
   level: number,
   difficulty: Difficulty,
-  scale = 1,
-  rules: EncounterConfig = DEFAULT_ENCOUNTER_CONFIG,
+  scale: number,
+  rules: EncounterConfig,
 ): EncounterSpec {
   const band = xpBand(partySize, level, difficulty, scale, rules);
   const roster = themeMonsters(theme);
@@ -182,7 +182,7 @@ function attempt(rng: Rng, usable: MonsterData[], target: number, pattern: Patte
  * Contracts are budgeted for four. A bigger company meets proportionally more
  * of the same monsters (a lone boss stays alone until the count would double).
  */
-export function scaleEncounter(spec: DeepReadonly<EncounterSpec>, partySize: number, baseSize: number, rules: EncounterConfig = DEFAULT_ENCOUNTER_CONFIG): DeepReadonly<EncounterSpec> {
+export function scaleEncounter(spec: DeepReadonly<EncounterSpec>, partySize: number, baseSize: number, rules: EncounterConfig): DeepReadonly<EncounterSpec> {
   if (partySize <= baseSize) return spec;
   const factor = partySize / baseSize;
   const monsters = spec.monsters.map((g) => ({ ...g, count: Math.max(g.count, Math.floor(g.count * factor + rules.scaleRoundingBias)) }));

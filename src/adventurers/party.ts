@@ -3,7 +3,7 @@ import type { Rng } from '../core/rng';
 import type { MagicItem } from '../items/items';
 import { HERO_CLASS_NAMES, type HeroClassName } from 'battlecast-engine';
 import type { DeepReadonly } from '../core/readonly';
-import { createHero, DEFAULT_HERO_ECONOMY, type Hero } from './hero';
+import { createHero, type Hero } from './hero';
 
 export type PartyStatus =
   | 'idle'
@@ -78,7 +78,7 @@ export function rollClasses(rng: Rng, size: number): HeroClassName[] {
   return chosen;
 }
 
-export function createParty(rng: Rng, level: number, size: number, tick: number, startingGoldPerLevel = DEFAULT_HERO_ECONOMY.startingGoldPerLevel): Party {
+export function createParty(rng: Rng, level: number, size: number, tick: number, startingGoldPerLevel: number): Party {
   const members: Hero[] = rollClasses(rng, size).map((cls) => createHero(rng, level, cls));
   return {
     id: rng.id('party'),

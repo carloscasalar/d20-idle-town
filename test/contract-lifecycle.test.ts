@@ -9,6 +9,9 @@ import { DEFAULT_COMPANY_ROSTER_CONFIG } from '../src/adventurers/company-roster
 import { ASSET_KINDS, createAsset, type Asset } from '../src/town/assets';
 import { createLair, type Lair } from '../src/town/lairs';
 import { serviceOf, type Employer, type Town } from '../src/town/town';
+import { STARTING_GOLD } from './helpers/supplied-config';
+import { DEFAULT_LAIR_CONFIG } from '../src/town/lairs';
+import { DEFAULT_HOLDING_CONFIG } from '../src/town/assets';
 
 // All mutation happens inside forTesting. The default scene keeps arrivals,
 // shops, daily income and unrelated posting out of these one-hour decisions.
@@ -37,7 +40,7 @@ function scene(configure: (scenario: GameScenario, rng: Rng) => void, config: De
 }
 
 function holding(rng: Rng, employer: Employer, name = 'Holding'): Asset {
-  const asset = createAsset(rng, 'watchtower', employer.id);
+  const asset = createAsset(rng, 'watchtower', employer.id, DEFAULT_HOLDING_CONFIG);
   Object.assign(asset, { name, incomePerDay: 10 });
   employer.assets.push(asset);
   return asset;
@@ -51,7 +54,7 @@ function postingEmployer(scenario: GameScenario, rng: Rng, overrides: Partial<Em
 }
 
 function company(rng: Rng, level = 5): Party {
-  const party = createParty(rng, level, 4, 100);
+  const party = createParty(rng, level, 4, 100, STARTING_GOLD);
   // Fully provisioned, with current dues; no service consumes the decision hour.
   Object.assign(party, { gold: 0, potions: 4, blessed: true, duesPaidDay: 5 });
   for (const hero of party.members) hero.armorTier = 3;
@@ -59,7 +62,7 @@ function company(rng: Rng, level = 5): Party {
 }
 
 function lair(rng: Rng, theme: ThemeId = 'goblins', level = 5): Lair {
-  const result = createLair(rng, theme, level, 100, DEFAULT_COMPANY_ROSTER_CONFIG.companySize);
+  const result = createLair(rng, theme, level, 100, DEFAULT_COMPANY_ROSTER_CONFIG.companySize, DEFAULT_LAIR_CONFIG);
   Object.assign(result, { raidCooldown: 10_000, hoard: { gold: 100, items: [] } });
   return result;
 }

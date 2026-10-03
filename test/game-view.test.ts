@@ -6,6 +6,8 @@ import { instantiate, ITEM_CATALOGUE } from '../src/items/items';
 import type { Quest } from '../src/quests/quest';
 import { Game } from '../src/sim/game';
 import { createLair } from '../src/town/lairs';
+import { STARTING_GOLD } from './helpers/supplied-config';
+import { DEFAULT_LAIR_CONFIG } from '../src/town/lairs';
 
 describe('Game.view', () => {
   it('gives a renderer an immutable snapshot of the clock and visible town settings', () => {
@@ -35,28 +37,28 @@ describe('Game.view', () => {
       ],
       revealed: 1, countRevealed: false, reward: 100, itemReward: null, guildOnly: false, status: 'taken', partyId: null, postedAt: 0,
     };
-    const incomplete = createParty(rng, 1, 3, 0);
+    const incomplete = createParty(rng, 1, 3, 0, STARTING_GOLD);
     incomplete.id = 'incomplete';
     incomplete.idleTicks = 6;
-    const traveling = createParty(rng, 2, 4, 0);
+    const traveling = createParty(rng, 2, 4, 0, STARTING_GOLD);
     traveling.id = 'traveling';
     traveling.status = 'traveling';
     traveling.questId = quest.id;
     traveling.ticksLeft = 2;
-    const questing = createParty(rng, 2, 4, 0);
+    const questing = createParty(rng, 2, 4, 0, STARTING_GOLD);
     questing.id = 'questing';
     questing.status = 'questing';
     questing.questId = quest.id;
     questing.progress = 1;
-    const returning = createParty(rng, 2, 4, 0);
+    const returning = createParty(rng, 2, 4, 0, STARTING_GOLD);
     returning.id = 'returning';
     returning.status = 'returning';
     returning.ticksLeft = 3;
-    const resting = createParty(rng, 2, 4, 0);
+    const resting = createParty(rng, 2, 4, 0, STARTING_GOLD);
     resting.id = 'resting';
     resting.status = 'resting';
     resting.ticksLeft = 4;
-    const disbanded = createParty(rng, 2, 4, 0);
+    const disbanded = createParty(rng, 2, 4, 0, STARTING_GOLD);
     disbanded.status = 'disbanded';
     const game = Game.forTesting({ seed: 12 }, (scenario) => {
       scenario.quests = [quest];
@@ -74,10 +76,10 @@ describe('Game.view', () => {
 
   it('resolves the board’s employers, companies, lairs and hidden encounters', () => {
     const rng = new Rng(13);
-    const party = createParty(rng, 2, 4, 0);
+    const party = createParty(rng, 2, 4, 0, STARTING_GOLD);
     party.id = 'party-1';
     party.name = 'The Lanterns';
-    const lair = createLair(rng, 'goblins', 4, 0, DEFAULT_COMPANY_ROSTER_CONFIG.companySize);
+    const lair = createLair(rng, 'goblins', 4, 0, DEFAULT_COMPANY_ROSTER_CONFIG.companySize, DEFAULT_LAIR_CONFIG);
     lair.id = 'lair-1';
     lair.name = 'Cragmaw warcamp';
     lair.strength = 3;
@@ -121,7 +123,7 @@ describe('Game.view', () => {
 
   it('summarises the town economy, holdings, lairs, counters and chronicle as immutable read data', () => {
     const rng = new Rng(14);
-    const lair = createLair(rng, 'goblins', 4, 0, DEFAULT_COMPANY_ROSTER_CONFIG.companySize);
+    const lair = createLair(rng, 'goblins', 4, 0, DEFAULT_COMPANY_ROSTER_CONFIG.companySize, DEFAULT_LAIR_CONFIG);
     lair.name = 'The Broken Fang';
     lair.strength = 3;
     lair.raidCooldown = 47;

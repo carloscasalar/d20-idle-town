@@ -6,6 +6,7 @@ import { Rng } from '../src/core/rng';
 import type { EncounterSpec } from '../src/quests/encounters';
 import { Game } from '../src/sim/game';
 import { LONG_SIMULATION_TIMEOUT_MS } from './helpers/simulation';
+import { COMBAT_RULES } from './helpers/supplied-config';
 
 const roc = getMonsterByName('Roc')!;
 
@@ -22,7 +23,7 @@ function sixRocs(): EncounterSpec {
 describe('a Gargantuan creature\'s space', () => {
   it('still fights when six Rocs face a single hero', () => {
     const hero = createHero(new Rng(1), 1, 'Fighter');
-    const out = runCombat([hero], sixRocs(), 7);
+    const out = runCombat([hero], sixRocs(), 7, { ...COMBAT_RULES });
     expect(out.opening).toContain('6x Roc');
     expect(out.rounds).toBeGreaterThan(0);
     expect(out.lines.join('\n')).toContain('Roc 6');

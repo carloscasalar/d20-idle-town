@@ -77,6 +77,8 @@ export interface HeroEconomyConfig {
   resurrectedHpFraction: number;
   /** Least hit points a resurrected hero is left with. */
   resurrectedHpMinimum: number;
+  /** Bonus treated as skill when choosing who has advantage on the check. */
+  skillAdvantageTiebreak: number;
 }
 
 export const DEFAULT_HERO_ECONOMY: HeroEconomyConfig = freeze({
@@ -93,12 +95,10 @@ export const DEFAULT_HERO_ECONOMY: HeroEconomyConfig = freeze({
   startingGoldPerLevel: 20,
   resurrectedHpFraction: 0.5,
   resurrectedHpMinimum: 1,
+  skillAdvantageTiebreak: 3,
 });
 
-/** The configured armour cap. Tests and callers that only need the default read this. */
-export const MAX_ARMOR_TIER = DEFAULT_HERO_ECONOMY.maxArmorTier;
-
-export function armorUpgradeCost(tier: number, level: number, economy: HeroEconomyConfig = DEFAULT_HERO_ECONOMY): number {
+export function armorUpgradeCost(tier: number, level: number, economy: HeroEconomyConfig): number {
   return Math.round((economy.armorBase + economy.armorPerLevel * level) * Math.pow(economy.armorTierFactor, tier));
 }
 
@@ -163,22 +163,22 @@ export function killHero(hero: Hero): void {
   hero.deaths += 1;
 }
 
-export function resurrectHero(hero: Hero, economy: HeroEconomyConfig = DEFAULT_HERO_ECONOMY): void {
+export function resurrectHero(hero: Hero, economy: HeroEconomyConfig): void {
   hero.alive = true;
   hero.hp = Math.max(economy.resurrectedHpMinimum, Math.floor(hero.maxHp * economy.resurrectedHpFraction));
 }
 
 /** Gold the temple asks to bring someone back. Grows with level, like a 5e diamond bill would. */
-export function resurrectionCost(level: number, economy: HeroEconomyConfig = DEFAULT_HERO_ECONOMY): number {
+export function resurrectionCost(level: number, economy: HeroEconomyConfig): number {
   return economy.resurrectionBase + level * level * economy.resurrectionQuadratic;
 }
 
 /** A healing draught scaled to the buyer's level: one potion is about a third of a hero's hit points. */
-export function potionCost(level: number, economy: HeroEconomyConfig = DEFAULT_HERO_ECONOMY): number {
+export function potionCost(level: number, economy: HeroEconomyConfig): number {
   return economy.potionBase + economy.potionPerLevel * level;
 }
 
-export function potionHeal(hero: Hero, economy: HeroEconomyConfig = DEFAULT_HERO_ECONOMY): number {
+export function potionHeal(hero: Hero, economy: HeroEconomyConfig): number {
   return Math.max(economy.potionHealMinimum, Math.ceil(hero.maxHp / economy.potionHealDivisor));
 }
 
@@ -214,12 +214,13 @@ export interface SkillRoll {
 }
 
 /** The best member attempts the check; d20 (twice, keep the best, if their class has advantage) plus their bonus. */
-export function rollSkill(rng: Rng, members: Hero[], skill: string, dc: number): SkillRoll | null;
-export function rollSkill(rng: Rng, members: readonly DeepReadonly<Hero>[], skill: string, dc: number): DeepReadonly<SkillRoll> | null;
-export function rollSkill(rng: Rng, members: readonly DeepReadonly<Hero>[], skill: string, dc: number): DeepReadonly<SkillRoll> | null {
+export function rollSkill(rng: Rng, members: Hero[], skill: string, dc: number, economy: HeroEconomyConfig): SkillRoll | null;
+export function rollSkill(rng: Rng, members: readonly DeepReadonly<Hero>[], skill: string, dc: number, economy: HeroEconomyConfig): DeepReadonly<SkillRoll> | null;
+export function rollSkill(rng: Rng, members: readonly DeepReadonly<Hero>[], skill: string, dc: number, economy: HeroEconomyConfig): DeepReadonly<SkillRoll> | null {
   const alive = members.filter((h) => h.alive);
   if (alive.length === 0) return null;
-  const hero = [...alive].sort((a, b) => skillBonus(b, skill) + (SKILL_ADVANTAGE[skill]?.includes(b.heroClass) ? 3 : 0) - (skillBonus(a, skill) + (SKILL_ADVANTAGE[skill]?.includes(a.heroClass) ? 3 : 0)))[0]!;
+  const edge = (hero: DeepReadonly<Hero>) => skillBonus(hero, skill) + (SKILL_ADVANTAGE[skill]?.includes(hero.heroClass) ? economy.skillAdvantageTiebreak : 0);
+  const hero = [...alive].sort((a, b) => edge(b) - edge(a))[0]!;
   const advantage = SKILL_ADVANTAGE[skill]?.includes(hero.heroClass) ?? false;
   const d1 = rng.int(1, 20);
   const d2 = rng.int(1, 20);

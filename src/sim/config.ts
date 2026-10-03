@@ -15,14 +15,14 @@ import { DEFAULT_EXPEDITION_CONFIG, type ExpeditionConfig } from './expedition';
 import { DEFAULT_WORLD_CONFIG, TICKS_PER_DAY, type WorldConfig } from './game-rules';
 
 /**
- * One plain configuration. `seed` and the clock sit at the top. Every other
- * value lives in the section of the module that owns it. Shared values
- * (company size, renown cap, lair strength cap) have one home; Game passes
- * that value to the other modules.
+ * One plain configuration. `seed` sits at the top. Every other value lives in
+ * the section of the module that owns it. A day is `TICKS_PER_DAY` hours, a
+ * constant of the clock rather than a tunable. Shared values (company size,
+ * renown cap, lair strength cap) have one home; Game passes that value to the
+ * other modules.
  */
 export interface GameConfig {
   seed: number;
-  ticksPerDay: number;
   board: BoardConfig;
   roster: CompanyRosterConfig;
   intel: JobIntelConfig;
@@ -41,7 +41,6 @@ export interface GameConfig {
 
 export const DEFAULT_CONFIG: GameConfig = freeze({
   seed: 20260907,
-  ticksPerDay: TICKS_PER_DAY,
   board: DEFAULT_BOARD_CONFIG,
   roster: DEFAULT_COMPANY_ROSTER_CONFIG,
   intel: DEFAULT_JOB_INTEL_CONFIG,
@@ -70,16 +69,19 @@ export type DeepPartial<T> = T extends readonly (infer Item)[]
 export type ConfigResult = { ok: true; config: GameConfig } | { ok: false; errors: string[] };
 
 type Spec =
-  | { kind: 'number'; min?: number; max?: number; price?: boolean }
-  | { kind: 'range' }
+  | { kind: 'number'; min?: number; max?: number; price?: boolean; integer?: boolean }
+  | { kind: 'range'; integer?: boolean }
   | { kind: 'boolean' }
   | { kind: 'enum'; values: readonly string[] }
-  | { kind: 'strings' }
-  | { kind: 'list'; item: Spec }
+  | { kind: 'strings'; nonEmpty?: boolean }
+  | { kind: 'list'; item: Spec; weights?: boolean }
   | { kind: 'section'; fields: Record<string, Spec> };
 
 const price = { kind: 'number' as const, min: 0, price: true };
-const count = { kind: 'number' as const, min: 0 };
+const count = { kind: 'number' as const, min: 0, integer: true };
+const whole = (min: number): Spec => ({ kind: 'number', min, integer: true });
+const fraction = { kind: 'number' as const, min: 0 };
+const wholeRange = { kind: 'range' as const, integer: true };
 const chance = { kind: 'number' as const, min: 0, max: 1 };
 const range = { kind: 'range' as const };
 const flag = { kind: 'boolean' as const };
@@ -95,7 +97,6 @@ const GAME_SPEC: Spec = {
   kind: 'section',
   fields: {
     seed: { kind: 'number' },
-    ticksPerDay: { kind: 'number', min: 1 },
     board: numberSection([
       'windfallDays', 'lootingDays', 'bountyRenown', 'contractRenown', 'failureRenownLoss',
       'reputationGain', 'pruningThreshold', 'contractOpenTicks', 'travelTicks', 'lairStrengthGain',
@@ -111,8 +112,8 @@ const GAME_SPEC: Spec = {
     services: numberSection(['duesPeriodDays']),
     lairs: numberSection(['strengthCap', 'initialStrength', 'minRaidInterval', 'baseRaidInterval', 'raidIntervalPerStrength']),
     heroes: numberSection(['maxArmorTier', 'potionHealMinimum', 'potionHealDivisor']),
-    holdings: numberSection(['incomeSpreadMin', 'incomeSpreadSpan']),
-    items: numberSection(['resaleDivisor'], { kind: 'number', min: 1 }),
+    holdings: numberSection(['incomeSpreadMin', 'incomeSpreadSpan'], fraction),
+    items: numberSection(['resaleDivisor'], whole(1)),
     world: numberSection([
       'maxOpenQuests', 'postingThreshold', 'ruinDays', 'bountyLevelGap', 'idleLevelWeight', 'busyLevelWeight',
       'stretchReputation', 'idleStretchTicks', 'levelStretch', 'firstRefusalTicks', 'lairRespawnDays',
@@ -128,11 +129,13 @@ function withFields(spec: Spec, fields: Record<string, Spec>): Spec {
 
 const boardSpec = withFields(GAME_SPEC.kind === 'section' ? GAME_SPEC.fields.board! : GAME_SPEC, {
   difficultyScale: { kind: 'number', min: 0 },
-  expiryCooldown: range,
-  failureCooldown: range,
+  expiryCooldown: wholeRange,
+  failureCooldown: wholeRange,
 });
 
 const rosterSpec = withFields(sectionField(GAME_SPEC, 'roster'), {
+  arrivalIntervalMinDivisor: whole(1),
+  arrivalIntervalMaxFactor: whole(1),
   retirementPrice: price,
   retirementCapitalShare: chance,
   arrivalQuestLevelChance: chance,
@@ -145,7 +148,7 @@ const intelSpec = withFields(sectionField(GAME_SPEC, 'intel'), {
 });
 
 const expeditionSpec = withFields(sectionField(GAME_SPEC, 'expedition'), {
-  shortRestHealFraction: { kind: 'number', min: 0 },
+  shortRestHealFraction: fraction,
   carousingShare: chance,
   carousingMinimum: price,
   roomFeePerLevel: price,
@@ -156,33 +159,34 @@ const servicesSpec = withFields(sectionField(GAME_SPEC, 'services'), {
   guildDuesPerLevel: price,
   blessingCostPerLevel: price,
   blessingHpPerLevel: count,
-  blessingReserveFactor: { kind: 'number', min: 0 },
+  blessingReserveFactor: fraction,
 });
 
 const lairsSpec = withFields(sectionField(GAME_SPEC, 'lairs'), {
   hoardGoldPerLevel: price,
-  raidCooldown: range,
+  raidCooldown: wholeRange,
 });
 
 const heroesSpec = withFields(sectionField(GAME_SPEC, 'heroes'), {
   armorBase: price,
   armorPerLevel: price,
-  armorTierFactor: { kind: 'number', min: 0 },
+  armorTierFactor: fraction,
   resurrectionBase: price,
   resurrectionQuadratic: price,
   potionBase: price,
   potionPerLevel: price,
   startingGoldPerLevel: price,
   resurrectedHpFraction: chance,
-  resurrectedHpMinimum: { kind: 'number', min: 1 },
+  resurrectedHpMinimum: whole(1),
+  skillAdvantageTiebreak: count,
 });
 
 const questsSpec: Spec = {
   kind: 'section',
   fields: {
-    encounterCounts: { kind: 'list', item: { kind: 'section', fields: { count: { kind: 'number', min: 1 }, weight: count } } },
-    difficultyWeights: { kind: 'list', item: { kind: 'section', fields: { difficulty, weight: count } } },
-    difficultyPay: numberSection(['easy', 'intermediate', 'hard'], { kind: 'number', min: 0 }),
+    encounterCounts: { kind: 'list', weights: true, item: { kind: 'section', fields: { count: whole(1), weight: count } } },
+    difficultyWeights: { kind: 'list', weights: true, item: { kind: 'section', fields: { difficulty, weight: count } } },
+    difficultyPay: numberSection(['easy', 'intermediate', 'hard'], fraction),
     ravagedPayFactor: { kind: 'number', min: 0 },
     incomeDays: count,
     levelPayFactor: count,
@@ -195,8 +199,8 @@ const questsSpec: Spec = {
     nobleItemChance: chance,
     guildOnlyKinds: { kind: 'strings' },
     guildOnlyLevel: count,
-    assaultEncounters: range,
-    assaultDifficultyWeights: { kind: 'list', item: { kind: 'section', fields: { difficulty, weight: count } } },
+    assaultEncounters: wholeRange,
+    assaultDifficultyWeights: { kind: 'list', weights: true, item: { kind: 'section', fields: { difficulty, weight: count } } },
     bountyPerLevel: price,
     bossLootLevelBonus: count,
     bossGuardCount: count,
@@ -206,19 +210,19 @@ const questsSpec: Spec = {
 const encountersSpec: Spec = {
   kind: 'section',
   fields: {
-    maxMonsters: { kind: 'number', min: 1 },
-    compositionAttempts: { kind: 'number', min: 1 },
+    maxMonsters: whole(1),
+    compositionAttempts: whole(1),
     minimumFallbackXp: count,
-    patterns: { kind: 'list', item: { kind: 'section', fields: { item: pattern, weight: count } } },
+    patterns: { kind: 'list', weights: true, item: { kind: 'section', fields: { item: pattern, weight: count } } },
     soloMinFactor: chance,
-    hordeTargetDivisor: { kind: 'number', min: 1 },
-    hordeMinimum: { kind: 'number', min: 1 },
+    hordeTargetDivisor: whole(1),
+    hordeMinimum: whole(1),
     leaderMinFactor: chance,
     leaderMaxFactor: chance,
-    mixedKinds: range,
-    mixedShareDivisor: { kind: 'number', min: 1 },
-    mixedGroupCap: { kind: 'number', min: 1 },
-    scaleRoundingBias: count,
+    mixedKinds: wholeRange,
+    mixedShareDivisor: whole(1),
+    mixedGroupCap: whole(1),
+    scaleRoundingBias: fraction,
     easyBand: range,
   },
 };
@@ -227,49 +231,50 @@ const townSpec: Spec = {
   kind: 'section',
   fields: {
     maxStock: count,
-    restockTicks: numberSection(['enchanter', 'temple', 'smith'], { kind: 'number', min: 1 }),
-    restockInitialDivisor: { kind: 'number', min: 1 },
-    nobleCount: range,
-    extraMerchants: range,
-    extraFactions: range,
-    nobleHoldings: range,
-    otherHoldings: range,
+    restockTicks: numberSection(['enchanter', 'temple', 'smith'], whole(1)),
+    restockInitialDivisor: whole(1),
+    nobleCount: wholeRange,
+    extraMerchants: wholeRange,
+    extraFactions: wholeRange,
+    nobleHoldings: wholeRange,
+    otherHoldings: wholeRange,
     nobleTreasury: range,
     merchantTreasury: range,
     factionTreasury: range,
     templeTreasury: range,
     nobleGenerosityMin: { kind: 'number', min: 0 },
-    nobleGenerositySpan: count,
-    merchantGenerosityMin: { kind: 'number', min: 0 },
-    merchantGenerositySpan: count,
-    factionGenerosityMin: { kind: 'number', min: 0 },
-    factionGenerositySpan: count,
-    templeGenerosityMin: { kind: 'number', min: 0 },
-    templeGenerositySpan: count,
-    upkeepFactorMin: count,
-    upkeepFactorSpan: count,
-    initialCooldown: range,
-    retiredUpkeepFactor: count,
+    nobleGenerositySpan: fraction,
+    merchantGenerosityMin: fraction,
+    merchantGenerositySpan: fraction,
+    factionGenerosityMin: fraction,
+    factionGenerositySpan: fraction,
+    templeGenerosityMin: fraction,
+    templeGenerositySpan: fraction,
+    upkeepFactorMin: fraction,
+    upkeepFactorSpan: fraction,
+    initialCooldown: wholeRange,
+    retiredHoldings: { kind: 'strings', nonEmpty: true },
+    retiredUpkeepFactor: fraction,
     retiredGenerosity: { kind: 'number', min: 0 },
     retiredReputation: count,
-    retiredCooldown: range,
-    threatenedIncomeDivisor: { kind: 'number', min: 1 },
+    retiredCooldown: wholeRange,
+    threatenedIncomeDivisor: whole(1),
   },
 };
 
 const combatSpec: Spec = {
   kind: 'section',
   fields: {
-    maxRounds: { kind: 'number', min: 1 },
+    maxRounds: whole(1),
     surpriseInitiativePenalty: count,
     ambushTacticChance: chance,
     monstersFirstChance: chance,
-    lairDepthWatchfulness: count,
+    lairDepthWatchfulness: fraction,
     partyAmbushFactor: chance,
-    fleeCompanyDivisor: { kind: 'number', min: 1 },
+    fleeCompanyDivisor: whole(1),
     fleeMonsterHpFraction: chance,
-    stealthGroupDivisor: { kind: 'number', min: 1 },
-    stabilisedHp: { kind: 'number', min: 1 },
+    stealthGroupDivisor: whole(1),
+    stabilisedHp: whole(1),
   },
 };
 
@@ -277,10 +282,10 @@ const worldSpec = withFields(sectionField(GAME_SPEC, 'world'), {
   assaultAppetite: chance,
   stretchPostChance: chance,
   lairRespawnSameThemeChance: chance,
-  postingCooldown: range,
-  startingLairs: range,
-  startingLairLevels: range,
-  lairRespawnLevelGain: range,
+  postingCooldown: wholeRange,
+  startingLairs: wholeRange,
+  startingLairLevels: wholeRange,
+  lairRespawnLevelGain: wholeRange,
 });
 
 const itemsSpec = withFields(sectionField(GAME_SPEC, 'items'), {
@@ -294,7 +299,6 @@ const SPEC: Spec = {
   kind: 'section',
   fields: {
     seed: { kind: 'number' },
-    ticksPerDay: { kind: 'number', min: 1 },
     board: boardSpec,
     roster: rosterSpec,
     intel: intelSpec,
@@ -317,6 +321,23 @@ function sectionField(spec: Spec, name: string): Spec {
   const field = spec.fields[name];
   if (!field) throw new Error(`missing section ${name}`);
   return field;
+}
+
+/** Every field the validator knows, including fields inside a weighted list. */
+export function configFieldPaths(): readonly string[] {
+  return listFields(SPEC, '');
+}
+
+function listFields(spec: Spec, path: string): string[] {
+  if (spec.kind === 'section') {
+    return Object.entries(spec.fields).flatMap(([key, field]) => {
+      const next = path ? `${path}.${key}` : key;
+      const nested = field.kind === 'section' || field.kind === 'list' ? listFields(field, next) : [];
+      return [next, ...nested];
+    });
+  }
+  if (spec.kind === 'list') return listFields(spec.item, `${path}[]`);
+  return [];
 }
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -358,8 +379,11 @@ function check(value: unknown, spec: Spec, path: string, errors: string[]): void
   const place = path || 'configuration';
   if (spec.kind === 'section') {
     if (!isPlainObject(value)) {
-      errors.push(path ? `missing section ${path}` : 'expected a configuration object');
+      errors.push(path ? `${path}: expected an object, got ${seen(value)}` : 'expected a configuration object');
       return;
+    }
+    for (const key of Object.keys(value)) {
+      if (!(key in spec.fields)) errors.push(`unknown field ${path ? `${path}.${key}` : key}`);
     }
     for (const [key, field] of Object.entries(spec.fields)) {
       const next = path ? `${path}.${key}` : key;
@@ -374,6 +398,10 @@ function check(value: unknown, spec: Spec, path: string, errors: string[]): void
   if (spec.kind === 'number') {
     if (typeof value !== 'number' || !Number.isFinite(value)) {
       errors.push(`${place}: expected a number, got ${seen(value)}`);
+      return;
+    }
+    if (spec.integer && !Number.isInteger(value)) {
+      errors.push(`${place}: expected a whole number, got ${value}`);
       return;
     }
     if (spec.price && value < 0) {
@@ -393,6 +421,10 @@ function check(value: unknown, spec: Spec, path: string, errors: string[]): void
       errors.push(`${place}: expected a [min, max] pair of numbers`);
       return;
     }
+    if (spec.integer && (!Number.isInteger(value[0]) || !Number.isInteger(value[1]))) {
+      errors.push(`${place}: expected a [min, max] pair of whole numbers`);
+      return;
+    }
     if (value[0] > value[1]) errors.push(`${place}: minimum ${value[0]} exceeds maximum ${value[1]}`);
     return;
   }
@@ -409,11 +441,17 @@ function check(value: unknown, spec: Spec, path: string, errors: string[]): void
   if (spec.kind === 'strings') {
     if (!Array.isArray(value) || value.some((item) => typeof item !== 'string')) {
       errors.push(`${place}: expected a list of strings`);
+      return;
     }
+    if (spec.nonEmpty && value.length === 0) errors.push(`${place}: empty list`);
     return;
   }
   if (!Array.isArray(value)) {
     errors.push(`${place}: expected a list`);
+    return;
+  }
+  if (spec.weights && value.length === 0) {
+    errors.push(`${place}: empty weight list`);
     return;
   }
   value.forEach((item, index) => check(item, spec.item, `${place}[${index}]`, errors));

@@ -1,5 +1,5 @@
 import { freeze } from '../core/freeze';
-import { describeHero, resurrectHero, resurrectionCost, DEFAULT_HERO_ECONOMY, type Hero, type HeroEconomyConfig } from './hero';
+import { describeHero, resurrectHero, resurrectionCost, type Hero, type HeroEconomyConfig } from './hero';
 import { aliveMembers, createParty, deadMembers, describeParty, partyLevel, type Party, type ReadonlyParty } from './party';
 import { listNames } from '../core/names';
 import type { DeepReadonly } from '../core/readonly';
@@ -10,13 +10,17 @@ import { coinReasons, purse, sink, transfer, treasury, type GoldStatistics } fro
 import { visitTownServices, type TownServiceStep, type TownServiceContext } from '../town/services';
 import { advanceExpedition, startExpedition, type ExpeditionContext } from '../sim/expedition';
 import type { Board, BoardContext, TakenWork } from '../sim/board';
-import { DEFAULT_HOLDING_CONFIG, type HoldingConfig } from '../town/assets';
-import { retiredEmployer, serviceOf, type Town, type TownConfig, DEFAULT_TOWN_CONFIG } from '../town/town';
+import { type HoldingConfig } from '../town/assets';
+import { retiredEmployer, serviceOf, type Town, type TownConfig } from '../town/town';
 
 /** Plain data; all durations are in ticks. Shared defaults retain their one definition. */
 export interface CompanyRosterConfig {
   maxCompanies: number;
   arrivalInterval: number;
+  /** Shortest wait is the interval divided by this, rounded up. */
+  arrivalIntervalMinDivisor: number;
+  /** Longest wait is the interval multiplied by this. */
+  arrivalIntervalMaxFactor: number;
   patienceTicks: number;
   disbandTicks: number;
   companySize: number;
@@ -35,6 +39,8 @@ export interface CompanyRosterConfig {
 export const DEFAULT_COMPANY_ROSTER_CONFIG: CompanyRosterConfig = freeze({
   maxCompanies: 8,
   arrivalInterval: 10,
+  arrivalIntervalMinDivisor: 2,
+  arrivalIntervalMaxFactor: 2,
   patienceTicks: 12,
   disbandTicks: 72,
   companySize: 4,
@@ -99,10 +105,10 @@ export class CompanyRoster {
   private nextArrival: number;
 
   constructor(
-    private readonly config: DeepReadonly<CompanyRosterConfig> = DEFAULT_COMPANY_ROSTER_CONFIG,
-    private readonly heroes: HeroEconomyConfig = DEFAULT_HERO_ECONOMY,
-    private readonly townRules: TownConfig = DEFAULT_TOWN_CONFIG,
-    private readonly holdings: HoldingConfig = DEFAULT_HOLDING_CONFIG,
+    private readonly config: DeepReadonly<CompanyRosterConfig>,
+    private readonly heroes: HeroEconomyConfig,
+    private readonly townRules: TownConfig,
+    private readonly holdings: HoldingConfig,
   ) {
     this.nextArrival = config.firstArrivalTick;
   }
@@ -180,7 +186,9 @@ export class CompanyRoster {
 
   arrivals(context: ArrivalContext): void {
     if (context.tick < this.nextArrival) return;
-    this.nextArrival = context.tick + context.rng.int(Math.ceil(this.config.arrivalInterval / 2), this.config.arrivalInterval * 2);
+    const shortest = Math.ceil(this.config.arrivalInterval / this.config.arrivalIntervalMinDivisor);
+    const longest = this.config.arrivalInterval * this.config.arrivalIntervalMaxFactor;
+    this.nextArrival = context.tick + context.rng.int(shortest, longest);
     if (this.activeCompanies.length >= this.config.maxCompanies) return;
 
     const stranded = this.activeCompanies.find((p) => p.status === 'idle' && !this.isReady(p) && p.idleTicks >= this.config.patienceTicks);

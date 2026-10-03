@@ -1,12 +1,12 @@
 import { freeze } from '../core/freeze';
 import type { DeepReadonly } from '../core/readonly';
 import type { Rng } from '../core/rng';
-import { rollLootItem, DEFAULT_ITEM_CONFIG, type ItemConfig, type MagicItem } from '../items/items';
+import { rollLootItem, type ItemConfig, type MagicItem } from '../items/items';
 import { ASSET_KINDS, type Asset, type AssetKind } from '../town/assets';
 import type { Lair } from '../town/lairs';
 import type { Employer, EmployerKind } from '../town/town';
-import { buildEncounter, DEFAULT_ENCOUNTER_CONFIG, type Difficulty, type EncounterConfig, type EncounterSpec } from './encounters';
-import { knowledgeAtPosting, DEFAULT_JOB_INTEL_CONFIG, type JobIntelConfig } from './job-intel';
+import { buildEncounter, type Difficulty, type EncounterConfig, type EncounterSpec } from './encounters';
+import { knowledgeAtPosting, type JobIntelConfig } from './job-intel';
 import { THEMES, themeMonsters, type ThemeId } from './themes';
 
 export { difficultyCode, isFullyKnown } from './job-intel';
@@ -107,22 +107,19 @@ export const DEFAULT_QUEST_CONFIG: QuestConfig = freeze({
   bossGuardCount: 1,
 });
 
-export const MIN_ENCOUNTERS = DEFAULT_QUEST_CONFIG.encounterCounts[0]!.count;
-export const MAX_ENCOUNTERS = DEFAULT_QUEST_CONFIG.encounterCounts[DEFAULT_QUEST_CONFIG.encounterCounts.length - 1]!.count;
-
 export interface QuestGeneration {
-  quests?: QuestConfig;
-  encounters?: EncounterConfig;
-  intel?: JobIntelConfig;
-  items?: ItemConfig;
+  quests: QuestConfig;
+  encounters: EncounterConfig;
+  intel: JobIntelConfig;
+  items: ItemConfig;
 }
 
 /** Short jobs are common, long ones rare. */
-export function rollEncounterCount(rng: Rng, quests: QuestConfig = DEFAULT_QUEST_CONFIG): number {
+export function rollEncounterCount(rng: Rng, quests: QuestConfig): number {
   return rng.weighted(quests.encounterCounts.map((entry) => ({ item: entry.count, weight: entry.weight })));
 }
 
-export function rollDifficulties(rng: Rng, count: number, quests: QuestConfig = DEFAULT_QUEST_CONFIG): Difficulty[] {
+export function rollDifficulties(rng: Rng, count: number, quests: QuestConfig): Difficulty[] {
   const weights = quests.difficultyWeights.map((entry) => ({ item: entry.difficulty, weight: entry.weight }));
   return Array.from({ length: count }, () => rng.weighted(weights));
 }
@@ -145,11 +142,8 @@ export interface QuestTerms {
  * dangerous the job is, how generous the employer is, and how desperate (a
  * ravaged asset pays more). Capped by what the employer can actually pay.
  */
-export function generateQuest(rng: Rng, terms: QuestTerms, generation: QuestGeneration = {}): Quest {
-  const quests = generation.quests ?? DEFAULT_QUEST_CONFIG;
-  const encountersRules = generation.encounters ?? DEFAULT_ENCOUNTER_CONFIG;
-  const intel = generation.intel ?? DEFAULT_JOB_INTEL_CONFIG;
-  const items = generation.items ?? DEFAULT_ITEM_CONFIG;
+export function generateQuest(rng: Rng, terms: QuestTerms, generation: QuestGeneration): Quest {
+  const { quests, encounters: encountersRules, intel, items } = generation;
   const { employer, asset, theme, level, partySize, tick } = terms;
   const def = ASSET_KINDS[asset.kind];
   const threatLabel = terms.lair ? `${THEMES[theme].label} of ${terms.lair.name}` : THEMES[theme].label;
@@ -193,11 +187,8 @@ const ASSAULT_TITLES = ['Break {lair}', 'End the reign of {boss}', 'Storm {place
  * The standing contract to clear a lair: long, mostly hard, and the boss with
  * its guard at the end. The lair's own hoard is the prize, plus the guild's bounty.
  */
-export function generateAssault(rng: Rng, lair: Lair, guild: Employer, partySize: number, tick: number, difficultyScale = 1, generation: QuestGeneration = {}): Quest {
-  const quests = generation.quests ?? DEFAULT_QUEST_CONFIG;
-  const encountersRules = generation.encounters ?? DEFAULT_ENCOUNTER_CONFIG;
-  const intel = generation.intel ?? DEFAULT_JOB_INTEL_CONFIG;
-  const items = generation.items ?? DEFAULT_ITEM_CONFIG;
+export function generateAssault(rng: Rng, lair: Lair, guild: Employer, partySize: number, tick: number, difficultyScale: number, generation: QuestGeneration): Quest {
+  const { quests, encounters: encountersRules, intel, items } = generation;
   const count = rng.int(...quests.assaultEncounters);
   const assaultWeights = quests.assaultDifficultyWeights.map((entry) => ({ item: entry.difficulty, weight: entry.weight }));
   const difficulties: Difficulty[] = Array.from({ length: count - 1 }, () => rng.weighted(assaultWeights));

@@ -1,10 +1,10 @@
-import { armorUpgradeCost, equipItem, wantsItem, potionCost, resurrectionCost, DEFAULT_HERO_ECONOMY, type Hero, type HeroEconomyConfig } from '../adventurers/hero';
+import { armorUpgradeCost, equipItem, wantsItem, potionCost, resurrectionCost, type Hero, type HeroEconomyConfig } from '../adventurers/hero';
 import { aliveMembers, partyLevel, type Party } from '../adventurers/party';
 import { freeze } from '../core/freeze';
 import { listNames } from '../core/names';
-import { describeEffect, resalePrice, DEFAULT_ITEM_CONFIG, type ItemConfig, type MagicItem } from '../items/items';
+import { describeEffect, resalePrice, type ItemConfig, type MagicItem } from '../items/items';
 import { coinReasons, purse, transfer, treasury, type GoldStatistics } from './coin';
-import { serviceOf, DEFAULT_TOWN_CONFIG, type Employer, type Town } from './town';
+import { serviceOf, type Employer, type Town } from './town';
 
 /** Prices and limits for an idle hour in town. */
 export interface TownServiceConfig {
@@ -24,9 +24,6 @@ export const DEFAULT_TOWN_SERVICE_CONFIG: TownServiceConfig = freeze({
   blessingReserveFactor: 1.5,
 });
 
-/** The configured blessing. Expedition receives this when a company is blessed. */
-export const BLESSING_HP_PER_LEVEL = DEFAULT_TOWN_SERVICE_CONFIG.blessingHpPerLevel;
-
 /** Item statistics for a service visit. Gold statistics live on the context. */
 export interface ServiceLedger {
   itemsSold: number;
@@ -45,11 +42,11 @@ export interface TownServiceContext {
   statistics: GoldStatistics;
   /** Publish immediately, so subscribers see state at the same point as the event. */
   report: (event: ServiceEvent) => void;
-  services?: TownServiceConfig;
-  heroes?: HeroEconomyConfig;
-  items?: ItemConfig;
+  services: TownServiceConfig;
+  heroes: HeroEconomyConfig;
+  items: ItemConfig;
   /** Shop shelf size. The town section is its home. */
-  maxStock?: number;
+  maxStock: number;
 }
 
 /** One service may spend the hour; false allows the following step to try. */
@@ -212,11 +209,7 @@ export function buyBlessing(p: Party, context: TownServiceContext): boolean {
 
 /** Per-step inputs and the existing coin/event operations; no random draws. */
 function serviceVisit(p: Party, context: TownServiceContext) {
-  const { town, day, ledger, statistics, report } = context;
-  const services = context.services ?? DEFAULT_TOWN_SERVICE_CONFIG;
-  const heroes = context.heroes ?? DEFAULT_HERO_ECONOMY;
-  const items = context.items ?? DEFAULT_ITEM_CONFIG;
-  const maxStock = context.maxStock ?? DEFAULT_TOWN_CONFIG.maxStock;
+  const { town, day, ledger, statistics, report, services, heroes, items, maxStock } = context;
   const pay = (from: Party, to: Employer, amount: number, adventurer?: Hero) =>
     transfer(purse(from), treasury(to), amount, 'service', statistics, coinReasons, adventurer);
   const log = (kind: ServiceEvent['kind'], text: string) => report({ kind, text });

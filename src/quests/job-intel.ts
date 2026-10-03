@@ -12,7 +12,7 @@
  */
 
 import { aliveMembers, partyLevel, type JobInquiry, type Party } from '../adventurers/party';
-import { resurrectionCost, rollSkill, DEFAULT_HERO_ECONOMY, type HeroEconomyConfig } from '../adventurers/hero';
+import { resurrectionCost, rollSkill, type HeroEconomyConfig } from '../adventurers/hero';
 import { freeze } from '../core/freeze';
 import type { DeepReadonly } from '../core/readonly';
 import type { Rng } from '../core/rng';
@@ -94,8 +94,8 @@ export interface JobIntelContext {
   rng: Rng;
   statistics: GoldStatistics;
   config: JobIntelConfig;
-  /** Resurrection price. Omitted calls use the hero module's default. */
-  heroes?: HeroEconomyConfig;
+  /** Resurrection price. */
+  heroes: HeroEconomyConfig;
   report: (event: JobIntelEvent) => void;
 }
 
@@ -120,6 +120,7 @@ export function seekJobIntelligence(company: Party, context: JobIntelContext, st
 export interface RoadIntelContext {
   rng: Rng;
   skillDc: number;
+  heroes: HeroEconomyConfig;
   /** The job being travelled. The module decides what a successful reading reveals. */
   knowledge: JobKnowledge;
   report: (text: string) => void;
@@ -147,7 +148,7 @@ export function difficultyCode(work: {
 }
 
 /** How much is public when a job is posted. A bounty already shows its length. */
-export function knowledgeAtPosting(kind: 'contract' | 'assault', config: JobIntelConfig = DEFAULT_JOB_INTEL_CONFIG): { revealed: number; countRevealed: boolean } {
+export function knowledgeAtPosting(kind: 'contract' | 'assault', config: JobIntelConfig): { revealed: number; countRevealed: boolean } {
   return { revealed: config.revealedAtPosting, countRevealed: kind === 'assault' && config.assaultRevealsCount };
 }
 
@@ -186,7 +187,7 @@ export function freeAttempt(company: Party, context: JobIntelContext): boolean {
   const tavern = serviceOf(context.town, 'tavern');
   if (tavern.ruined || jobInquiry(company, context.work.id)?.freeAttempt) return false;
   ensureInquiry(company, context.work.id).freeAttempt = true;
-  const check = rollSkill(context.rng, aliveMembers(company), 'Persuasion', context.config.skillDc);
+  const check = rollSkill(context.rng, aliveMembers(company), 'Persuasion', context.config.skillDc, context.heroes);
   if (!check) return false;
   const dice = diceText(check);
   const dc = context.config.skillDc;
@@ -205,7 +206,7 @@ export function divination(company: Party, context: JobIntelContext): boolean {
   if (temple.ruined) return false;
   const level = partyLevel(company);
   const cost = context.config.divinationCostPerLevel * level;
-  const reserve = resurrectionCost(level, context.heroes ?? DEFAULT_HERO_ECONOMY) * context.config.divinationReserveFactor;
+  const reserve = resurrectionCost(level, context.heroes) * context.config.divinationReserveFactor;
   if (company.gold - cost < reserve) return false;
   transfer(purse(company), treasury(temple), cost, 'intel', context.statistics, coinReasons);
   context.knowledge.revealAll();
@@ -223,7 +224,7 @@ export function paidRound(company: Party, context: JobIntelContext): boolean {
   const tavern = serviceOf(context.town, 'tavern');
   const level = partyLevel(company);
   const cost = context.config.roundCostPerLevel * level;
-  const reserve = resurrectionCost(level, context.heroes ?? DEFAULT_HERO_ECONOMY) * context.config.roundReserveFactor;
+  const reserve = resurrectionCost(level, context.heroes) * context.config.roundReserveFactor;
   if (tavern.ruined || company.gold - cost < reserve) return false;
   transfer(purse(company), treasury(tavern), cost, 'intel', context.statistics, coinReasons);
   ensureInquiry(company, context.work.id).roundsBought = done + 1;
@@ -240,7 +241,7 @@ export function readTheRoad(
 ): void {
   if (isFullyKnown(work) || jobInquiry(company, work.id)?.roadRead) return;
   ensureInquiry(company, work.id).roadRead = true;
-  const check = rollSkill(context.rng, aliveMembers(company), 'Survival', context.skillDc);
+  const check = rollSkill(context.rng, aliveMembers(company), 'Survival', context.skillDc, context.heroes);
   if (!check) return;
   const dice = diceText(check);
   if (check.success) context.report(`On the road, ${check.hero.name} reads the tracks (Survival ${dice} vs DC ${context.skillDc}): ${context.knowledge.learnNext()}.`);

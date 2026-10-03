@@ -4,6 +4,10 @@ import { createParty } from '../src/adventurers/party';
 import { killHero } from '../src/adventurers/hero';
 import { Rng } from '../src/core/rng';
 import { emptyGoldStatistics } from '../src/town/coin';
+import { STARTING_GOLD } from './helpers/supplied-config';
+import { DEFAULT_HERO_ECONOMY } from '../src/adventurers/hero';
+import { DEFAULT_TOWN_CONFIG } from '../src/town/town';
+import { DEFAULT_HOLDING_CONFIG } from '../src/town/assets';
 
 // Compile-time checks: hourly iteration cannot lend mutable company state.
 function hourlyViews(roster: CompanyRoster): void {
@@ -20,10 +24,10 @@ void hourlyViews;
 
 it('refuses merges, burial and disbanding of companies outside the roster before changing them', () => {
   const rng = new Rng(1);
-  const host = createParty(rng, 1, 2, 0);
-  const outsider = createParty(rng, 1, 2, 0);
+  const host = createParty(rng, 1, 2, 0, STARTING_GOLD);
+  const outsider = createParty(rng, 1, 2, 0, STARTING_GOLD);
   killHero(outsider.members[0]!);
-  const roster = new CompanyRoster();
+  const roster = new CompanyRoster(DEFAULT_COMPANY_ROSTER_CONFIG, DEFAULT_HERO_ECONOMY, DEFAULT_TOWN_CONFIG, DEFAULT_HOLDING_CONFIG);
   roster.replaceForScenario([host]);
   const context = { statistics: emptyGoldStatistics() };
   expect(() => roster.merge(host, outsider, context)).toThrow('not in this roster');
@@ -39,10 +43,10 @@ it('refuses merges, burial and disbanding of companies outside the roster before
 
 it('uses configured capacity when merging through read-only hourly views', () => {
   const rng = new Rng(2);
-  const host = createParty(rng, 1, 2, 0);
-  const donor = createParty(rng, 1, 3, 0);
+  const host = createParty(rng, 1, 2, 0, STARTING_GOLD);
+  const donor = createParty(rng, 1, 3, 0, STARTING_GOLD);
   const staying = donor.members.slice(1);
-  const roster = new CompanyRoster({ ...DEFAULT_COMPANY_ROSTER_CONFIG, maxCompanySize: 3 });
+  const roster = new CompanyRoster({ ...DEFAULT_COMPANY_ROSTER_CONFIG, maxCompanySize: 3 }, DEFAULT_HERO_ECONOMY, DEFAULT_TOWN_CONFIG, DEFAULT_HOLDING_CONFIG);
   roster.replaceForScenario([host, donor]);
   roster.updateActive((company) => {
     if (company.id === host.id) {

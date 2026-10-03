@@ -61,7 +61,7 @@ export function instantiate(rng: Rng, template: ItemTemplate): MagicItem {
 }
 
 /** Roll an item a shop could stock. Rare items are a one-in-four affair. */
-export function rollStockItem(rng: Rng, source: ItemSource, items: ItemConfig = DEFAULT_ITEM_CONFIG): MagicItem | null {
+export function rollStockItem(rng: Rng, source: ItemSource, items: ItemConfig): MagicItem | null {
   const pool = ITEM_CATALOGUE.filter((t) => t.sources.includes(source));
   if (pool.length === 0) return null;
   const rarity: ItemRarity = rng.chance(items.stockRareChance) ? 'rare' : 'uncommon';
@@ -70,7 +70,7 @@ export function rollStockItem(rng: Rng, source: ItemSource, items: ItemConfig = 
 }
 
 /** Roll an item found on a job: anything in the catalogue, rarity weighted by contract level. */
-export function rollLootItem(rng: Rng, level: number, items: ItemConfig = DEFAULT_ITEM_CONFIG): MagicItem {
+export function rollLootItem(rng: Rng, level: number, items: ItemConfig): MagicItem {
   const rareChance = Math.min(items.lootRareCap, items.lootRareBase + level * items.lootRarePerLevel);
   const rarity: ItemRarity = rng.chance(rareChance) ? 'rare' : 'uncommon';
   const byRarity = ITEM_CATALOGUE.filter((t) => t.rarity === rarity);
@@ -109,6 +109,6 @@ export const DEFAULT_ITEM_CONFIG: ItemConfig = freeze({
 });
 
 /** What a shop pays when adventurers sell an item back. */
-export function resalePrice(item: MagicItem, items: ItemConfig = DEFAULT_ITEM_CONFIG): number {
+export function resalePrice(item: MagicItem, items: ItemConfig): number {
   return Math.floor(item.price / items.resaleDivisor);
 }

@@ -352,7 +352,7 @@ export class Game {
   }
 
   private get day(): number {
-    return Math.floor(this.tick / this.config.ticksPerDay) + 1;
+    return Math.floor(this.tick / TICKS_PER_DAY) + 1;
   }
 
   private get openQuests(): readonly ReadonlyQuest[] {
@@ -368,7 +368,7 @@ export class Game {
     const partyNames = new Map(this.roster.all().map((party) => [party.id, party.name]));
     const lairs = new Map(this.lairs.map((lair) => [lair.id, lair]));
     return Object.freeze({
-      time: formatTime(this.tick, this.config.ticksPerDay),
+      time: formatTime(this.tick),
       difficultyScale: this.config.board.difficultyScale,
       town: Object.freeze({
         name: this.town.name,
@@ -512,7 +512,7 @@ export class Game {
   /** Advances the world by one hour. */
   step(): void {
     this.tick += 1;
-    if (this.tick % this.config.ticksPerDay === 0) {
+    if (this.tick % TICKS_PER_DAY === 0) {
       this.closeTheBooks();
       this.respawnLairs();
     }
@@ -604,7 +604,7 @@ export class Game {
   private raids(): void {
     for (const lair of this.activeLairs) {
       if (--lair.raidCooldown > 0) continue;
-      lair.raidCooldown = raidInterval(lair);
+      lair.raidCooldown = raidInterval(lair, this.config.lairs);
       if (this.openQuests.length >= this.config.world.maxOpenQuests) continue;
       const targets: { employer: Employer; asset: Asset }[] = [];
       for (const employer of this.town.employers) {
@@ -636,7 +636,7 @@ export class Game {
   private respawnLairs(): void {
     for (const lair of this.lairs) {
       if (lair.status !== 'cleared' || lair.clearedAt === null) continue;
-      if (this.tick - lair.clearedAt < this.config.world.lairRespawnDays * this.config.ticksPerDay) continue;
+      if (this.tick - lair.clearedAt < this.config.world.lairRespawnDays * TICKS_PER_DAY) continue;
       lair.clearedAt = null;
       const theme = this.rng.chance(this.config.world.lairRespawnSameThemeChance) ? lair.theme : this.rng.pick(LAIR_THEMES);
       this.spawnLair(theme, Math.min(MAX_LEVEL, lair.level + this.rng.int(...this.config.world.lairRespawnLevelGain)));
@@ -680,6 +680,7 @@ export class Game {
       travelTicks: this.config.board.travelTicks,
       config: this.config.expedition,
       intel: this.config.intel,
+      encounters: this.config.encounters,
       renownCap: this.config.roster.renownCap,
       blessingHpPerLevel: this.config.services.blessingHpPerLevel,
       companySize: this.config.roster.companySize,
@@ -894,9 +895,9 @@ function eventView(event: GameEvent): GameEventView {
   });
 }
 
-export function formatTime(tick: number, ticksPerDay = TICKS_PER_DAY): string {
-  const day = Math.floor(tick / ticksPerDay) + 1;
-  const hour = tick % ticksPerDay;
+export function formatTime(tick: number): string {
+  const day = Math.floor(tick / TICKS_PER_DAY) + 1;
+  const hour = tick % TICKS_PER_DAY;
   return `Day ${day}, ${String(hour).padStart(2, '0')}:00`;
 }
 

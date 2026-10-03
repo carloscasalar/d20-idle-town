@@ -141,7 +141,7 @@ enchanter buys back.
   retirement step. Adding or reordering a service changes
   the supplied list; services has no knowledge of retirement. Each step keeps
   the existing reserve, equipment allocation, coin reasons and synchronous
-  reporting. `BLESSING_HP_PER_LEVEL` remains shared with combat setup.
+  reporting. The blessing's hit points per level live on the services configuration and are passed into combat setup.
 
 - **`coin.ts`** — the only writer of a gold balance or a gold counter. Callers
   name a purse, treasury, hoard or loot and one of three operations: `transfer`,
@@ -214,14 +214,18 @@ Game code above this line never sees a `Creature`, a `BattleLog` or a
 `Game` (`game.ts`) owns the town, the lairs, the stats and the
 event log, and exposes one method that matters: `step()`, one in-game hour.
 Its configuration is one plain object, `GameConfig`, composed in
-`src/sim/config.ts` from each module's own frozen default. `seed` and
-`ticksPerDay` sit at the top; every other value is a section
+`src/sim/config.ts` from each module's own frozen default. `seed` sits at the
+top. A day is `TICKS_PER_DAY` (24) in `src/sim/game-rules.ts`, a calendar
+constant, not a tunable field. Every other value is a section
 (`board`, `roster`, `intel`, `expedition`, `services`, `lairs`, `quests`,
 `encounters`, `heroes`, `town`, `holdings`, `items`, `combat`, `world`).
 `new Game(partial)` and `Game.forTesting` deep-merge that partial onto the
 defaults, replacing arrays and `[min, max]` pairs whole, then reject a result
-that is missing a section, has the wrong type, a negative price, or a range
-whose minimum exceeds its maximum. Nothing in the object is a function, a
+that is missing a section, has an unknown field, a section that is not an
+object, the wrong type, a count that is not a whole number, an empty weight
+list, a negative price, or a range whose minimum exceeds its maximum. A
+function that uses a section takes that section as a required argument, so
+forgetting it is a type error and an override reaches every use. Nothing in the object is a function, a
 class instance or `undefined`, so the same document can later be loaded from
 YAML. The field list is [Configuration](CONFIGURATION.md).
 

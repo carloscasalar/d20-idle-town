@@ -1,7 +1,7 @@
 import { buildHero, Encounter, EncounterError, getFootprintSize, getMonsterByName, type BattleLog, type Creature, type HeroClassName, type MonsterData } from 'battlecast-engine';
 import type { DeepReadonly } from '../core/readonly';
 import { Rng } from '../core/rng';
-import { combinedEffect, heroAc, isBloodied, potionHeal, skillBonus, WEAPON_CLASSES, DEFAULT_HERO_ECONOMY, type Hero, type HeroEconomyConfig } from '../adventurers/hero';
+import { combinedEffect, heroAc, isBloodied, potionHeal, skillBonus, WEAPON_CLASSES, type Hero, type HeroEconomyConfig } from '../adventurers/hero';
 import { freeze } from '../core/freeze';
 import type { EncounterSpec } from '../quests/encounters';
 
@@ -43,7 +43,7 @@ export interface CombatConfig {
   monstersFirstChance: number;
   lairDepthWatchfulness: number;
   partyAmbushFactor: number;
-  /** Flee once fewer than this fraction of the company is standing. 2 means half. */
+  /** Flee once this fraction of the company, or fewer, is standing. 2 means half or fewer. */
   fleeCompanyDivisor: number;
   fleeMonsterHpFraction: number;
   /** A side sneaks when at least this fraction of them beat passive Perception. 2 means half. */
@@ -125,9 +125,9 @@ function fmtBonus(n: number): string {
   return n === 0 ? '' : n > 0 ? `+${n}` : `${n}`;
 }
 
-export function runCombat(heroes: Hero[], spec: DeepReadonly<EncounterSpec>, seed: number, opts: CombatOptions = {}): CombatOutcome {
-  const rules = opts.rules ?? DEFAULT_COMBAT_CONFIG;
-  const economy = opts.heroes ?? DEFAULT_HERO_ECONOMY;
+export function runCombat(heroes: Hero[], spec: DeepReadonly<EncounterSpec>, seed: number, opts: CombatOptions & { rules: CombatConfig; heroes: HeroEconomyConfig }): CombatOutcome {
+  const { rules } = opts;
+  const economy = opts.heroes;
   const fighters = heroes.filter((h) => h.alive);
   const rng = new Rng(seed);
   const enc = new Encounter({ gridSize: GRID, seed });

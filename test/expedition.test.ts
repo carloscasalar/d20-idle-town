@@ -11,6 +11,10 @@ import type { Quest } from '../src/quests/quest';
 import { advanceExpedition, type CombatResolver, type ExpeditionContext, type ExpeditionEvent } from '../src/sim/expedition';
 import { generateTown, serviceOf } from '../src/town/town';
 import { expeditionRules } from './helpers/expedition-rules';
+import { STARTING_GOLD } from './helpers/supplied-config';
+import { DEFAULT_HERO_ECONOMY } from '../src/adventurers/hero';
+import { DEFAULT_TOWN_CONFIG } from '../src/town/town';
+import { DEFAULT_HOLDING_CONFIG } from '../src/town/assets';
 
 const encounter: EncounterSpec = {
   difficulty: 'easy',
@@ -33,7 +37,7 @@ function outcome(party: Party, winner: CombatOutcome['winner'], alive = party.me
 }
 
 function setup(level = 1) {
-  const party = createParty(new Rng(1), level, 4, 0);
+  const party = createParty(new Rng(1), level, 4, 0, STARTING_GOLD);
   party.status = 'questing';
   party.questId = 'q1';
   party.gold = 1000;
@@ -43,7 +47,7 @@ function setup(level = 1) {
     encounters: [encounter, encounter], revealed: 1, countRevealed: false,
     reward: 100, itemReward: null, guildOnly: false, status: 'taken', partyId: party.id, postedAt: 0,
   };
-  const town = generateTown(new Rng(2));
+  const town = generateTown(new Rng(2), DEFAULT_TOWN_CONFIG, DEFAULT_HOLDING_CONFIG);
   const rng = new Rng(99);
   const ledger = { heroesDied: 0, partiesWiped: 0 };
   const statistics = { goldPaid: 0, goldSpentByHeroes: 0 };
@@ -52,7 +56,7 @@ function setup(level = 1) {
   const combat = vi.fn<CombatResolver>(() => outcome(party, 'party'));
   const settleQuest = vi.fn<ExpeditionContext['settleQuest']>((_quest, _party, success) => { calls.push(`settle:${success}`); });
   const leaveLoot = vi.fn<ExpeditionContext['leaveLoot']>((_quest, _party, fallen) => { calls.push(`loot:${fallen.length}`); });
-  const roster = new CompanyRoster();
+  const roster = new CompanyRoster(DEFAULT_COMPANY_ROSTER_CONFIG, DEFAULT_HERO_ECONOMY, DEFAULT_TOWN_CONFIG, DEFAULT_HOLDING_CONFIG);
   roster.replaceForScenario([party]);
   const context: ExpeditionContext = {
     quest, town, rng, ledger, statistics, ...expeditionRules({ travelTicks: 2, restTicks: 2, skillDc: 15 }),
@@ -522,7 +526,7 @@ describe('homecoming', () => {
     if (reason === 'dead member') killHero(party.members[0]!);
     if (reason === 'maximum renown') party.renown = DEFAULT_COMPANY_ROSTER_CONFIG.renownCap;
     const fee = 3 * partyLevel(party) * aliveMembers(party).length;
-    if (reason === 'resurrection reserve') party.gold = fee + resurrectionCost(partyLevel(party)) + 9;
+    if (reason === 'resurrection reserve') party.gold = fee + resurrectionCost(partyLevel(party), DEFAULT_HERO_ECONOMY) + 9;
     const gold = party.gold;
     const renown = party.renown;
     const tavern = serviceOf(town, 'tavern');
@@ -545,7 +549,7 @@ describe('homecoming', () => {
     dead[1]!.level = 3;
     for (const hero of dead) killHero(hero);
     const temple = serviceOf(town, 'temple');
-    const bill = dead.map((hero) => `${hero.name}: ${resurrectionCost(hero.level)} gp`).join(', ');
+    const bill = dead.map((hero) => `${hero.name}: ${resurrectionCost(hero.level, DEFAULT_HERO_ECONOMY)} gp`).join(', ');
 
     advanceExpedition(party, context);
 

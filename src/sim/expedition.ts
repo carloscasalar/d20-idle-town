@@ -5,7 +5,7 @@ import { freeze } from '../core/freeze';
 import { listNames } from '../core/names';
 import type { DeepReadonly } from '../core/readonly';
 import type { Rng } from '../core/rng';
-import { describeEncounter, scaleEncounter, type EncounterSpec } from '../quests/encounters';
+import { describeEncounter, scaleEncounter, type EncounterConfig, type EncounterSpec } from '../quests/encounters';
 import { learnOnArrival, readTheRoad, type JobIntelConfig, type JobKnowledge } from '../quests/job-intel';
 import { difficultyCode, type ReadonlyQuest } from '../quests/quest';
 import { coinReasons, purse, transfer, treasury, type GoldStatistics } from '../town/coin';
@@ -16,10 +16,11 @@ export interface ExpeditionConfig {
   restTicks: number;
   shortRestHealFraction: number;
   carousingShare: number;
+  /** Least gold spent carousing when the company tells the tale. */
   carousingMinimum: number;
   carousingRenown: number;
   roomFeePerLevel: number;
-  /** Turn back when this many companies would fill the original line. 2 means half are down. */
+  /** Turn back when this fraction of the original line, or fewer, are still up. 2 means half or fewer. */
   retreatAliveDivisor: number;
   retreatHpFraction: number;
 }
@@ -62,6 +63,7 @@ export interface ExpeditionContext {
   config: ExpeditionConfig;
   /** Job intelligence, including the skill difficulty of reading the road. */
   intel: JobIntelConfig;
+  encounters: EncounterConfig;
   /** Received from the company roster. */
   renownCap: number;
   /** Received from town services. */
@@ -134,6 +136,7 @@ function travel(p: Party, q: ReadonlyQuest, context: ExpeditionContext): void {
   readTheRoad(p, q, {
     rng: context.rng,
     skillDc: context.intel.skillDc,
+    heroes: context.heroes,
     knowledge: context.knowledge(q),
     report: (text) => log(context, 'party', text),
   });
@@ -148,7 +151,7 @@ function travel(p: Party, q: ReadonlyQuest, context: ExpeditionContext): void {
 function resolveFight(p: Party, q: ReadonlyQuest, context: ExpeditionContext): void {
   const { town, rng, ledger, travelTicks, combat, settleQuest, leaveLoot } = context;
   const fighters = aliveMembers(p);
-  const spec = scaleEncounter(q.encounters[p.progress]!, fighters.length, context.companySize);
+  const spec = scaleEncounter(q.encounters[p.progress]!, fighters.length, context.companySize, context.encounters);
   const n = p.progress + 1;
   const bossFight = q.kind === 'assault' && p.progress === q.encounters.length - 1;
   const outcome = combat(fighters, spec, rng.seed(), {

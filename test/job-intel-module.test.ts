@@ -21,6 +21,10 @@ import {
 } from '../src/quests/job-intel';
 import { emptyGoldStatistics } from '../src/town/coin';
 import { generateTown, serviceOf, type ServiceKind } from '../src/town/town';
+import { STARTING_GOLD } from './helpers/supplied-config';
+import { DEFAULT_HERO_ECONOMY } from '../src/adventurers/hero';
+import { DEFAULT_TOWN_CONFIG } from '../src/town/town';
+import { DEFAULT_HOLDING_CONFIG } from '../src/town/assets';
 
 const encounters: EncounterSpec[] = [
   { difficulty: 'easy', monsters: [{ name: 'Goblin Warrior', count: 1, xpEach: 50 }], totalXp: 50, tier: 'Low' },
@@ -36,10 +40,10 @@ function contract() {
 }
 
 function scene(options: { gold?: number; level?: number; skillDc?: number; ruined?: ServiceKind } = {}) {
-  const company = createParty(new Rng(1), options.level ?? 1, 4, 0);
+  const company = createParty(new Rng(1), options.level ?? 1, 4, 0, STARTING_GOLD);
   company.name = 'Lanterns';
   company.gold = options.gold ?? 1000;
-  const town = generateTown(new Rng(2));
+  const town = generateTown(new Rng(2), DEFAULT_TOWN_CONFIG, DEFAULT_HOLDING_CONFIG);
   if (options.ruined) serviceOf(town, options.ruined).ruined = true;
   const work = contract();
   const statistics = emptyGoldStatistics();
@@ -51,6 +55,7 @@ function scene(options: { gold?: number; level?: number; skillDc?: number; ruine
     rng: new Rng(3),
     statistics,
     config: { ...DEFAULT_JOB_INTEL_CONFIG, skillDc: options.skillDc ?? DEFAULT_JOB_INTEL_CONFIG.skillDc },
+    heroes: DEFAULT_HERO_ECONOMY,
     report: (event) => events.push(event),
   };
   return { company, work, town, context, events, statistics };
@@ -60,7 +65,7 @@ function afford(company: Party, kind: 'divination' | 'round', extra = 0) {
   const level = partyLevel(company);
   const price = kind === 'divination' ? DEFAULT_JOB_INTEL_CONFIG.divinationCostPerLevel : DEFAULT_JOB_INTEL_CONFIG.roundCostPerLevel;
   const factor = kind === 'divination' ? DEFAULT_JOB_INTEL_CONFIG.divinationReserveFactor : DEFAULT_JOB_INTEL_CONFIG.roundReserveFactor;
-  company.gold = resurrectionCost(level) * factor + price * level + extra;
+  company.gold = resurrectionCost(level, DEFAULT_HERO_ECONOMY) * factor + price * level + extra;
 }
 
 describe('job intelligence', () => {
@@ -99,7 +104,7 @@ describe('job intelligence', () => {
   it('a divination reveals the whole job and moves gold as intelligence', () => {
     const { company, work, town, context, events, statistics } = scene({ gold: 0 });
     afford(company, 'divination');
-    const cost = company.gold - resurrectionCost(partyLevel(company)) * DEFAULT_JOB_INTEL_CONFIG.divinationReserveFactor;
+    const cost = company.gold - resurrectionCost(partyLevel(company), DEFAULT_HERO_ECONOMY) * DEFAULT_JOB_INTEL_CONFIG.divinationReserveFactor;
     const temple = serviceOf(town, 'temple');
     const treasury = temple.treasury;
     const earned = temple.earned;
@@ -109,7 +114,7 @@ describe('job intelligence', () => {
 
     expect(isFullyKnown(work)).toBe(true);
     expect(events[0]?.text).toContain('fights [E/I/H]');
-    expect(company.gold).toBe(resurrectionCost(partyLevel(company)) * DEFAULT_JOB_INTEL_CONFIG.divinationReserveFactor);
+    expect(company.gold).toBe(resurrectionCost(partyLevel(company), DEFAULT_HERO_ECONOMY) * DEFAULT_JOB_INTEL_CONFIG.divinationReserveFactor);
     expect(company.spent).toBe(spent + cost);
     expect(temple).toMatchObject({ treasury: treasury + cost, earned: earned + cost });
     expect(statistics).toEqual({ goldPaid: 0, goldSpentByHeroes: cost });
@@ -140,7 +145,7 @@ describe('job intelligence', () => {
   it('a paid round learns one fact and moves gold as intelligence', () => {
     const { company, work, town, context, events, statistics } = scene({ gold: 0 });
     afford(company, 'round');
-    const cost = company.gold - resurrectionCost(partyLevel(company)) * DEFAULT_JOB_INTEL_CONFIG.roundReserveFactor;
+    const cost = company.gold - resurrectionCost(partyLevel(company), DEFAULT_HERO_ECONOMY) * DEFAULT_JOB_INTEL_CONFIG.roundReserveFactor;
     const tavern = serviceOf(town, 'tavern');
     const treasury = tavern.treasury;
 
@@ -149,7 +154,7 @@ describe('job intelligence', () => {
     expect(events[0]?.text).toContain('it means 3 fights');
     expect(work.countRevealed).toBe(true);
     expect(jobInquiry(company, work.id)?.roundsBought).toBe(1);
-    expect(company.gold).toBe(resurrectionCost(partyLevel(company)) * DEFAULT_JOB_INTEL_CONFIG.roundReserveFactor);
+    expect(company.gold).toBe(resurrectionCost(partyLevel(company), DEFAULT_HERO_ECONOMY) * DEFAULT_JOB_INTEL_CONFIG.roundReserveFactor);
     expect(tavern.treasury).toBe(treasury + cost);
     expect(statistics).toEqual({ goldPaid: 0, goldSpentByHeroes: cost });
     expect(company.members.every((hero) => hero.goldSpent === 0)).toBe(true);
@@ -199,6 +204,7 @@ describe('job intelligence', () => {
     const road = (skillDc: number) => readTheRoad(company, work, {
       rng: new Rng(4),
       skillDc,
+      heroes: DEFAULT_HERO_ECONOMY,
       knowledge: jobKnowledge(work),
       report: (text) => lines.push(text),
     });
@@ -220,6 +226,7 @@ describe('job intelligence', () => {
     const road = () => readTheRoad(company, work, {
       rng: new Rng(4),
       skillDc: 0,
+      heroes: DEFAULT_HERO_ECONOMY,
       knowledge: jobKnowledge(work),
       report: (text) => lines.push(text),
     });
@@ -239,6 +246,7 @@ describe('job intelligence', () => {
     readTheRoad(company, work, {
       rng: new Rng(4),
       skillDc: 0,
+      heroes: DEFAULT_HERO_ECONOMY,
       knowledge: jobKnowledge(work),
       report: (text) => lines.push(text),
     });

@@ -4,14 +4,18 @@ import { Rng } from '../src/core/rng';
 import { emptyGoldStatistics } from '../src/town/coin';
 import { buyPotions, buyArmour, visitTownServices, type TownServiceStep, type TownServiceContext } from '../src/town/services';
 import { generateTown } from '../src/town/town';
+import { SERVICE_SUPPLIES, STARTING_GOLD } from './helpers/supplied-config';
+import { DEFAULT_TOWN_CONFIG } from '../src/town/town';
+import { DEFAULT_HOLDING_CONFIG } from '../src/town/assets';
 
 it('inserts a made-up service between potions and armour using only the supplied list', () => {
   const rng = new Rng(1);
-  const town = generateTown(rng);
-  const company = createParty(rng, 1, 4, 0);
+  const town = generateTown(rng, DEFAULT_TOWN_CONFIG, DEFAULT_HOLDING_CONFIG);
+  const company = createParty(rng, 1, 4, 0, STARTING_GOLD);
   company.gold = 10000;
   const events: string[] = [];
   const context: TownServiceContext = {
+    ...SERVICE_SUPPLIES,
     town, day: 1, ledger: { itemsSold: 0 }, statistics: emptyGoldStatistics(),
     report: (event) => events.push(event.text),
   };

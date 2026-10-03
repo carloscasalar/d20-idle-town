@@ -5,10 +5,12 @@ frozen default. A later YAML file can use this shape directly: every value is
 a number, a boolean, a string, or a list of those. Nothing is a function, a
 class instance, or `undefined`.
 
-`seed` and `ticksPerDay` sit at the top. Every other value is a section named
+`seed` sits at the top. Every other value is a section named
 after the module that owns it. A field is not renamed on the way in, and a
 duration stays in the unit that module already uses. One tick is one hour.
-`ticksPerDay` is 24, so a value written in ticks is a count of hours.
+A day is `TICKS_PER_DAY` (24) in `src/sim/game-rules.ts`, a calendar constant
+of the simulation, not a field of this configuration. A value written in ticks
+is a count of hours and does not follow that constant.
 
 A range is an inclusive `[min, max]` pair. Overriding a section merges its
 fields. Overriding an array or a range replaces that value whole.
@@ -23,16 +25,18 @@ home changes the game everywhere that value applies.
 | Lair strength cap | `lairs.strengthCap` | Board strength gains, raid interval |
 
 `validateGameConfig` checks a complete document. It reports a missing section,
-a missing field, a wrong type, a negative price, or a range whose minimum
-exceeds its maximum. `new Game(partial)` and `Game.forTesting` merge the
-partial onto these defaults first, then use that check.
+a missing field, an unknown field, a section that is not an object, a wrong
+type, a count that is not a whole number, an empty weight list, a negative
+price, or a range whose minimum exceeds its maximum. `new Game(partial)` and
+`Game.forTesting` merge the partial onto these defaults first, then use that
+check. A function in the simulation takes the section it uses as a required
+argument, so an override of that section reaches every use.
 
 ## Top level
 
 | Field | Default | Meaning |
 | --- | --- | --- |
 | `seed` | 20260907 | World seed. Any finite number. |
-| `ticksPerDay` | 24 | Hours in a day. At least 1. |
 
 ## `board`
 
@@ -61,7 +65,9 @@ The company roster. Defined in `src/adventurers/company-roster.ts`.
 | Field | Default | Meaning |
 | --- | --- | --- |
 | `maxCompanies` | 8 | Active companies. Disbanded history takes no place. |
-| `arrivalInterval` | 10 | Hours. The next arrival waits from half of this, rounded up, to twice this. |
+| `arrivalInterval` | 10 | Hours between scheduled arrivals, before the spread below |
+| `arrivalIntervalMinDivisor` | 2 | Shortest wait is the interval divided by this, rounded up |
+| `arrivalIntervalMaxFactor` | 2 | Longest wait is the interval multiplied by this |
 | `patienceTicks` | 12 | Idle hours before strangers arrive for a stranded company |
 | `disbandTicks` | 72 | Hours before survivors look for a ready host |
 | `companySize` | 4 | Arrival size, readiness, and the size encounters and bosses are built for |
@@ -101,10 +107,10 @@ Recovery, rooms, and the decision to turn back. Defined in
 | `restTicks` | 8 | Hours of rest after a homecoming |
 | `shortRestHealFraction` | 0.5 | Share of maximum hit points restored at a short rest, rounded up |
 | `carousingShare` | 0.05 | Share of the purse spent carousing |
-| `carousingMinimum` | 10 | Gold below which the company does not carouse |
+| `carousingMinimum` | 10 | Least gold spent carousing when the company tells the tale |
 | `carousingRenown` | 1 | Renown gained by carousing, up to the roster's cap |
 | `roomFeePerLevel` | 3 | Gold per company level for rooms |
-| `retreatAliveDivisor` | 2 | Turn back when fewer than this fraction of the original company is standing. 2 means half. |
+| `retreatAliveDivisor` | 2 | Turn back when this fraction of the original company, or fewer, is standing. 2 means half or fewer. |
 | `retreatHpFraction` | 0.35 | Also turn back when the company is this badly hurt |
 
 ## `services`
@@ -209,6 +215,7 @@ and at least `resurrectedHpMinimum`.
 | `startingGoldPerLevel` | 20 | Gold a new company carries per level |
 | `resurrectedHpFraction` | 0.5 | Share of maximum hit points restored |
 | `resurrectedHpMinimum` | 1 | Least hit points a resurrected hero is left with |
+| `skillAdvantageTiebreak` | 3 | Extra points a class with advantage counts for when choosing who attempts the check |
 
 ## `town`
 
@@ -246,6 +253,7 @@ Generosity is `min + span × a roll from 0 to 1`.
 | `retiredGenerosity` | 1.2 | A retired adventurer's generosity |
 | `retiredReputation` | 1 | Reputation a new retired employer starts with |
 | `retiredCooldown` | [6, 12] | Hours before they post |
+| `retiredHoldings` | vineyard, warehouse, trade-route, hunting-lodge, farmland | Holdings a retired adventurer might buy, in the order the draw considers them |
 | `threatenedIncomeDivisor` | 2 | A threatened holding pays income divided by this |
 
 ## `holdings`
@@ -286,7 +294,7 @@ rules of the game.
 | `monstersFirstChance` | 0.3 | Chance the monsters act before the company is set |
 | `lairDepthWatchfulness` | 0.5 | Added to that chance deeper in a lair |
 | `partyAmbushFactor` | 0.43 | Share of the remaining chance that the company ambushes instead |
-| `fleeCompanyDivisor` | 2 | Monsters flee when fewer than this fraction of the company is standing. 2 means half. |
+| `fleeCompanyDivisor` | 2 | Monsters flee when this fraction of the company, or fewer, is standing. 2 means half or fewer. |
 | `fleeMonsterHpFraction` | 0.5 | Monsters also flee when they are this badly hurt |
 | `stealthGroupDivisor` | 2 | A side sneaks when at least this fraction of them beat passive Perception. 2 means half. |
 | `stabilisedHp` | 1 | Hit points a dying winner is left with |
@@ -299,7 +307,7 @@ Defined in `src/sim/game-rules.ts`.
 | Field | Default | Meaning |
 | --- | --- | --- |
 | `maxOpenQuests` | 8 | Open jobs the Board will hold |
-| `postingThreshold` | 25 | Treasury a guild needs before it posts a bounty |
+| `postingThreshold` | 25 | Treasury an employer needs before posting a contract, and before a lair will raid one of their holdings. The guild also needs it before posting a bounty. |
 | `postingCooldown` | [12, 30] | Hours an employer waits after posting |
 | `ruinDays` | 3 | Days in debt before an employer is ruined |
 | `assaultAppetite` | 0.35 | Chance an idle company that can pay a resurrection takes an open bounty at or below its level |

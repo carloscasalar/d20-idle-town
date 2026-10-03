@@ -8,11 +8,15 @@ import { Board, DEFAULT_BOARD_CONFIG } from '../src/sim/board';
 import { emptyGoldStatistics } from '../src/town/coin';
 import { generateTown, serviceOf } from '../src/town/town';
 import type { Quest } from '../src/quests/quest';
+import { SERVICE_SUPPLIES, STARTING_GOLD } from './helpers/supplied-config';
+import { DEFAULT_HERO_ECONOMY } from '../src/adventurers/hero';
+import { DEFAULT_TOWN_CONFIG } from '../src/town/town';
+import { DEFAULT_HOLDING_CONFIG } from '../src/town/assets';
 
 function setup(config: Partial<CompanyRosterConfig> = {}) {
   const rng = new Rng(8);
-  const town = generateTown(rng);
-  const roster = new CompanyRoster({ ...DEFAULT_COMPANY_ROSTER_CONFIG, ...config });
+  const town = generateTown(rng, DEFAULT_TOWN_CONFIG, DEFAULT_HOLDING_CONFIG);
+  const roster = new CompanyRoster({ ...DEFAULT_COMPANY_ROSTER_CONFIG, ...config }, DEFAULT_HERO_ECONOMY, DEFAULT_TOWN_CONFIG, DEFAULT_HOLDING_CONFIG);
   const events: RosterEvent[] = [];
   const context: RosterContext = {
     town, rng, tick: 1,
@@ -20,7 +24,7 @@ function setup(config: Partial<CompanyRosterConfig> = {}) {
     statistics: emptyGoldStatistics(), report: (event) => events.push(event),
   };
   const board = new Board(DEFAULT_BOARD_CONFIG);
-  const company = (level = 1, size = 4): Party => createParty(rng, level, size, 0);
+  const company = (level = 1, size = 4): Party => createParty(rng, level, size, 0, STARTING_GOLD);
   const arrivals = () => roster.arrivals({ ...context, board });
   return { roster, context, company, events, board, arrivals };
 }
@@ -187,7 +191,7 @@ describe('CompanyRoster recruitment and absorption', () => {
     const p = company(2);
     const dead = p.members[0]!;
     killHero(dead);
-    p.gold = resurrectionCost(dead.level);
+    p.gold = resurrectionCost(dead.level, DEFAULT_HERO_ECONOMY);
     const donor = company(2, 1);
     roster.replaceForScenario([p, donor]);
     const temple = serviceOf(context.town, 'temple');
@@ -197,9 +201,9 @@ describe('CompanyRoster recruitment and absorption', () => {
     expect(p.members).toHaveLength(4);
     expect(donor.members).toHaveLength(1);
     expect(p.gold).toBe(0);
-    expect(temple.treasury).toBe(treasury + resurrectionCost(dead.level));
+    expect(temple.treasury).toBe(treasury + resurrectionCost(dead.level, DEFAULT_HERO_ECONOMY));
     expect(context.ledger.resurrections).toBe(1);
-    expect(context.statistics.goldSpentByHeroes).toBe(resurrectionCost(dead.level));
+    expect(context.statistics.goldSpentByHeroes).toBe(resurrectionCost(dead.level, DEFAULT_HERO_ECONOMY));
     expect(events).toMatchObject([{ kind: 'temple', chronicle: true }]);
   });
 
@@ -308,12 +312,12 @@ describe('CompanyRoster retirement and compatibility operations', () => {
     const veteran = p.members[1]!;
     const item = instantiate(context.rng, ITEM_CATALOGUE[0]!);
     veteran.items = [item];
-    p.gold = 1000 + resurrectionCost(5);
+    p.gold = 1000 + resurrectionCost(5, DEFAULT_HERO_ECONOMY);
     roster.replaceForScenario([p]);
     context.report = (event) => {
       expect(event).toMatchObject({ kind: 'town', chronicle: true });
       expect(p.members).not.toContain(veteran);
-      expect(p.gold).toBe(resurrectionCost(5));
+      expect(p.gold).toBe(resurrectionCost(5, DEFAULT_HERO_ECONOMY));
       expect(context.town.employers.at(-1)).toMatchObject({ treasury: 300, earned: 0, favoredPartyId: p.id, name: veteran.name });
       expect(context.ledger.retirements).toBe(1);
     };
@@ -344,7 +348,7 @@ describe('CompanyRoster retirement and compatibility operations', () => {
     const p = company(8);
     p.gold = 100000;
     roster.replaceForScenario([p]);
-    const serviceContext = { town: context.town, day: 1, ledger: { itemsSold: 0 }, statistics: context.statistics, report: () => {} };
+    const serviceContext = { ...SERVICE_SUPPLIES, town: context.town, day: 1, ledger: { itemsSold: 0 }, statistics: context.statistics, report: () => {} };
     expect(roster.retirementStep(context)(p, serviceContext)).toBe(true);
     expect(p.members).toHaveLength(3);
   });

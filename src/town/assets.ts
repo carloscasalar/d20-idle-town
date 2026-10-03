@@ -170,7 +170,7 @@ export const DEFAULT_HOLDING_CONFIG: HoldingConfig = freeze({
   incomeSpreadSpan: 0.6,
 });
 
-export function createAsset(rng: Rng, kind: AssetKind, ownerId: string, holdings: HoldingConfig = DEFAULT_HOLDING_CONFIG): Asset {
+export function createAsset(rng: Rng, kind: AssetKind, ownerId: string, holdings: HoldingConfig): Asset {
   const def = ASSET_KINDS[kind];
   const name = rng.pick(def.names).replace('{name}', rng.pick(def.nameParts));
   const spread = holdings.incomeSpreadMin + rng.next() * holdings.incomeSpreadSpan;

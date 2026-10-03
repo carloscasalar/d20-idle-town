@@ -322,20 +322,23 @@ overriding one did not change the other. Other rules — starting lairs, the
 posting threshold, investigation and carousing, shop restock, item rarity —
 still lived as literals beside the code that used them.
 
-**Change.** `GameConfig` is one plain object. `seed` and `ticksPerDay` sit at
-the top. Every other value is the owning module's configuration, defined once
-in that module and frozen. `DEFAULT_CONFIG` is composed from those defaults.
-No field is renamed or converted between units on the way in. Company size and
-the renown cap live on the roster; the lair strength cap lives on the lair
-module. The Board and Expedition receive them. Job intelligence is its own
-section, and Expedition reads the road's difficulty from that section.
-`new Game` and `Game.forTesting` accept a deep partial: sections merge, and
-arrays and `[min, max]` pairs replace whole. `validateGameConfig` checks an
-unknown document and returns the configuration or a list of readable errors.
-The game uses that check whenever it is given a configuration. A test
-serialises `DEFAULT_CONFIG` with `JSON.stringify`, parses it back, and runs
-400 hours of one seed from both objects. The field list is
-[Configuration](CONFIGURATION.md).
+**Change.** `GameConfig` is one plain object. `seed` sits at the top. A day is
+`TICKS_PER_DAY` (24) in `src/sim/game-rules.ts`, a calendar constant, not a
+tunable field. Every other value is the owning module's configuration, defined
+once in that module and frozen. `DEFAULT_CONFIG` is composed from those
+defaults. No field is renamed or converted between units on the way in.
+Company size and the renown cap live on the roster; the lair strength cap
+lives on the lair module. The Board and Expedition receive them. The raid
+clock passes the lairs section into `raidInterval`, and Expedition passes the
+encounters section into `scaleEncounter`. Job intelligence is its own section,
+and Expedition reads the road's difficulty from that section. `new Game` and
+`Game.forTesting` accept a deep partial: sections merge, and arrays and
+`[min, max]` pairs replace whole. `validateGameConfig` checks an unknown
+document and returns the configuration or a list of readable errors. The game
+uses that check whenever it is given a configuration. A test serialises
+`DEFAULT_CONFIG` with `JSON.stringify`, parses it back, validates that object
+without merging defaults, and runs 400 hours of one seed from both objects.
+The field list is [Configuration](CONFIGURATION.md).
 
 **Files.** `src/sim/config.ts`, `src/sim/game-rules.ts`, `src/core/freeze.ts`;
 the module defaults in Board, roster, job intelligence, Expedition, services,
@@ -345,8 +348,25 @@ configuration; `docs/CONFIGURATION.md` and the architecture references.
 
 **Evidence.** The regression snapshot is the behaviour. Each moved number is
 the value the code already used. Shared caps are passed into the module that
-used to read the second constant, so one override reaches every use.
+used to read the second constant. The raid clock and encounter scaling receive
+the same section the rest of the game uses. A production function takes its
+section as a required argument, so one override reaches every use.
 
 **Verification.** `pnpm typecheck` passed. `pnpm test` passed all 571 tests
 across 27 files. The regression snapshot has no diff. Its SHA-256 is
 `cbbf8cc5c7c6a321866dd4db3b27bef401a39557a003c05d7480ce703d2d7343`.
+
+**Correction 1.** The review found two overrides that never reached the clock
+or the fight: the raid interval was computed without the lairs section, and
+encounter scaling without the encounters section. Both now receive that
+section. Production functions no longer fill a missing section from
+`DEFAULT_*`; the caller passes it, and tests pass the module default
+explicitly. The arrival spread, the skill-advantage tiebreak, and a retiree's
+holdings moved into their sections. `ticksPerDay` left the configuration; a
+day remains `TICKS_PER_DAY`. The validator rejects an unknown key, a
+fractional count, an empty weight list, and a section that is not an object.
+The round trip validates the parsed object on its own.
+
+Correction verification: `pnpm typecheck` passed. `pnpm test` passed all 575
+tests across 27 files. The regression snapshot has no diff. Its SHA-256
+remains `cbbf8cc5c7c6a321866dd4db3b27bef401a39557a003c05d7480ce703d2d7343`.

@@ -2,7 +2,7 @@ import { freeze } from '../core/freeze';
 import { deityName, factionName, merchantName, nobleName, townName } from '../core/names';
 import type { Rng } from '../core/rng';
 import type { MagicItem } from '../items/items';
-import { createAsset, DEFAULT_HOLDING_CONFIG, type Asset, type AssetKind, type HoldingConfig } from './assets';
+import { createAsset, type Asset, type AssetKind, type HoldingConfig } from './assets';
 
 export type EmployerKind = 'noble' | 'merchant' | 'faction' | 'temple';
 
@@ -102,6 +102,8 @@ export interface TownConfig {
   retiredGenerosity: number;
   retiredReputation: number;
   retiredCooldown: [number, number];
+  /** Holdings a retired adventurer might buy. */
+  retiredHoldings: AssetKind[];
   threatenedIncomeDivisor: number;
 }
 
@@ -133,6 +135,7 @@ export const DEFAULT_TOWN_CONFIG: TownConfig = freeze({
   retiredGenerosity: 1.2,
   retiredReputation: 1,
   retiredCooldown: [6, 12],
+  retiredHoldings: ['vineyard', 'warehouse', 'trade-route', 'hunting-lodge', 'farmland'],
   threatenedIncomeDivisor: 2,
 });
 
@@ -207,9 +210,9 @@ function makeEmployer(rng: Rng, kind: EmployerKind, service: ServiceKind | null,
 }
 
 /** A high-level adventurer buys a business and becomes an employer in their own right. */
-export function retiredEmployer(rng: Rng, heroName: string, partyId: string, town: TownConfig = DEFAULT_TOWN_CONFIG, holdings: HoldingConfig = DEFAULT_HOLDING_CONFIG): Employer {
+export function retiredEmployer(rng: Rng, heroName: string, partyId: string, town: TownConfig, holdings: HoldingConfig): Employer {
   const id = rng.id('employer');
-  const kind: AssetKind = rng.pick(['vineyard', 'warehouse', 'trade-route', 'hunting-lodge', 'farmland']);
+  const kind: AssetKind = rng.pick(town.retiredHoldings);
   const asset = createAsset(rng, kind, id, holdings);
   return {
     id,
@@ -235,7 +238,7 @@ export function retiredEmployer(rng: Rng, heroName: string, partyId: string, tow
   };
 }
 
-export function generateTown(rng: Rng, town: TownConfig = DEFAULT_TOWN_CONFIG, holdings: HoldingConfig = DEFAULT_HOLDING_CONFIG): Town {
+export function generateTown(rng: Rng, town: TownConfig, holdings: HoldingConfig): Town {
   const deity = deityName(rng);
   const tavernName = rng.pick(TAVERNS);
   const employers: Employer[] = [];
@@ -272,6 +275,6 @@ export function assetById(town: Town, id: string): Asset | undefined {
   return undefined;
 }
 
-export function dailyIncome(e: Employer, threatenedDivisor = DEFAULT_TOWN_CONFIG.threatenedIncomeDivisor): number {
+export function dailyIncome(e: Employer, threatenedDivisor: number): number {
   return e.assets.reduce((s, a) => s + (a.status === 'safe' ? a.incomePerDay : a.status === 'threatened' ? Math.floor(a.incomePerDay / threatenedDivisor) : 0), 0);
 }

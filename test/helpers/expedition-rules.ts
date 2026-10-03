@@ -1,5 +1,6 @@
 import { DEFAULT_COMPANY_ROSTER_CONFIG } from '../../src/adventurers/company-roster';
 import { DEFAULT_HERO_ECONOMY, type HeroEconomyConfig } from '../../src/adventurers/hero';
+import { DEFAULT_ENCOUNTER_CONFIG, type EncounterConfig } from '../../src/quests/encounters';
 import { DEFAULT_JOB_INTEL_CONFIG, type JobIntelConfig } from '../../src/quests/job-intel';
 import { DEFAULT_BOARD_CONFIG } from '../../src/sim/board';
 import { DEFAULT_EXPEDITION_CONFIG, type ExpeditionConfig } from '../../src/sim/expedition';
@@ -19,6 +20,7 @@ export function expeditionRules(overrides: {
   blessingHpPerLevel: number;
   companySize: number;
   heroes: HeroEconomyConfig;
+  encounters: EncounterConfig;
 } {
   return {
     travelTicks: overrides.travelTicks ?? DEFAULT_BOARD_CONFIG.travelTicks,
@@ -35,5 +37,6 @@ export function expeditionRules(overrides: {
     blessingHpPerLevel: DEFAULT_TOWN_SERVICE_CONFIG.blessingHpPerLevel,
     companySize: DEFAULT_COMPANY_ROSTER_CONFIG.companySize,
     heroes: DEFAULT_HERO_ECONOMY,
+    encounters: DEFAULT_ENCOUNTER_CONFIG,
   };
 }

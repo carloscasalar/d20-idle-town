@@ -15,6 +15,11 @@ import { defaultTownServiceSteps, visitTownServices } from '../src/town/services
 import { generateTown, serviceOf, type Town } from '../src/town/town';
 import { expeditionRules } from './helpers/expedition-rules';
 import { LONG_SIMULATION_TIMEOUT_MS, readSimulationState } from './helpers/simulation';
+import { SERVICE_SUPPLIES, STARTING_GOLD } from './helpers/supplied-config';
+import { DEFAULT_HERO_ECONOMY } from '../src/adventurers/hero';
+import { DEFAULT_LAIR_CONFIG } from '../src/town/lairs';
+import { DEFAULT_TOWN_CONFIG } from '../src/town/town';
+import { DEFAULT_HOLDING_CONFIG } from '../src/town/assets';
 
 interface World {
   tick: number;
@@ -85,7 +90,7 @@ function watchBooks(game: Game, config: DeepPartial<GameConfig> = {}) {
       if (!previousIndex.parties.has(p.id)) {
         // C01: derive opening gold from the public constructor, using an
         // independent RNG so observation cannot affect the simulation.
-        const purse = createParty(new Rng(0), partyLevel(p), p.members.length, p.arrivedAt).gold;
+        const purse = createParty(new Rng(0), partyLevel(p), p.members.length, p.arrivedAt, STARTING_GOLD).gold;
         starting.set(p.id, purse);
         sources += purse;
       }
@@ -99,7 +104,7 @@ function watchBooks(game: Game, config: DeepPartial<GameConfig> = {}) {
     }
     for (const l of current.lairs) {
       if (!previousIndex.lairs.has(l.id)) {
-        sources += createLair(new Rng(0), l.theme, l.level, l.spawnedAt, DEFAULT_COMPANY_ROSTER_CONFIG.companySize).hoard.gold; // C03
+        sources += createLair(new Rng(0), l.theme, l.level, l.spawnedAt, DEFAULT_COMPANY_ROSTER_CONFIG.companySize, DEFAULT_LAIR_CONFIG).hoard.gold; // C03
       }
     }
     sinks += rules.roster.retirementPrice * (current.stats.retirements - previous.stats.retirements) - retirementCapital; // G03
@@ -146,7 +151,7 @@ function watchBooks(game: Game, config: DeepPartial<GameConfig> = {}) {
 }
 
 function provisioned(rng: Rng, level = 1, gold = 1000): Party {
-  const p = createParty(rng, level, 4, 0);
+  const p = createParty(rng, level, 4, 0, STARTING_GOLD);
   p.members = Array.from({ length: 4 }, () => createHero(rng, level, 'Fighter'));
   Object.assign(p, { gold, potions: 4, blessed: true, guildMember: true, duesPaidDay: 1 });
   for (const hero of p.members) hero.armorTier = 3;
@@ -240,7 +245,7 @@ describe('service purchase ledgers', () => {
     { service: 'enchanter', cost: 800, left: 200, spent: 810, treasury: 1800, earned: 820, totalSpent: 807 },
   ] as const)('records a $cost gp purchase at the $service', ({ service, cost, left, spent, treasury, earned, totalSpent }) => {
     const rng = new Rng(8);
-    const town = generateTown(rng);
+    const town = generateTown(rng, DEFAULT_TOWN_CONFIG, DEFAULT_HOLDING_CONFIG);
     const p = provisioned(rng);
     p.earned = 30;
     p.spent = 10;
@@ -257,7 +262,7 @@ describe('service purchase ledgers', () => {
     const ledger = { itemsSold: 3 };
     const statistics = { goldPaid: 0, goldSpentByHeroes: 7 };
 
-    expect(visitTownServices(p, { town, day: 1, ledger, statistics, report: () => {} }, defaultTownServiceSteps())).toBe(true);
+    expect(visitTownServices(p, { ...SERVICE_SUPPLIES, town, day: 1, ledger, statistics, report: () => {} }, defaultTownServiceSteps())).toBe(true);
 
     expect(p).toMatchObject({ gold: left, earned: 30, spent });
     expect(shop).toMatchObject({ treasury, earned, spent: 5 });
@@ -343,7 +348,7 @@ describe('homecoming payments', () => {
     { success: true, gold: 1031, spent: 62, left: 969, treasury: 1062, renown: 1 },
   ])('charges $spent gp for a homecoming from a $gold gp purse (success=$success)', ({ success, gold, spent, left, treasury, renown }) => {
     const rng = new Rng(8);
-    const town = generateTown(rng);
+    const town = generateTown(rng, DEFAULT_TOWN_CONFIG, DEFAULT_HOLDING_CONFIG);
     const p = provisioned(rng, 1, gold);
     const tavern = serviceOf(town, 'tavern');
     tavern.treasury = 1000;
@@ -355,7 +360,7 @@ describe('homecoming payments', () => {
     const ledger = { heroesDied: 0, partiesWiped: 0 };
     const statistics = { goldPaid: 0, goldSpentByHeroes: 0 };
     const reports: string[] = [];
-    const roster = new CompanyRoster();
+    const roster = new CompanyRoster(DEFAULT_COMPANY_ROSTER_CONFIG, DEFAULT_HERO_ECONOMY, DEFAULT_TOWN_CONFIG, DEFAULT_HOLDING_CONFIG);
     roster.replaceForScenario([p]);
     const context: ExpeditionContext = {
       town, quest: q, rng, ledger, statistics, ...expeditionRules({ travelTicks: 2, restTicks: 8, skillDc: 15 }),
@@ -395,7 +400,7 @@ describe('daily income and upkeep', () => {
       const e = s.town.employers[0]!;
       e.upkeepPerDay = 0;
       e.assets = ['safe', 'threatened', 'ravaged'].map((status) => {
-        const a = createAsset(rng, 'watchtower', e.id);
+        const a = createAsset(rng, 'watchtower', e.id, DEFAULT_HOLDING_CONFIG);
         Object.assign(a, { status, incomePerDay: 11 });
         return a;
       });
@@ -417,7 +422,7 @@ describe('expiry looting', () => {
     const game = scene((s, rng) => {
       s.tick = 100;
       const e = s.town.employers[0]!;
-      const a = createAsset(rng, 'watchtower', e.id);
+      const a = createAsset(rng, 'watchtower', e.id, DEFAULT_HOLDING_CONFIG);
       Object.assign(a, { incomePerDay: 10, status: 'threatened', questId: 'work' });
       e.assets = [a];
       s.quests = [work(s.town, provisioned(rng), { assetId: a.id })];
@@ -432,10 +437,10 @@ describe('expiry looting', () => {
       s.tick = 100;
       const p = provisioned(rng);
       const e = s.town.employers[0]!;
-      const a = createAsset(rng, 'watchtower', e.id);
+      const a = createAsset(rng, 'watchtower', e.id, DEFAULT_HOLDING_CONFIG);
       Object.assign(a, { incomePerDay: 10, status: 'threatened', questId: 'work' });
       e.assets = [a];
-      const l = createLair(rng, 'goblins', 5, 0, DEFAULT_COMPANY_ROSTER_CONFIG.companySize);
+      const l = createLair(rng, 'goblins', 5, 0, DEFAULT_COMPANY_ROSTER_CONFIG.companySize, DEFAULT_LAIR_CONFIG);
       Object.assign(l, { raidCooldown: 10000 });
       l.hoard.gold = 100;
       s.lairs = [l];
@@ -454,7 +459,7 @@ describe('configured Contract windfall', () => {
     const game = scene((s, rng) => {
       const p = provisioned(rng, 1, 0);
       const e = s.town.employers[0]!;
-      const a = createAsset(rng, 'watchtower', e.id);
+      const a = createAsset(rng, 'watchtower', e.id, DEFAULT_HOLDING_CONFIG);
       Object.assign(a, { incomePerDay: 10, status: 'ravaged', questId: 'work' });
       e.assets = [a];
       const q = work(s.town, p, { status: 'taken', assetId: a.id });
@@ -496,10 +501,10 @@ describe('company purse transfers', () => {
       Object.assign(p, { earned: 13, spent: 7 });
       s.stats.goldSpentByHeroes = 9;
       const e = s.town.employers[0]!;
-      const a = createAsset(rng, 'watchtower', e.id);
+      const a = createAsset(rng, 'watchtower', e.id, DEFAULT_HOLDING_CONFIG);
       e.assets = [a];
       a.loot.gold = 11;
-      const l = createLair(rng, 'goblins', 5, 0, DEFAULT_COMPANY_ROSTER_CONFIG.companySize);
+      const l = createLair(rng, 'goblins', 5, 0, DEFAULT_COMPANY_ROSTER_CONFIG.companySize, DEFAULT_LAIR_CONFIG);
       l.hoard.gold = 100;
       l.raidCooldown = 10000;
       const q = work(s.town, p, {
@@ -568,10 +573,10 @@ describe('fallen equipment and the surviving purse', () => {
       p.members[0]!.hp = 1;
       p.members[0]!.items = [instantiate(rng, ITEM_CATALOGUE[0]!)];
       const e = s.town.employers[0]!;
-      const a = createAsset(rng, 'watchtower', e.id);
+      const a = createAsset(rng, 'watchtower', e.id, DEFAULT_HOLDING_CONFIG);
       a.loot.gold = 11;
       e.assets = [a];
-      const l = createLair(rng, 'goblins', 5, 0, DEFAULT_COMPANY_ROSTER_CONFIG.companySize);
+      const l = createLair(rng, 'goblins', 5, 0, DEFAULT_COMPANY_ROSTER_CONFIG.companySize, DEFAULT_LAIR_CONFIG);
       l.raidCooldown = 10000;
       l.hoard.gold = 100;
       const q = work(s.town, p, { status: 'taken', assetId: a.id, lairId: destination === 'Lair' ? l.id : null,
