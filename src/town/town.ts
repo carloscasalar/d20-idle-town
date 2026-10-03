@@ -6,6 +6,9 @@ import { createAsset, type Asset, type AssetKind, type HoldingConfig } from './a
 
 export type EmployerKind = 'noble' | 'merchant' | 'faction' | 'temple';
 
+/** Every employer kind a configuration may name. */
+export const EMPLOYER_KINDS = ['noble', 'merchant', 'faction', 'temple'] as const satisfies readonly EmployerKind[];
+
 /** Shops where adventurers spend coin. Each belongs to one employer. */
 export type ServiceKind = 'tavern' | 'temple' | 'smith' | 'apothecary' | 'enchanter' | 'guild';
 

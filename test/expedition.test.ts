@@ -6,9 +6,11 @@ import type { CombatOutcome } from '../src/combat/battlecast';
 import { listNames } from '../src/core/names';
 import { Rng } from '../src/core/rng';
 import type { EncounterSpec } from '../src/quests/encounters';
-import { jobInquiry, jobKnowledge } from '../src/quests/job-intel';
+import { jobInquiry } from '../src/quests/job-intel';
 import type { Quest } from '../src/quests/quest';
+import { Board, DEFAULT_BOARD_CONFIG } from '../src/sim/board';
 import { advanceExpedition, type CombatResolver, type ExpeditionContext, type ExpeditionEvent } from '../src/sim/expedition';
+import { openCoin } from '../src/town/coin';
 import { generateTown, serviceOf } from '../src/town/town';
 import { expeditionRules } from './helpers/expedition-rules';
 import { STARTING_GOLD } from './helpers/supplied-config';
@@ -58,16 +60,18 @@ function setup(level = 1) {
   const leaveLoot = vi.fn<ExpeditionContext['leaveLoot']>((_quest, _party, fallen) => { calls.push(`loot:${fallen.length}`); });
   const roster = new CompanyRoster(DEFAULT_COMPANY_ROSTER_CONFIG, DEFAULT_HERO_ECONOMY, DEFAULT_TOWN_CONFIG, DEFAULT_HOLDING_CONFIG);
   roster.replaceForScenario([party]);
+  const board = new Board(DEFAULT_BOARD_CONFIG);
+  board.replaceForScenario([quest]);
   const context: ExpeditionContext = {
-    quest, town, rng, ledger, statistics, ...expeditionRules({ travelTicks: 2, restTicks: 2, skillDc: 15 }),
+    quest, town, rng, ledger, coin: openCoin(statistics), ...expeditionRules({ travelTicks: 2, restTicks: 2, skillDc: 15 }),
     combat,
     disband: (company) => roster.disband(company),
     report: (event) => { events.push(event); calls.push(`event:${event.kind}`); },
-    knowledge: () => jobKnowledge(quest),
+    knowledge: (work) => board.knowledge(work),
     settleQuest,
     leaveLoot,
   };
-  return { party, quest, town, rng, ledger, statistics, events, calls, context, combat, settleQuest, leaveLoot };
+  return { party, quest, town, rng, ledger, statistics, events, calls, context, combat, settleQuest, leaveLoot, board };
 }
 
 function homecoming(success = true, level = 1) {
@@ -610,7 +614,7 @@ describe('reading the road', () => {
   });
 
   it('allows a fresh road check for a different contract', () => {
-    const { party, quest, context, events } = setup();
+    const { party, quest, context, events, board } = setup();
     party.status = 'traveling';
     party.ticksLeft = 3;
     context.intel = { ...context.intel, skillDc: 100 };
@@ -623,7 +627,7 @@ describe('reading the road', () => {
     party.questId = nextQuest.id;
     party.ticksLeft = 3;
     context.quest = nextQuest;
-    context.knowledge = () => jobKnowledge(nextQuest);
+    board.replaceForScenario([quest, nextQuest]);
     context.intel = { ...context.intel, skillDc: 0 };
     advanceExpedition(party, context);
 

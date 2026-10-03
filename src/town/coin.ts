@@ -2,12 +2,14 @@
  * The only writer of a gold balance or a gold counter.
  *
  * A movement is a transfer between two holders, a source (gold enters the
- * world) or a sink (gold leaves it). `coinReasons` is a frozen table of typed
- * reasons; a caller may pass another table. The entry decides which counters
- * and lifetime statistics that reason touches. Callers decide whether anyone
- * can afford the amount; a balance may still fall below zero, as it does for
- * an employer's upkeep.
+ * world) or a sink (gold leaves it). Build one `Coin` for a world: it keeps
+ * the gold statistics and the reason table, and callers move gold through it.
+ * The reason's named effects decide which counters and lifetime statistics
+ * that reason touches. Callers decide whether anyone can afford the amount;
+ * a balance may still fall below zero, as it does for an employer's upkeep.
  */
+
+import { freeze } from '../core/freeze';
 
 /** Lifetime gold statistics. Other ledgers no longer carry these fields. */
 export interface GoldStatistics {
@@ -38,54 +40,112 @@ export interface CoinEffects {
 /** A table of reasons. A movement's reason must be one of its keys. */
 export type CoinTable<Reason extends string> = Readonly<Record<Reason, CoinEffects>>;
 
-function effects(
-  spent: boolean,
-  earned: boolean,
-  goldPaid: boolean,
-  goldSpentByHeroes: boolean,
-  adventurer: boolean,
-): CoinEffects {
-  return Object.freeze({ spent, earned, goldPaid, goldSpentByHeroes, adventurer });
-}
+/** A company pays an employer, including paying to learn about work. */
+const purchase: CoinEffects = freeze({
+  spent: true,
+  earned: true,
+  goldPaid: false,
+  goldSpentByHeroes: true,
+  adventurer: true,
+});
+
+/** Gold arriving that is not a payment: income, a windfall, or spoils. */
+const receipt: CoinEffects = freeze({
+  spent: false,
+  earned: true,
+  goldPaid: false,
+  goldSpentByHeroes: false,
+  adventurer: false,
+});
+
+/** Gold leaving that is not a purchase: upkeep, a forfeit, looting, or a wipe. */
+const loss: CoinEffects = freeze({
+  spent: true,
+  earned: false,
+  goldPaid: false,
+  goldSpentByHeroes: false,
+  adventurer: false,
+});
+
+/** Gold moving between holders without counting as pay or a hero's spending. */
+const exchange: CoinEffects = freeze({
+  spent: true,
+  earned: true,
+  goldPaid: false,
+  goldSpentByHeroes: false,
+  adventurer: false,
+});
 
 /**
  * One entry per reason. Similar movements that the world treats differently
- * stay different here; nothing in the movement code branches on the name.
+ * stay different keys; nothing in the movement code branches on the name.
+ * Reasons that must touch the same counters share one effect object.
  * Frozen: a new reason is a new key, and a typo is a compile error.
+ *
+ * These effects are the accounting identity of each movement, not a tunable
+ * of the world, so the table stays in code rather than in the configuration.
  */
-export const coinReasons = Object.freeze({
+export const coinReasons = freeze({
   /** A company pays an employer for a service. */
-  service: effects(true, true, false, true, true),
+  service: purchase,
   /** A company pays to learn about a Contract or Bounty. Same counters as a service. */
-  intel: effects(true, true, false, true, true),
+  intel: purchase,
   /** An employer buys gear back from a company. */
-  resale: effects(true, true, false, false, false),
+  resale: exchange,
   /** An employer pays a completed Contract or Bounty. */
-  reward: effects(true, true, true, false, false),
+  reward: freeze({ spent: true, earned: true, goldPaid: true, goldSpentByHeroes: false, adventurer: false }),
   /** Daily income from a Holding. */
-  income: effects(false, true, false, false, false),
+  income: receipt,
   /** Income recovered when a Holding is freed. Same counters as daily income. */
-  windfall: effects(false, true, false, false, false),
-  /** Gold taken from a Lair's hoard or a Holding's loot. Not a reward. */
-  spoils: effects(false, true, false, false, false),
-  /** An unanswered Contract's loss, taken by an active Lair. */
-  looting: effects(true, false, false, false, false),
+  windfall: receipt,
+  /** Gold taken from a Lair's hoard or a Holding's loot. Same counters as income. */
+  spoils: receipt,
+  /** An unanswered Contract's loss, taken by an active Lair. Same counters as upkeep. */
+  looting: loss,
   /** That same loss when no active Lair receives it. Same counters as upkeep. */
-  forfeit: effects(true, false, false, false, false),
-  /** A wiped company's purse, left in the field. Not a purchase. */
-  wipe: effects(true, false, false, false, false),
-  /** Survivors bring their company's purse to the host company. */
-  merger: effects(true, true, false, false, false),
+  forfeit: loss,
+  /** A wiped company's purse, left in the field. Same counters as upkeep. */
+  wipe: loss,
+  /** Survivors bring their company's purse to the host company. Same counters as a resale. */
+  merger: exchange,
   /** An employer's daily costs. The treasury may go into debt. */
-  upkeep: effects(true, false, false, false, false),
+  upkeep: loss,
   /** Buying a business. The new treasury is opening capital, not earnings. */
-  retirement: effects(true, false, false, true, false),
+  retirement: freeze({ spent: true, earned: false, goldPaid: false, goldSpentByHeroes: true, adventurer: false }),
 });
 
 export type CoinReason = keyof typeof coinReasons;
 
 export function emptyGoldStatistics(): GoldStatistics {
   return { goldPaid: 0, goldSpentByHeroes: 0 };
+}
+
+/** The world's gold statistics and the reason table, built once. */
+export interface Coin<Reason extends string = CoinReason> {
+  readonly statistics: GoldStatistics;
+  transfer(from: Holder, to: Holder, amount: number, reason: Reason, adventurer?: AdventurerSpending): void;
+  source(to: Holder, amount: number, reason: Reason): void;
+  sink(from: Holder, amount: number, reason: Reason, adventurer?: AdventurerSpending): void;
+}
+
+export function openCoin(statistics: GoldStatistics): Coin<CoinReason>;
+export function openCoin<Reason extends string>(statistics: GoldStatistics, reasons: CoinTable<Reason>): Coin<Reason>;
+export function openCoin<Reason extends string>(
+  statistics: GoldStatistics,
+  reasons: CoinTable<Reason> = coinReasons as unknown as CoinTable<Reason>,
+): Coin<Reason> {
+  return {
+    statistics,
+    transfer(from, to, amount, reason, adventurer) {
+      transfer(from, to, amount, reason, statistics, reasons, adventurer);
+    },
+    source(to, amount, reason) {
+      source(to, amount, reason, statistics, reasons);
+    },
+    sink(from, amount, reason, adventurer) {
+      sink(from, amount, reason, statistics, reasons, adventurer);
+    },
+  };
 }
 
 /** A company's purse: `gold`, with `earned` and `spent`. */

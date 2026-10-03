@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { createHero, gainXp, killHero, resurrectHero, resurrectionCost } from '../src/adventurers/hero';
 import { aliveMembers, createParty, partyLevel } from '../src/adventurers/party';
 import { Rng } from '../src/core/rng';
+import { openCoin } from '../src/town/coin';
 import { STARTING_GOLD } from './helpers/supplied-config';
 import { DEFAULT_HERO_ECONOMY } from '../src/adventurers/hero';
 import { DEFAULT_TOWN_CONFIG } from '../src/town/town';
@@ -46,7 +47,7 @@ describe('party merging', () => {
     donor.gold = 5;
     const roster = new CompanyRoster(DEFAULT_COMPANY_ROSTER_CONFIG, DEFAULT_HERO_ECONOMY, DEFAULT_TOWN_CONFIG, DEFAULT_HOLDING_CONFIG);
     roster.replaceForScenario([host, donor]);
-    const leftover = roster.merge(host, donor, { statistics: { goldPaid: 0, goldSpentByHeroes: 0 } });
+    const leftover = roster.merge(host, donor, { coin: openCoin({ goldPaid: 0, goldSpentByHeroes: 0 }) });
     expect(roster.isReady(host)).toBe(true);
     expect(aliveMembers(host).length).toBe(5); // 2 + 3: room for six, so everyone comes along
     expect(leftover.length).toBe(0);

@@ -1,12 +1,9 @@
-import { DEFAULT_COMPANY_ROSTER_CONFIG, CompanyRoster, type CompanyRosterConfig } from '../../src/adventurers/company-roster';
 import { DEFAULT_HERO_ECONOMY } from '../../src/adventurers/hero';
 import { DEFAULT_COMBAT_CONFIG } from '../../src/combat/battlecast';
 import { DEFAULT_ENCOUNTER_CONFIG } from '../../src/quests/encounters';
 import { DEFAULT_JOB_INTEL_CONFIG } from '../../src/quests/job-intel';
 import { DEFAULT_QUEST_CONFIG, type QuestGeneration } from '../../src/quests/quest';
-import { DEFAULT_HOLDING_CONFIG } from '../../src/town/assets';
 import { DEFAULT_ITEM_CONFIG } from '../../src/items/items';
-import { DEFAULT_LAIR_CONFIG } from '../../src/town/lairs';
 import { DEFAULT_TOWN_SERVICE_CONFIG } from '../../src/town/services';
 import { DEFAULT_TOWN_CONFIG } from '../../src/town/town';
 
@@ -28,7 +25,3 @@ export const SERVICE_SUPPLIES = {
   items: DEFAULT_ITEM_CONFIG,
   maxStock: DEFAULT_TOWN_CONFIG.maxStock,
 };
-
-export function testRoster(config: CompanyRosterConfig = DEFAULT_COMPANY_ROSTER_CONFIG): CompanyRoster {
-  return new CompanyRoster(config, DEFAULT_HERO_ECONOMY, DEFAULT_TOWN_CONFIG, DEFAULT_HOLDING_CONFIG);
-}

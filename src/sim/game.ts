@@ -1,5 +1,6 @@
-import { coinReasons, emptyGoldStatistics, hoard, loot, purse, sink, source, transfer, treasury } from '../town/coin';
-import { defaultTownServiceSteps } from '../town/services';
+import { emptyGoldStatistics, hoard, loot, openCoin, purse, treasury, type Coin } from '../town/coin';
+import { TOWN_SERVICE_STEPS } from '../town/services';
+import { resolveSteps } from '../core/steps';
 import { CompanyRoster, type RosterContext } from '../adventurers/company-roster';
 import {
   resurrectionCost,
@@ -17,7 +18,7 @@ import type { DeepReadonly } from '../core/readonly';
 import { hashString, Rng } from '../core/rng';
 import { MAX_LEVEL, xpToNextLevel } from '../core/xp';
 import { describeEncounter, type Difficulty } from '../quests/encounters';
-import { defaultJobIntelSteps } from '../quests/job-intel';
+import { JOB_INTEL_STEPS } from '../quests/job-intel';
 import { difficultyCode, type Quest, type ReadonlyQuest } from '../quests/quest';
 import { THEMES, type ThemeId } from '../quests/themes';
 import { ASSET_KINDS, rollThreat, type Asset } from '../town/assets';
@@ -219,6 +220,12 @@ export interface GameQuestView {
     strength: number;
     hoardGold: number;
   }> | null;
+  /** Badge text from the kind. Empty means no badge. */
+  readonly badge: string;
+  readonly badgeClass: string;
+  /** Board-card line naming the lair, already phrased for this kind. */
+  readonly origin: string | null;
+  readonly originDetail: string | null;
   readonly encounters: readonly GameEncounterView[];
 }
 
@@ -250,6 +257,7 @@ export class Game {
   private lairs: Lair[] = [];
   private debtDays = new Map<string, number>();
   private listeners: ((event: GameEventView) => void)[] = [];
+  private readonly coin: Coin;
 
   constructor(partial: DeepPartial<GameConfig> = {}) {
     const resolved = resolveGameConfig(partial);
@@ -259,6 +267,7 @@ export class Game {
     this.rng = new Rng(this.config.seed);
     this.town = generateTown(this.rng, this.config.town, this.config.holdings);
     this.roster = new CompanyRoster(this.config.roster, this.config.heroes, this.config.town, this.config.holdings);
+    this.coin = openCoin(this.stats);
     const temple = serviceOf(this.town, 'temple');
     this.log('town', `Welcome to ${this.town.name}. Adventurers gather at ${this.town.tavernName}; the ${temple.name} keeps its doors open for the fallen.`);
     for (const e of this.town.employers) {
@@ -461,6 +470,7 @@ export class Game {
 
   private questView(quest: ReadonlyQuest, partyNames: ReadonlyMap<string, string>, lairs: ReadonlyMap<string, Lair>): GameQuestView {
     const lair = quest.lairId ? lairs.get(quest.lairId) : undefined;
+    const profile = this.board.profile(quest.kind);
     return Object.freeze({
       id: quest.id,
       kind: quest.kind,
@@ -475,6 +485,10 @@ export class Game {
       encounterCountKnown: quest.countRevealed,
       partyName: quest.partyId ? partyNames.get(quest.partyId) ?? null : null,
       lair: lair ? Object.freeze({ name: lair.name, strength: lair.strength, hoardGold: lair.hoard.gold }) : null,
+      badge: profile.badge,
+      badgeClass: profile.badge ? profile.id : '',
+      origin: lair ? `${profile.lairRelation} ${lair.name}` : null,
+      originDetail: lair ? (profile.lairFigure === 'hoard' ? `hoard ${lair.hoard.gold} gp` : `strength ${lair.strength}`) : null,
       encounters: Object.freeze(quest.encounters.map((encounter, index) => Object.freeze({
         number: index + 1,
         difficulty: index < quest.revealed ? encounter.difficulty : null,
@@ -552,8 +566,8 @@ export class Game {
     for (const e of this.town.employers) {
       if (e.ruined) continue;
       const income = dailyIncome(e, this.config.town.threatenedIncomeDivisor);
-      source(treasury(e), income, 'income', this.stats, coinReasons);
-      sink(treasury(e), e.upkeepPerDay, 'upkeep', this.stats, coinReasons);
+      this.coin.source(treasury(e), income, 'income');
+      this.coin.sink(treasury(e), e.upkeepPerDay, 'upkeep');
       earned += income;
       paid += e.upkeepPerDay;
       if (e.treasury < 0) {
@@ -676,7 +690,8 @@ export class Game {
       town: this.town,
       rng: this.rng,
       ledger: this.stats,
-      statistics: this.stats,
+      coin: this.coin,
+      kinds: this.board.profiles(),
       travelTicks: this.config.board.travelTicks,
       config: this.config.expedition,
       intel: this.config.intel,
@@ -709,13 +724,13 @@ export class Game {
     // A company takes work at its own level. After a slow day it will stretch one level either way,
     // never more: the small jobs are for the companies that need them.
     const stretch = p.idleTicks >= this.config.world.idleStretchTicks ? this.config.world.levelStretch : 0;
-    const assault = this.openQuests.find((q) => q.kind === 'assault' && q.level <= level);
-    if (assault && p.gold >= resurrectionCost(level, this.config.heroes) && this.rng.chance(this.config.world.assaultAppetite)) {
-      this.acceptQuest(p, assault);
+    const standing = this.openQuests.find((q) => this.board.profile(q.kind).offer === 'lair' && q.level <= level);
+    if (standing && p.gold >= resurrectionCost(level, this.config.heroes) && this.rng.chance(this.config.world.assaultAppetite)) {
+      this.acceptQuest(p, standing);
       return;
     }
     const candidates = this.openQuests.filter(
-      (q) => q.kind === 'contract' && Math.abs(q.level - level) <= stretch && (!q.guildOnly || p.guildMember) && this.hasFirstRefusal(q, p),
+      (q) => this.board.profile(q.kind).offer === 'holding' && Math.abs(q.level - level) <= stretch && (!q.guildOnly || p.guildMember) && this.hasFirstRefusal(q, p),
     );
     if (candidates.length === 0) return;
     // An old friend's contract first, then exact level, then the employer's name, then the pay.
@@ -725,12 +740,12 @@ export class Game {
       (a, b) => favored(b) - favored(a) || Math.abs(a.level - level) - Math.abs(b.level - level) || rep(b) - rep(a) || b.reward - a.reward,
     );
     const quest = candidates[0]!;
-    if (this.roster.seekIntelligence(p, defaultJobIntelSteps(), {
+    if (this.roster.seekIntelligence(p, resolveSteps(this.config.intel.steps, JOB_INTEL_STEPS), {
       work: quest,
       knowledge: this.board.knowledge(quest),
       town: this.town,
       rng: this.rng,
-      statistics: this.stats,
+      coin: this.coin,
       config: this.config.intel,
       heroes: this.config.heroes,
       report: ({ kind, text }) => this.log(kind, text),
@@ -753,13 +768,17 @@ export class Game {
     return this.tick - q.postedAt >= this.config.world.firstRefusalTicks;
   }
 
-  /** The complete service order is data supplied by Game. */
+  /** The complete service order is the configured list of step names. */
   private shop(p: ReadonlyParty): boolean {
-    return this.roster.visitServices(p, defaultTownServiceSteps(this.roster.retirementStep(this.rosterContext())), {
+    const steps = resolveSteps(this.config.services.steps, {
+      ...TOWN_SERVICE_STEPS,
+      retirement: this.roster.retirementStep(this.rosterContext()),
+    });
+    return this.roster.visitServices(p, steps, {
       town: this.town,
       day: this.day,
       ledger: this.stats,
-      statistics: this.stats,
+      coin: this.coin,
       report: ({ kind, text, chronicle }) => {
         if (chronicle) this.chronicleLog(kind, text);
         else this.log(kind, text);
@@ -777,7 +796,7 @@ export class Game {
       rng: this.rng,
       tick: this.tick,
       ledger: this.stats,
-      statistics: this.stats,
+      coin: this.coin,
       report: ({ kind, text, chronicle }) => {
         if (chronicle) this.chronicleLog(kind, text);
         else this.log(kind, text);
@@ -794,7 +813,7 @@ export class Game {
   private payHoard(lair: Lair, company: Party): string {
     const gold = lair.hoard.gold;
     const items = lair.hoard.items;
-    transfer(hoard(lair), purse(company), gold, 'spoils', this.stats, coinReasons);
+    this.coin.transfer(hoard(lair), purse(company), gold, 'spoils');
     company.stash.push(...items);
     this.stats.itemsFound += items.length;
     lair.hoard.items = [];
@@ -809,7 +828,7 @@ export class Game {
       rng: this.rng,
       tick: this.tick,
       ledger: this.stats,
-      statistics: this.stats,
+      coin: this.coin,
       report: ({ kind, text, chronicle }) => {
         if (chronicle) this.chronicleLog(kind, text);
         else this.log(kind, text);
@@ -838,8 +857,8 @@ export class Game {
       items.push(...p.stash);
       p.stash = [];
       gold = p.gold;
-      if (lair) transfer(purse(p), hoard(lair), gold, 'wipe', this.stats, coinReasons);
-      else if (asset) transfer(purse(p), loot(asset), gold, 'wipe', this.stats, coinReasons);
+      if (lair) this.coin.transfer(purse(p), hoard(lair), gold, 'wipe');
+      else if (asset) this.coin.transfer(purse(p), loot(asset), gold, 'wipe');
     }
     store.items.push(...items);
     if (items.length === 0 && gold === 0) return;

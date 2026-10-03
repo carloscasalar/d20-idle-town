@@ -370,3 +370,59 @@ The round trip validates the parsed object on its own.
 Correction verification: `pnpm typecheck` passed. `pnpm test` passed all 575
 tests across 27 files. The regression snapshot has no diff. Its SHA-256
 remains `cbbf8cc5c7c6a321866dd4db3b27bef401a39557a003c05d7480ce703d2d7343`.
+
+## 8. Kinds of work, one step list, one coin
+
+**Problem.** The Board already picked a kind's settlement from a table, but
+Game, the expedition and job intelligence still branched on the kind's name:
+which work an idle company considers, whether the last fight forbids retreat,
+whether a fight is a depth in a lair, and what is public when the work is
+posted. Town services and job intelligence each had a step type and a
+dispatcher of the same shape, and retirement was a positional slot in the
+service list. Every gold movement was handed the reason table and the
+statistics again, and a reason's effects were five positional booleans.
+`jobKnowledge(record)` was exported, so any holder of a writable contract could
+build a learning handle. The validator accepted holding names, employer kinds
+and step names that do not exist, and a weight list whose weights are all zero.
+
+**Change.** Each kind of work is one profile plus one behaviour. The profile
+names the renown it grants, the board-card narration, whether the last fight
+forbids retreat, whether fights report how deep a lair is, what is known at
+posting, and how an idle company is offered it. Game, the expedition and job
+intelligence read those fields. The strings `contract` and `assault` remain
+only on that profile and on the type that names the kinds.
+
+`Step` and `runSteps` are the one step mechanism. Default orders are lists of
+names — `services.steps` and `intel.steps` — resolved against a registry.
+Retirement is the name `retirement`. An unknown name is a validation error.
+
+`openCoin` builds one coin for a world, with its statistics and its reason
+table. Callers use that coin. A reason's effects are named fields. `intel`
+shares `service`'s effect object; income, windfall and spoils share one;
+upkeep, forfeit, looting and a wipe share one. The reason table stays in code.
+A reason's effects are the accounting identity of that movement — which
+counters exist for it — not a number a scenario tunes. Putting them in the
+configuration would let a file redefine what a reward counts as.
+
+Only `Board.knowledge` builds a learning handle. The validator checks holding
+names, employer kinds and step names against the catalogues that define them,
+and rejects a weight list whose weights are all zero.
+
+**Files.** `src/sim/work-kinds.ts`, `src/core/steps.ts`; Board, Game, Expedition,
+job intelligence, town services, the company roster, coin and the configuration
+validator; the quest card in the UI; tests that built a step list, a coin
+context or a knowledge handle; `docs/CONFIGURATION.md` and the architecture
+references.
+
+**Evidence.** A made-up kind, registered only as a table entry, is posted,
+taken, fought and settled. The fight forbids retreat and reports a lair depth
+because the profile says so. A configuration that names armour ahead of potions
+is the order the game follows. A configuration that names an unknown step is
+rejected, as is `retiredHoldings: ['castle']` and a weight list of all zeroes.
+The regression snapshot is unchanged, so the named fields describe the behaviour
+the branches already had.
+
+**Verification.** `pnpm typecheck` passed. `pnpm test` passed all 579 tests
+across 29 files. The regression snapshot has no diff. Its SHA-256 remains
+`cbbf8cc5c7c6a321866dd4db3b27bef401a39557a003c05d7480ce703d2d7343`.
+`scripts/combat-sweep.ts` reported no crashes in seeds 1–150 for 1,500 hours.

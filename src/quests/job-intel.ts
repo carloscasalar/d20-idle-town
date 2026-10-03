@@ -2,9 +2,10 @@
  * Job intelligence: what is publicly known about a Contract or Bounty, what
  * each company has tried in order to learn it, and every way of learning.
  *
- * The Board keeps the job and hands out a handle that can only learn the next
- * fact or reveal every fact. What a company has tried lives on the company.
- * This module is the only writer of either fact after the job is created.
+ * The Board keeps the job and is the only code that gives out a handle.
+ * That handle can only learn the next fact or reveal every fact. What a
+ * company has tried lives on the company; this module is the only writer of
+ * those attempts. Knowledge only grows.
  *
  * An idle hour tries an ordered list of steps, the same shape as town services:
  * true when that step spends the hour. Reading the road and taking stock on
@@ -16,9 +17,10 @@ import { resurrectionCost, rollSkill, type HeroEconomyConfig } from '../adventur
 import { freeze } from '../core/freeze';
 import type { DeepReadonly } from '../core/readonly';
 import type { Rng } from '../core/rng';
-import { coinReasons, purse, transfer, treasury, type GoldStatistics } from '../town/coin';
+import { resolveSteps, runSteps, type Step } from '../core/steps';
+import { purse, treasury, type Coin } from '../town/coin';
 import { serviceOf, type Town } from '../town/town';
-import { describeEncounter, type EncounterSpec } from './encounters';
+import type { EncounterSpec } from './encounters';
 
 /**
  * What a caller may do to public knowledge. Both operations only reveal more.
@@ -27,13 +29,6 @@ import { describeEncounter, type EncounterSpec } from './encounters';
 export interface JobKnowledge {
   learnNext(): string;
   revealAll(): void;
-}
-
-interface KnowledgeRecord {
-  revealed: number;
-  countRevealed: boolean;
-  readonly title: string;
-  readonly encounters: readonly DeepReadonly<EncounterSpec>[];
 }
 
 /** Plain data. The resurrection price keeps its definition on the hero. */
@@ -60,6 +55,8 @@ export interface JobIntelConfig {
   revealedAtPosting: number;
   /** A bounty shows its encounter count as soon as it is posted. */
   assaultRevealsCount: boolean;
+  /** Idle-hour order, by step name. */
+  steps: readonly string[];
 }
 
 export const DEFAULT_JOB_INTEL_CONFIG: JobIntelConfig = freeze({
@@ -71,7 +68,11 @@ export const DEFAULT_JOB_INTEL_CONFIG: JobIntelConfig = freeze({
   maxRounds: 2,
   revealedAtPosting: 1,
   assaultRevealsCount: true,
+  steps: ['freeAttempt', 'divination', 'paidRound'],
 });
+
+/** Names a configuration may use for an idle hour of job intelligence. */
+export const INTEL_STEP_NAMES = DEFAULT_JOB_INTEL_CONFIG.steps;
 
 export interface IntelWork {
   readonly id: string;
@@ -92,7 +93,7 @@ export interface JobIntelContext {
   knowledge: JobKnowledge;
   town: Town;
   rng: Rng;
-  statistics: GoldStatistics;
+  coin: Coin;
   config: JobIntelConfig;
   /** Resurrection price. */
   heroes: HeroEconomyConfig;
@@ -100,11 +101,11 @@ export interface JobIntelContext {
 }
 
 /** True when the hour is spent. A false result may still record an attempt. */
-export type JobIntelStep = (company: Party, context: JobIntelContext) => boolean;
+export type JobIntelStep = Step<Party, JobIntelContext>;
 
-/** The idle-hour order: the free attempt, then divination, then a paid round. */
+/** The idle-hour order, resolved from the default names. */
 export function defaultJobIntelSteps(): readonly JobIntelStep[] {
-  return Object.freeze([freeAttempt, divination, paidRound]);
+  return resolveSteps(DEFAULT_JOB_INTEL_CONFIG.steps, JOB_INTEL_STEPS);
 }
 
 /**
@@ -113,8 +114,7 @@ export function defaultJobIntelSteps(): readonly JobIntelStep[] {
  */
 export function seekJobIntelligence(company: Party, context: JobIntelContext, steps: readonly JobIntelStep[]): boolean {
   if (isFullyKnown(context.work)) return false;
-  for (const step of steps) if (step(company, context)) return true;
-  return false;
+  return runSteps(company, context, steps);
 }
 
 export interface RoadIntelContext {
@@ -147,39 +147,16 @@ export function difficultyCode(work: {
   return [...known, ...Array.from({ length: hidden }, () => '?')].join('/');
 }
 
-/** How much is public when a job is posted. A bounty already shows its length. */
-export function knowledgeAtPosting(kind: 'contract' | 'assault', config: JobIntelConfig): { revealed: number; countRevealed: boolean } {
-  return { revealed: config.revealedAtPosting, countRevealed: kind === 'assault' && config.assaultRevealsCount };
-}
-
-/** A handle for a job this module may reveal. Knowledge only grows. */
-export function jobKnowledge(work: KnowledgeRecord): JobKnowledge {
-  return {
-    learnNext() {
-      const learned = revealNextFact(work);
-      if (learned === null) throw new Error(`"${work.title}" is already fully known.`);
-      if (learned === 'count') return `it means ${work.encounters.length} fights`;
-      const next = work.encounters[work.revealed - 1]!;
-      return `the next fight will be ${describeEncounter(next)} (${next.difficulty})`;
-    },
-    revealAll() {
-      work.countRevealed = true;
-      work.revealed = work.encounters.length;
-    },
-  };
-}
-
-/** Learn the next fact: the encounter count first, then one encounter. */
-function revealNextFact(work: KnowledgeRecord): 'count' | 'encounter' | null {
-  if (!work.countRevealed) {
-    work.countRevealed = true;
-    return 'count';
-  }
-  if (work.revealed < work.encounters.length) {
-    work.revealed += 1;
-    return 'encounter';
-  }
-  return null;
+/**
+ * How much is public when work is posted.
+ * `configured` follows assaultRevealsCount; a boolean is that kind's own rule.
+ */
+export function knowledgeAtPosting(
+  countAtPosting: boolean | 'configured',
+  config: JobIntelConfig,
+): { revealed: number; countRevealed: boolean } {
+  const countRevealed = countAtPosting === 'configured' ? config.assaultRevealsCount : countAtPosting;
+  return { revealed: config.revealedAtPosting, countRevealed };
 }
 
 /** One try per job, while the tavern stands. Success and failure both spend the hour. */
@@ -208,7 +185,7 @@ export function divination(company: Party, context: JobIntelContext): boolean {
   const cost = context.config.divinationCostPerLevel * level;
   const reserve = resurrectionCost(level, context.heroes) * context.config.divinationReserveFactor;
   if (company.gold - cost < reserve) return false;
-  transfer(purse(company), treasury(temple), cost, 'intel', context.statistics, coinReasons);
+  context.coin.transfer(purse(company), treasury(temple), cost, 'intel');
   context.knowledge.revealAll();
   context.report({
     kind: 'temple',
@@ -226,7 +203,7 @@ export function paidRound(company: Party, context: JobIntelContext): boolean {
   const cost = context.config.roundCostPerLevel * level;
   const reserve = resurrectionCost(level, context.heroes) * context.config.roundReserveFactor;
   if (tavern.ruined || company.gold - cost < reserve) return false;
-  transfer(purse(company), treasury(tavern), cost, 'intel', context.statistics, coinReasons);
+  context.coin.transfer(purse(company), treasury(tavern), cost, 'intel');
   ensureInquiry(company, context.work.id).roundsBought = done + 1;
   const learned = context.knowledge.learnNext();
   context.report({ kind: 'shop', text: `${company.name} buy a round at ${tavern.name} (${cost} gp) and ask about "${context.work.title}": ${learned}.` });
@@ -272,3 +249,10 @@ function ensureInquiry(company: Party, jobId: string): JobInquiry {
 function diceText(check: { roll: number; bonus: number; total: number; advantage: boolean }): string {
   return `${check.roll}${check.bonus >= 0 ? '+' : ''}${check.bonus} = ${check.total}${check.advantage ? ', with advantage' : ''}`;
 }
+
+/** Named idle-hour steps. Game resolves `intel.steps` against this registry. */
+export const JOB_INTEL_STEPS: Readonly<Record<string, JobIntelStep>> = Object.freeze({
+  freeAttempt,
+  divination,
+  paidRound,
+});

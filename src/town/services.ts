@@ -3,7 +3,8 @@ import { aliveMembers, partyLevel, type Party } from '../adventurers/party';
 import { freeze } from '../core/freeze';
 import { listNames } from '../core/names';
 import { describeEffect, resalePrice, type ItemConfig, type MagicItem } from '../items/items';
-import { coinReasons, purse, transfer, treasury, type GoldStatistics } from './coin';
+import { resolveSteps, runSteps, type Step } from '../core/steps';
+import { purse, treasury, type Coin } from './coin';
 import { serviceOf, type Employer, type Town } from './town';
 
 /** Prices and limits for an idle hour in town. */
@@ -14,6 +15,8 @@ export interface TownServiceConfig {
   blessingHpPerLevel: number;
   /** Gold that must remain after a blessing, as a multiple of the resurrection price. */
   blessingReserveFactor: number;
+  /** Idle-hour order, by step name. `retirement` is the roster's step. */
+  steps: readonly string[];
 }
 
 export const DEFAULT_TOWN_SERVICE_CONFIG: TownServiceConfig = freeze({
@@ -22,7 +25,11 @@ export const DEFAULT_TOWN_SERVICE_CONFIG: TownServiceConfig = freeze({
   blessingCostPerLevel: 40,
   blessingHpPerLevel: 3,
   blessingReserveFactor: 1.5,
+  steps: ['potions', 'loot', 'items', 'dues', 'blessing', 'retirement', 'armour'],
 });
+
+/** Names a configuration may use for an idle hour in town, including the roster's retirement step. */
+export const SERVICE_STEP_NAMES = DEFAULT_TOWN_SERVICE_CONFIG.steps;
 
 /** Item statistics for a service visit. Gold statistics live on the context. */
 export interface ServiceLedger {
@@ -39,7 +46,7 @@ export interface TownServiceContext {
   town: Town;
   day: number;
   ledger: ServiceLedger;
-  statistics: GoldStatistics;
+  coin: Coin;
   /** Publish immediately, so subscribers see state at the same point as the event. */
   report: (event: ServiceEvent) => void;
   services: TownServiceConfig;
@@ -50,15 +57,24 @@ export interface TownServiceContext {
 }
 
 /** One service may spend the hour; false allows the following step to try. */
-export type TownServiceStep = (company: Party, context: TownServiceContext) => boolean;
+export type TownServiceStep = Step<Party, TownServiceContext>;
 
-/** One default order, with a caller-contributed company step before armour.
- * The standalone default contributes no action; Game supplies its roster step.
+/** Named town services. `retirement` is registered by the roster, not here. */
+export const TOWN_SERVICE_STEPS: Readonly<Record<string, TownServiceStep>> = {
+  potions: buyPotions,
+  loot: sellLoot,
+  items: buyMagicItem,
+  dues: payGuildDues,
+  blessing: buyBlessing,
+  armour: buyArmour,
+};
+
+/**
+ * The default order, including a retirement step that does nothing.
+ * Game resolves `services.steps` and registers the roster's retirement step under that name.
  */
-export function defaultTownServiceSteps(companyStep: TownServiceStep = () => false): readonly TownServiceStep[] {
-  return Object.freeze([
-    buyPotions, sellLoot, buyMagicItem, payGuildDues, buyBlessing, companyStep, buyArmour,
-  ]);
+export function defaultTownServiceSteps(): readonly TownServiceStep[] {
+  return resolveSteps(DEFAULT_TOWN_SERVICE_CONFIG.steps, { ...TOWN_SERVICE_STEPS, retirement: () => false });
 }
 
 /** Try caller-supplied steps in order, stopping as soon as one spends the hour.
@@ -66,8 +82,7 @@ export function defaultTownServiceSteps(companyStep: TownServiceStep = () => fal
  * Regular purchases retain one resurrection's cost; blessings retain 1.5 times.
  */
 export function visitTownServices(p: Party, services: TownServiceContext, steps: readonly TownServiceStep[]): boolean {
-  for (const step of steps) if (step(p, services)) return true;
-  return false;
+  return runSteps(p, services, steps);
 }
 
 export function buyPotions(p: Party, context: TownServiceContext): boolean {
@@ -115,7 +130,7 @@ export function buyArmour(p: Party, context: TownServiceContext): boolean {
 
 /** Equip loot from the stash where it helps; sell the rest to the enchanter, who puts it back on sale. */
 export function sellLoot(p: Party, context: TownServiceContext): boolean {
-  const { town, ledger, statistics, log, items, maxStock } = serviceVisit(p, context);
+  const { town, ledger, log, items, maxStock } = serviceVisit(p, context);
   if (p.stash.length === 0) return false;
   const equipped: string[] = [];
   let guard = 0;
@@ -139,7 +154,7 @@ export function sellLoot(p: Party, context: TownServiceContext): boolean {
     p.stash.push(item);
     return false;
   }
-  transfer(treasury(enchanter), purse(p), price, 'resale', statistics, coinReasons);
+  context.coin.transfer(treasury(enchanter), purse(p), price, 'resale');
   enchanter.stock.push(item);
   ledger.itemsSold += 1;
   log('shop', `${p.name} sell a ${item.name} to ${enchanter.name} for ${price} gp.`);
@@ -209,14 +224,14 @@ export function buyBlessing(p: Party, context: TownServiceContext): boolean {
 
 /** Per-step inputs and the existing coin/event operations; no random draws. */
 function serviceVisit(p: Party, context: TownServiceContext) {
-  const { town, day, ledger, statistics, report, services, heroes, items, maxStock } = context;
+  const { town, day, ledger, coin, report, services, heroes, items, maxStock } = context;
   const pay = (from: Party, to: Employer, amount: number, adventurer?: Hero) =>
-    transfer(purse(from), treasury(to), amount, 'service', statistics, coinReasons, adventurer);
+    coin.transfer(purse(from), treasury(to), amount, 'service', adventurer);
   const log = (kind: ServiceEvent['kind'], text: string) => report({ kind, text });
   const chronicleLog = (kind: ServiceEvent['kind'], text: string) => report({ kind, text, chronicle: true });
   const level = partyLevel(p);
   return {
-    town, day, ledger, statistics, pay, log, chronicleLog, level, services, heroes, items, maxStock,
+    town, day, ledger, coin, pay, log, chronicleLog, level, services, heroes, items, maxStock,
     reserve: resurrectionCost(level, heroes), alive: aliveMembers(p),
   };
 }

@@ -5,9 +5,10 @@ import { createHero, killHero } from '../src/adventurers/hero';
 import { createParty, partyLevel, type Party } from '../src/adventurers/party';
 import { Rng } from '../src/core/rng';
 import { instantiate, ITEM_CATALOGUE } from '../src/items/items';
-import { jobKnowledge } from '../src/quests/job-intel';
 import type { Quest } from '../src/quests/quest';
+import { Board, DEFAULT_BOARD_CONFIG } from '../src/sim/board';
 import { advanceExpedition, type ExpeditionContext } from '../src/sim/expedition';
+import { openCoin } from '../src/town/coin';
 import { Game, mergeConfig, resolveGameConfig, TICKS_PER_DAY, type DeepPartial, type GameConfig, type GameScenario, type GameStats } from '../src/sim/game';
 import { createAsset } from '../src/town/assets';
 import { createLair, type Lair } from '../src/town/lairs';
@@ -262,7 +263,7 @@ describe('service purchase ledgers', () => {
     const ledger = { itemsSold: 3 };
     const statistics = { goldPaid: 0, goldSpentByHeroes: 7 };
 
-    expect(visitTownServices(p, { ...SERVICE_SUPPLIES, town, day: 1, ledger, statistics, report: () => {} }, defaultTownServiceSteps())).toBe(true);
+    expect(visitTownServices(p, { ...SERVICE_SUPPLIES, town, day: 1, ledger, coin: openCoin(statistics), report: () => {} }, defaultTownServiceSteps())).toBe(true);
 
     expect(p).toMatchObject({ gold: left, earned: 30, spent });
     expect(shop).toMatchObject({ treasury, earned, spent: 5 });
@@ -362,11 +363,13 @@ describe('homecoming payments', () => {
     const reports: string[] = [];
     const roster = new CompanyRoster(DEFAULT_COMPANY_ROSTER_CONFIG, DEFAULT_HERO_ECONOMY, DEFAULT_TOWN_CONFIG, DEFAULT_HOLDING_CONFIG);
     roster.replaceForScenario([p]);
+    const board = new Board(DEFAULT_BOARD_CONFIG);
+    board.replaceForScenario([q]);
     const context: ExpeditionContext = {
-      town, quest: q, rng, ledger, statistics, ...expeditionRules({ travelTicks: 2, restTicks: 8, skillDc: 15 }),
+      town, quest: q, rng, ledger, coin: openCoin(statistics), ...expeditionRules({ travelTicks: 2, restTicks: 8, skillDc: 15 }),
       combat: () => { throw new Error('Homecoming does not fight'); }, report: (event) => { reports.push(event.text); },
       disband: (company) => roster.disband(company),
-      knowledge: () => jobKnowledge(q), leaveLoot: () => {},
+      knowledge: () => board.knowledge(q), leaveLoot: () => {},
       settleQuest: (_q, company) => { company.questId = null; },
     };
     advanceExpedition(p, context);

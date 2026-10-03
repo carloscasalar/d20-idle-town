@@ -10,7 +10,6 @@ import {
   freeAttempt,
   isFullyKnown,
   jobInquiry,
-  jobKnowledge,
   learnOnArrival,
   paidRound,
   readTheRoad,
@@ -19,7 +18,9 @@ import {
   type JobIntelEvent,
   type JobIntelStep,
 } from '../src/quests/job-intel';
-import { emptyGoldStatistics } from '../src/town/coin';
+import { emptyGoldStatistics, openCoin } from '../src/town/coin';
+import { Board, DEFAULT_BOARD_CONFIG } from '../src/sim/board';
+import type { Quest } from '../src/quests/quest';
 import { generateTown, serviceOf, type ServiceKind } from '../src/town/town';
 import { STARTING_GOLD } from './helpers/supplied-config';
 import { DEFAULT_HERO_ECONOMY } from '../src/adventurers/hero';
@@ -31,6 +32,12 @@ const encounters: EncounterSpec[] = [
   { difficulty: 'intermediate', monsters: [{ name: 'Wolf', count: 2, xpEach: 50 }], totalXp: 100, tier: 'Low' },
   { difficulty: 'hard', monsters: [{ name: 'Ogre', count: 1, xpEach: 450 }], totalXp: 450, tier: 'High' },
 ];
+
+function knowledgeOf(work: ReturnType<typeof contract>) {
+  const board = new Board(DEFAULT_BOARD_CONFIG);
+  board.replaceForScenario([work as Quest]);
+  return board.knowledge(work as Quest);
+}
 
 function contract() {
   return {
@@ -50,10 +57,10 @@ function scene(options: { gold?: number; level?: number; skillDc?: number; ruine
   const events: JobIntelEvent[] = [];
   const context: JobIntelContext = {
     work,
-    knowledge: jobKnowledge(work),
+    knowledge: knowledgeOf(work),
     town,
     rng: new Rng(3),
-    statistics,
+    coin: openCoin(statistics),
     config: { ...DEFAULT_JOB_INTEL_CONFIG, skillDc: options.skillDc ?? DEFAULT_JOB_INTEL_CONFIG.skillDc },
     heroes: DEFAULT_HERO_ECONOMY,
     report: (event) => events.push(event),
@@ -205,7 +212,7 @@ describe('job intelligence', () => {
       rng: new Rng(4),
       skillDc,
       heroes: DEFAULT_HERO_ECONOMY,
-      knowledge: jobKnowledge(work),
+      knowledge: knowledgeOf(work),
       report: (text) => lines.push(text),
     });
 
@@ -227,7 +234,7 @@ describe('job intelligence', () => {
       rng: new Rng(4),
       skillDc: 0,
       heroes: DEFAULT_HERO_ECONOMY,
-      knowledge: jobKnowledge(work),
+      knowledge: knowledgeOf(work),
       report: (text) => lines.push(text),
     });
 
@@ -240,14 +247,14 @@ describe('job intelligence', () => {
 
   it('does not read a road when the job is already fully known', () => {
     const { company, work } = scene();
-    jobKnowledge(work).revealAll();
+    knowledgeOf(work).revealAll();
     const lines: string[] = [];
 
     readTheRoad(company, work, {
       rng: new Rng(4),
       skillDc: 0,
       heroes: DEFAULT_HERO_ECONOMY,
-      knowledge: jobKnowledge(work),
+      knowledge: knowledgeOf(work),
       report: (text) => lines.push(text),
     });
 
@@ -257,7 +264,7 @@ describe('job intelligence', () => {
 
   it('taking stock on arrival reveals a surprise, and a known destination is familiar', () => {
     const { work } = scene();
-    const knowledge = jobKnowledge(work);
+    const knowledge = knowledgeOf(work);
 
     expect(learnOnArrival(work, knowledge)).toBe(true);
     expect(isFullyKnown(work)).toBe(true);
@@ -268,7 +275,7 @@ describe('job intelligence', () => {
 
   it('refuses to learn a fact about a job that is already fully known', () => {
     const { work } = scene();
-    const knowledge = jobKnowledge(work);
+    const knowledge = knowledgeOf(work);
     knowledge.revealAll();
 
     expect(() => knowledge.learnNext()).toThrow(/already fully known/);

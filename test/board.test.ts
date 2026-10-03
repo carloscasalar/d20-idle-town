@@ -8,6 +8,7 @@ import { DEFAULT_JOB_INTEL_CONFIG } from '../src/quests/job-intel';
 import { DEFAULT_QUEST_CONFIG } from '../src/quests/quest';
 import { DEFAULT_LAIR_CONFIG } from '../src/town/lairs';
 import { Rng } from '../src/core/rng';
+import { openCoin } from '../src/town/coin';
 import { generateAssault, generateQuest } from '../src/quests/quest';
 import { Board, WORK_KINDS, DEFAULT_BOARD_CONFIG, type BoardConfig, type BoardContext, type BoardLedger, type WorkKinds, type WorkBehavior } from '../src/sim/board';
 import { Game } from '../src/sim/game';
@@ -117,7 +118,7 @@ function world(config: Partial<BoardConfig> & { renownCap?: number; companySize?
     rng,
     tick: 0,
     ledger,
-    statistics: { goldPaid: 0, goldSpentByHeroes: 0 },
+    coin: openCoin({ goldPaid: 0, goldSpentByHeroes: 0 }),
     report: () => {},
     companySize: companySize ?? DEFAULT_COMPANY_ROSTER_CONFIG.companySize,
     renownCap: renownCap ?? DEFAULT_COMPANY_ROSTER_CONFIG.renownCap,

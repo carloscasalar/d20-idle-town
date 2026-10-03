@@ -26,8 +26,16 @@ home changes the game everywhere that value applies.
 
 `validateGameConfig` checks a complete document. It reports a missing section,
 a missing field, an unknown field, a section that is not an object, a wrong
-type, a count that is not a whole number, an empty weight list, a negative
-price, or a range whose minimum exceeds its maximum. `new Game(partial)` and
+type, a count that is not a whole number, an empty weight list, a weight list
+whose weights are all zero, a negative price, or a range whose minimum exceeds
+its maximum. It also checks every name against the catalogue that defines it:
+`town.retiredHoldings` and `quests.relicHoldings` against holding kinds,
+`quests.guildOnlyKinds` against employer kinds, `services.steps` against town
+service steps (including `retirement`), and `intel.steps` against job-intel
+steps. An unknown name is a readable error, for example
+`services.steps: unknown step "shoe-shine"`. Coin reasons are not configuration:
+a reason's effects are the accounting identity of that movement, kept in code.
+`new Game(partial)` and
 `Game.forTesting` merge the partial onto these defaults first, then use that
 check. A function in the simulation takes the section it uses as a required
 argument, so an override of that section reaches every use.
@@ -95,7 +103,8 @@ road at `skillDc`.
 | `roundReserveFactor` | 1 | Resurrection prices that must remain after a paid round |
 | `maxRounds` | 2 | Paid rounds one company may buy about one job |
 | `revealedAtPosting` | 1 | Encounters already known when a job is posted |
-| `assaultRevealsCount` | true | A bounty shows its encounter count as soon as it is posted |
+| `assaultRevealsCount` | true | When a kind's profile says `configured`, posting reveals the encounter count |
+| `steps` | freeAttempt, divination, paidRound | Idle-hour order, by step name |
 
 ## `expedition`
 
@@ -124,6 +133,7 @@ An idle hour in town. Defined in `src/town/services.ts`.
 | `blessingCostPerLevel` | 40 | Gold per company level for a blessing |
 | `blessingHpPerLevel` | 3 | Bonus hit points per level while blessed. Expedition receives this. |
 | `blessingReserveFactor` | 1.5 | Resurrection prices that must remain after a blessing |
+| `steps` | potions, loot, items, dues, blessing, retirement, armour | Idle-hour order, by step name. `retirement` is the roster's step |
 
 ## `lairs`
 

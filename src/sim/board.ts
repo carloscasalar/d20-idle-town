@@ -2,13 +2,14 @@ import type { Party } from '../adventurers/party';
 import { freeze } from '../core/freeze';
 import type { DeepReadonly } from '../core/readonly';
 import type { Rng } from '../core/rng';
-import { coinReasons, hoard, loot, purse, sink, source, transfer, treasury, type GoldStatistics } from '../town/coin';
-import { jobKnowledge, type JobIntelConfig, type JobKnowledge } from '../quests/job-intel';
+import { hoard, loot, purse, treasury, type Coin } from '../town/coin';
+import { type JobIntelConfig, type JobKnowledge } from '../quests/job-intel';
 import { difficultyCode, generateAssault, generateQuest, type Quest, type QuestConfig, type QuestGeneration, type QuestKind, type ReadonlyQuest } from '../quests/quest';
 import { THEMES, type ThemeId } from '../quests/themes';
 import { ASSET_KINDS, type Asset } from '../town/assets';
 import type { Lair } from '../town/lairs';
-import type { EncounterConfig } from '../quests/encounters';
+import { describeEncounter, type EncounterConfig, type EncounterSpec } from '../quests/encounters';
+import { assaultProfile, contractProfile, EMPTY_PROFILE, renownGain, type WorkProfile } from './work-kinds';
 import type { ItemConfig } from '../items/items';
 import { assetById, serviceOf, type Employer, type Town } from '../town/town';
 
@@ -69,9 +70,11 @@ export interface WorkBehavior {
   expire?: (work: ReadonlyQuest, context: WorkContext) => () => void;
   /** Absence means a broken lair does not withdraw this kind of work. */
   withdrawOnLairBreak?: (work: ReadonlyQuest, context: WorkContext) => void;
+  /** Named differences from the other kinds. Absence means the empty profile. */
+  profile?: WorkProfile;
 }
 
-export type WorkKinds = Readonly<Record<QuestKind, WorkBehavior>>;
+export type WorkKinds = Readonly<Record<string, WorkBehavior>>;
 
 export const Contract: WorkBehavior = {
   create: createContract,
@@ -81,6 +84,7 @@ export const Contract: WorkBehavior = {
   acceptance: contractAcceptance,
   expire: expireContract,
   withdrawOnLairBreak: withdrawContract,
+  profile: contractProfile,
 };
 
 export const Bounty: WorkBehavior = {
@@ -89,9 +93,10 @@ export const Bounty: WorkBehavior = {
   success: payBounty,
   failure: failBounty,
   acceptance: bountyAcceptance,
+  profile: assaultProfile,
 };
 
-export const WORK_KINDS: WorkKinds = { contract: Contract, assault: Bounty };
+export const WORK_KINDS: WorkKinds = { [contractProfile.id]: Contract, [assaultProfile.id]: Bounty };
 
 /** Game starts the expedition before publishing this acceptance event. */
 export interface TakenWork {
@@ -141,11 +146,23 @@ export class Board {
   }
 
   postContract(employer: Employer, holding: Asset, theme: ThemeId, level: number, origin: Lair | null, context: BoardContext): ReadonlyQuest {
-    return this.post('contract', { employer, holding, theme, level, lair: origin }, context);
+    return this.post(contractProfile.id, { employer, holding, theme, level, lair: origin }, context);
   }
 
   postBounty(lair: Lair, context: BoardContext): ReadonlyQuest {
-    return this.post('assault', { employer: serviceOf(context.town, 'guild'), lair }, context);
+    return this.post(assaultProfile.id, { employer: serviceOf(context.town, 'guild'), lair }, context);
+  }
+
+  /** Named rules for a kind. An unregistered kind has none of the built-in differences. */
+  profile(kind: QuestKind): WorkProfile {
+    return this.kinds[kind]?.profile ?? EMPTY_PROFILE;
+  }
+
+  /** Profiles of the kinds registered on this Board. The expedition reads this table. */
+  profiles(): Readonly<Record<string, WorkProfile>> {
+    return Object.fromEntries(
+      Object.entries(this.kinds).flatMap(([kind, behavior]) => (behavior.profile ? [[kind, behavior.profile]] : [])),
+    );
   }
 
   /** Link company and work; Expedition owns the journey and Game publishes acceptance. */
@@ -193,7 +210,7 @@ export class Board {
     }
   }
 
-  /** Learn the next fact, or reveal every fact. Knowledge only grows. */
+  /** Learn the next fact, or reveal every fact. Knowledge only grows. The only way to obtain a handle. */
   knowledge(work: ReadonlyQuest): JobKnowledge {
     return jobKnowledge(this.owned(work));
   }
@@ -228,7 +245,7 @@ export class Board {
     lair.clearedAt = context.tick;
     context.ledger.lairsCleared += 1;
     const found = context.payHoard(lair, company);
-    company.renown = Math.min(context.renownCap, company.renown + this.config.bountyRenown);
+    company.renown = Math.min(context.renownCap, company.renown + renownGain(this.profile(work.kind), this.config));
     for (const candidate of this.work) {
       if (candidate.lairId !== lair.id || candidate.status !== 'open') continue;
       const consequences = this.behavior(candidate.kind).withdrawOnLairBreak;
@@ -262,7 +279,7 @@ export interface BoardContext {
   rng: Rng;
   tick: number;
   ledger: BoardLedger;
-  statistics: GoldStatistics;
+  coin: Coin;
   /** Publish immediately so observers see state at the moment of the event. */
   report: (event: BoardEvent) => void;
   /** Move a broken lair's hoard onto the company. Returns what was found, for the chronicle. */
@@ -368,14 +385,14 @@ function payContract(work: Readonly<Quest>, company: Party, employer: Employer, 
     windfall = holding.incomePerDay * context.config.windfallDays;
     holding.status = 'safe';
   }
-  const statistics = context.statistics;
+  const { coin } = context;
   // Windfall and reward used to be one treasury assignment. Both finish before the reward event.
-  source(treasury(employer), windfall, 'windfall', statistics, coinReasons);
-  transfer(treasury(employer), purse(company), work.reward, 'reward', statistics, coinReasons);
+  coin.source(treasury(employer), windfall, 'windfall');
+  coin.transfer(treasury(employer), purse(company), work.reward, 'reward');
   employer.questsCompleted += 1;
   employer.reputation += context.config.reputationGain;
   company.questsDone += 1;
-  company.renown = Math.min(context.renownCap, company.renown + context.config.contractRenown);
+  company.renown = Math.min(context.renownCap, company.renown + renownGain(contractProfile, context.config));
   context.ledger.questsCompleted += 1;
   let inKind = '';
   if (work.itemReward) {
@@ -391,7 +408,7 @@ function payContract(work: Readonly<Quest>, company: Party, employer: Employer, 
   if (holding && (holding.loot.gold > 0 || holding.loot.items.length > 0)) {
     const found = [holding.loot.items.map((item) => item.name).join(', '), holding.loot.gold > 0 ? `${holding.loot.gold} gp` : ''].filter(Boolean).join(' and ');
     const items = holding.loot.items;
-    transfer(loot(holding), purse(company), holding.loot.gold, 'spoils', statistics, coinReasons);
+    coin.transfer(loot(holding), purse(company), holding.loot.gold, 'spoils');
     company.stash.push(...items);
     context.ledger.itemsFound += items.length;
     holding.loot.items = [];
@@ -412,7 +429,7 @@ function failContract(work: Readonly<Quest>, company: Party, employer: Employer,
 
 function payBounty(work: Readonly<Quest>, company: Party, guild: Employer, _holding: Asset | undefined, context: WorkContext): void {
   const lair = bountyLair(work, context);
-  transfer(treasury(guild), purse(company), work.reward, 'reward', context.statistics, coinReasons);
+  context.coin.transfer(treasury(guild), purse(company), work.reward, 'reward');
   guild.questsCompleted += 1;
   guild.reputation += context.config.reputationGain;
   company.questsDone += 1;
@@ -443,9 +460,9 @@ function expireContract(contract: ReadonlyQuest, context: WorkContext): () => vo
   return () => {
     const loss = Math.max(0, Math.min(employer.treasury, holding.incomePerDay * context.config.lootingDays));
     const lair = lairById(context.lairs, contract.lairId);
-    const statistics = context.statistics;
-    if (lair?.status === 'active') transfer(treasury(employer), hoard(lair), loss, 'looting', statistics, coinReasons);
-    else sink(treasury(employer), loss, 'forfeit', statistics, coinReasons);
+    const { coin } = context;
+    if (lair?.status === 'active') coin.transfer(treasury(employer), hoard(lair), loss, 'looting');
+    else coin.sink(treasury(employer), loss, 'forfeit');
     if (lair) unansweredRaid(lair, context);
     employer.cooldown = Math.min(employer.cooldown, context.rng.int(...context.config.expiryCooldown));
     if (holding.status === 'threatened') {
@@ -482,4 +499,38 @@ function report(context: BoardContext, kind: BoardEvent['kind'], text: string, c
 
 function capitalize(text: string): string {
   return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+/** The only constructor of a learning handle. Knowledge only grows. */
+function jobKnowledge(work: {
+  revealed: number;
+  countRevealed: boolean;
+  readonly title: string;
+  readonly encounters: readonly DeepReadonly<EncounterSpec>[];
+}): JobKnowledge {
+  return {
+    learnNext() {
+      const learned = revealNextFact(work);
+      if (learned === null) throw new Error(`"${work.title}" is already fully known.`);
+      if (learned === 'count') return `it means ${work.encounters.length} fights`;
+      const next = work.encounters[work.revealed - 1]!;
+      return `the next fight will be ${describeEncounter(next)} (${next.difficulty})`;
+    },
+    revealAll() {
+      work.countRevealed = true;
+      work.revealed = work.encounters.length;
+    },
+  };
+}
+
+function revealNextFact(work: { revealed: number; countRevealed: boolean; readonly encounters: readonly unknown[] }): 'count' | 'encounter' | null {
+  if (!work.countRevealed) {
+    work.countRevealed = true;
+    return 'count';
+  }
+  if (work.revealed < work.encounters.length) {
+    work.revealed += 1;
+    return 'encounter';
+  }
+  return null;
 }

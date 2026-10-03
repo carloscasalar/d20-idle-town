@@ -133,27 +133,28 @@ enchanter buys back.
   block worth being the last fight.
 
 - **`services.ts`** — `visitTownServices(party, context, steps)` tries the
-  caller's ordered list of `TownServiceStep` functions until one spends the
-  hour. The regular steps are potions, loot sharing/sales, magic items, guild
-  dues, blessing and armour. `defaultTownServiceSteps(companyStep?)` builds
-  the one named default list, with a caller-contributed step between blessing
-  and armour (no action for standalone visits). Game contributes the roster’s
-  retirement step. Adding or reordering a service changes
-  the supplied list; services has no knowledge of retirement. Each step keeps
-  the existing reserve, equipment allocation, coin reasons and synchronous
-  reporting. The blessing's hit points per level live on the services configuration and are passed into combat setup.
+  caller's ordered list of steps until one spends the hour. A step is the
+  generic `(company, context) => boolean`, and `runSteps` is the one function
+  that walks a list. The named steps are `potions`, `loot`, `items`, `dues`,
+  `blessing` and `armour`. `retirement` is the roster's step, registered under
+  that name when the list is resolved; services does not know what retirement
+  does. The default order is `services.steps` in the configuration. Each step
+  keeps the existing reserve, equipment allocation and synchronous reporting.
+  Gold moves through the world's coin object. The blessing's hit points per
+  level live on the services configuration and are passed into combat setup.
 
-- **`coin.ts`** — the only writer of a gold balance or a gold counter. Callers
-  name a purse, treasury, hoard or loot and one of three operations: `transfer`,
-  `source` or `sink`, each with an amount and a reason. `coinReasons` is a
-  frozen table of typed keys. It decides which earned/spent counters and which
-  lifetime statistics (`goldPaid`, `goldSpentByHeroes`, and a named adventurer's
-  `goldSpent`) that reason touches. Divination and a paid round use the `intel`
-  reason, with the same counters as `service`. A hoard and a loot store have no earned/spent counters. The module
+- **`coin.ts`** — the only writer of a gold balance or a gold counter. `openCoin`
+  builds one coin for a world, holding that world's gold statistics and the
+  reason table. Callers name a purse, treasury, hoard or loot and one of three
+  operations on that coin: `transfer`, `source` or `sink`, each with an amount
+  and a reason. A reason's effects are named fields. Reasons that must touch
+  the same counters share one effect object: `intel` with `service`, income
+  with a windfall and with spoils, and upkeep with a forfeit, looting and a
+  wipe. A hoard and a loot store have no earned/spent counters. The module
   does not decide whether anyone can afford the amount, and it does not import
-  `Game`; it receives the gold statistics and nothing else. Factories still
-  set a holder's starting amount. The roster calls it for mergers and retirement.
-  `payForService` is gone.
+  `Game`. The reason table stays in code: the effects are the accounting
+  identity of a movement, not a tunable of the world. Factories still set a
+  holder's starting amount.
 
 ### `src/quests` — what companies actually do
 
@@ -169,8 +170,9 @@ enchanter buys back.
   for companies larger than four.
 - **`quest.ts`** — a `Quest` is the unit of work: two to six `EncounterSpec`s, a
   reward, an optional item, a giver, the holding at stake and the lair behind it.
-  How much is public at posting, and every later change to `revealed` and
-  `countRevealed`, is inside job intelligence.
+  How much is public at posting comes from the kind's profile
+  (`countAtPosting`) through `knowledgeAtPosting`. Later changes to `revealed`
+  and `countRevealed` go through the handle only the Board gives out.
   `generateQuest` prices a contract from the holding's income, the difficulty
   mix, the employer's generosity and desperation; `generateAssault` builds the
   standing bounty on a lair.
@@ -178,16 +180,16 @@ enchanter buys back.
   created, of the two public facts (whether the encounter count is known, and
   how many encounters are revealed) and of what each company has tried: a free
   attempt, rounds bought, and a look at the road, named fields per job.
-  `Board.knowledge` hands back the two operations knowledge allows: learn the
-  next fact, or reveal every fact. Knowledge only grows. An idle hour tries an
-  ordered list of steps — the free attempt, then divination, then a paid round
-  — the same shape as town services. `defaultJobIntelSteps` is that list.
-  Reading the road and taking stock on arrival call those same operations
-  themselves. `JobIntelConfig` and
-  `DEFAULT_JOB_INTEL_CONFIG` hold the skill difficulty, the price per level of
-  divination and of a round, each reserve as a multiple of the resurrection
-  price, and the limit on paid rounds. The resurrection price keeps its
-  definition on the hero. Divination and rounds pay with the `intel` coin reason.
+  `Board.knowledge` is the only way to obtain the two operations knowledge
+  allows: learn the next fact, or reveal every fact. Knowledge only grows.
+  An idle hour tries an ordered list of named steps — `freeAttempt`, then
+  `divination`, then `paidRound` — resolved from `intel.steps` and run by the
+  same `runSteps` as town services. Reading the road and taking stock on
+  arrival call those same operations themselves. `JobIntelConfig` holds the
+  skill difficulty, the price per level of divination and of a round, each
+  reserve as a multiple of the resurrection price, the limit on paid rounds,
+  and that step list. The resurrection price keeps its definition on the hero.
+  Divination and rounds pay the world's coin with the `intel` reason.
 
 ### `src/combat` — the adapter, and the only file that knows the engine's shape
 
@@ -223,7 +225,9 @@ constant, not a tunable field. Every other value is a section
 defaults, replacing arrays and `[min, max]` pairs whole, then reject a result
 that is missing a section, has an unknown field, a section that is not an
 object, the wrong type, a count that is not a whole number, an empty weight
-list, a negative price, or a range whose minimum exceeds its maximum. A
+list, a weight list whose weights are all zero, a name that is not in the
+catalogue it names (a holding, an employer kind, or a step), a negative price,
+or a range whose minimum exceeds its maximum. A
 function that uses a section takes that section as a required argument, so
 forgetting it is a type error and an override reaches every use. Nothing in the object is a function, a
 class instance or `undefined`, so the same document can later be loaded from
@@ -238,8 +242,12 @@ that object: `contractOpenTicks` stays in ticks, and `travelTicks` and
 `DEFAULT_BOARD_CONFIG` is the one definition of those defaults. The `WORK_KINDS` table
 selects small, named Contract and Bounty behaviors for creation, posting,
 acceptance wording, success, failure, expiry and withdrawal after a lair falls.
-An injected table can add a kind through `Board.post` without changing Board
-operations. Kind entries do not do gold arithmetic: a Contract's reward and
+Each entry carries a profile: which renown it grants, the board-card narration,
+whether the last fight forbids retreat, whether fights report a lair's depth,
+what is known when the work is posted, and how an idle company is offered it.
+Game, the expedition and job intelligence read those fields. An injected table
+can add a kind through `Board.post` without changing those modules. Kind
+entries do not do gold arithmetic: a Contract's reward and
 windfall, a Bounty's payment, an expiry loss and a hoard's payout are coin
 movements with reasons. Creators receive the kind, and posting rules receive the original
 posting terms. Entries apply consequences; Board operations write terminal
@@ -375,6 +383,8 @@ checks repeatability; `simulation-regression.test.ts` additionally compares each
 | `test/company-roster.test.ts` | Existing hourly characterization of arrivals, recruiting, merging, disbanding and retirement |
 | `test/company-roster-interface.test.ts` | Direct roster operations, configuration, deeply read-only queries and synchronous event state |
 | `test/town-service-steps.test.ts` | Caller-supplied service order with a made-up step between potions and armour |
+| `test/configured-steps.test.ts` | A configured service order the game follows, and names the validator rejects |
+| `test/registered-kind.test.ts` | A made-up kind posted, taken, fought and settled from its table entry |
 | `test/job-intel.test.ts` | Hourly characterization of learning a contract or bounty |
 | `test/job-intel-module.test.ts` | Job intelligence through its own interface: each way of learning, each refusal, and a made-up step |
 | `test/job-intel-regression.test.ts` | Three seeds, 400 hours: the world with investigations removed matches the run from before inquiries changed shape |
@@ -399,13 +409,18 @@ touching `difficultyScale` or the XP bands.
   `src/quests/themes.ts` (curated names plus creature types), then wire it into
   the weights of an asset kind in `src/town/assets.ts`, and into `LAIR_THEMES`
   if it should be able to hold a lair.
-- **A new kind of work** — add a `WorkBehavior` entry to the Board's kind table.
-  Its creation/posting, success/failure, acceptance, optional expiry and optional
-  withdrawal rule supply the behavior; `post`, `take` and `settle` dispatch it.
-- **A new town service** — add a `TownServiceStep` function and insert it into
-  the list passed by Game to `visitTownServices`. The dispatcher does not change.
-- **A new way of learning in an idle hour** — add a `JobIntelStep` and insert it
-  into the list passed to `seekJobIntelligence`. The dispatcher does not change.
+- **A new kind of work** — add one profile and one `WorkBehavior` to the Board's
+  kind table. The profile names the renown, the narration, whether the last
+  fight forbids retreat, whether fights report a lair's depth, what is known
+  at posting, and how an idle company is offered it. Creation, posting,
+  success, failure, acceptance, and optional expiry or withdrawal supply the
+  rest. `post`, `take`, `settle`, the expedition and job intelligence dispatch
+  it. Game does not gain a branch.
+- **A new town service** — add a named step to the town-service registry and
+  to `services.steps`. `runSteps` does not change. Retirement is the name
+  `retirement`, not a slot in the list.
+- **A new way of learning in an idle hour** — add a named step to the job-intel
+  registry and to `intel.steps`. The same `runSteps` runs it.
 - **A new holding** — add an `AssetKind` and its `AssetKindDef` (income, titles,
   threat weights) in `src/town/assets.ts`. Nothing else needs to change.
 - **A new magic item** — add an `ItemTemplate` to `ITEM_CATALOGUE` in

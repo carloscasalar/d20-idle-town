@@ -5,7 +5,7 @@ import { killHero, resurrectionCost } from '../src/adventurers/hero';
 import { Rng } from '../src/core/rng';
 import { instantiate, ITEM_CATALOGUE } from '../src/items/items';
 import { Board, DEFAULT_BOARD_CONFIG } from '../src/sim/board';
-import { emptyGoldStatistics } from '../src/town/coin';
+import { emptyGoldStatistics, openCoin } from '../src/town/coin';
 import { generateTown, serviceOf } from '../src/town/town';
 import type { Quest } from '../src/quests/quest';
 import { SERVICE_SUPPLIES, STARTING_GOLD } from './helpers/supplied-config';
@@ -21,7 +21,7 @@ function setup(config: Partial<CompanyRosterConfig> = {}) {
   const context: RosterContext = {
     town, rng, tick: 1,
     ledger: { partiesArrived: 0, resurrections: 0, retirements: 0 },
-    statistics: emptyGoldStatistics(), report: (event) => events.push(event),
+    coin: openCoin(emptyGoldStatistics()), report: (event) => events.push(event),
   };
   const board = new Board(DEFAULT_BOARD_CONFIG);
   const company = (level = 1, size = 4): Party => createParty(rng, level, size, 0, STARTING_GOLD);
@@ -203,7 +203,7 @@ describe('CompanyRoster recruitment and absorption', () => {
     expect(p.gold).toBe(0);
     expect(temple.treasury).toBe(treasury + resurrectionCost(dead.level, DEFAULT_HERO_ECONOMY));
     expect(context.ledger.resurrections).toBe(1);
-    expect(context.statistics.goldSpentByHeroes).toBe(resurrectionCost(dead.level, DEFAULT_HERO_ECONOMY));
+    expect(context.coin.statistics.goldSpentByHeroes).toBe(resurrectionCost(dead.level, DEFAULT_HERO_ECONOMY));
     expect(events).toMatchObject([{ kind: 'temple', chronicle: true }]);
   });
 
@@ -268,7 +268,7 @@ describe('CompanyRoster recruitment and absorption', () => {
     expect(aliveMembers(host)).toHaveLength(5);
     expect(host).toMatchObject({ gold: 40, earned: 30, potions: 3, renown: 7, stash: [item] });
     expect(donor).toMatchObject({ gold: 0, spent: 30, potions: 0, stash: [], status: 'idle' });
-    expect(context.statistics).toEqual(emptyGoldStatistics());
+    expect(context.coin.statistics).toEqual(emptyGoldStatistics());
   });
 
   it('absorb disbands an emptied donor and buries the dead before its final company event', () => {
@@ -325,7 +325,7 @@ describe('CompanyRoster retirement and compatibility operations', () => {
     expect(p.stash).toEqual([item]);
     expect(veteran.items).toEqual([]);
     expect(p.spent).toBe(1000);
-    expect(context.statistics.goldSpentByHeroes).toBe(1000);
+    expect(context.coin.statistics.goldSpentByHeroes).toBe(1000);
   });
 
   it('refuses ineligible, fallen and unaffordable veterans without consuming a service hour', () => {
@@ -348,7 +348,7 @@ describe('CompanyRoster retirement and compatibility operations', () => {
     const p = company(8);
     p.gold = 100000;
     roster.replaceForScenario([p]);
-    const serviceContext = { ...SERVICE_SUPPLIES, town: context.town, day: 1, ledger: { itemsSold: 0 }, statistics: context.statistics, report: () => {} };
+    const serviceContext = { ...SERVICE_SUPPLIES, town: context.town, day: 1, ledger: { itemsSold: 0 }, coin: context.coin, report: () => {} };
     expect(roster.retirementStep(context)(p, serviceContext)).toBe(true);
     expect(p.members).toHaveLength(3);
   });

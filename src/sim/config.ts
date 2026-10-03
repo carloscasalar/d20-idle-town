@@ -3,13 +3,13 @@ import { DEFAULT_HERO_ECONOMY, type HeroEconomyConfig } from '../adventurers/her
 import { freeze } from '../core/freeze';
 import { DEFAULT_COMBAT_CONFIG, type CombatConfig } from '../combat/battlecast';
 import { DEFAULT_ENCOUNTER_CONFIG, type EncounterConfig } from '../quests/encounters';
-import { DEFAULT_JOB_INTEL_CONFIG, type JobIntelConfig } from '../quests/job-intel';
+import { DEFAULT_JOB_INTEL_CONFIG, INTEL_STEP_NAMES, type JobIntelConfig } from '../quests/job-intel';
 import { DEFAULT_QUEST_CONFIG, type QuestConfig } from '../quests/quest';
-import { DEFAULT_HOLDING_CONFIG, type HoldingConfig } from '../town/assets';
+import { ASSET_KINDS, DEFAULT_HOLDING_CONFIG, type HoldingConfig } from '../town/assets';
 import { DEFAULT_ITEM_CONFIG, type ItemConfig } from '../items/items';
 import { DEFAULT_LAIR_CONFIG, type LairConfig } from '../town/lairs';
-import { DEFAULT_TOWN_SERVICE_CONFIG, type TownServiceConfig } from '../town/services';
-import { DEFAULT_TOWN_CONFIG, type TownConfig } from '../town/town';
+import { DEFAULT_TOWN_SERVICE_CONFIG, SERVICE_STEP_NAMES, type TownServiceConfig } from '../town/services';
+import { DEFAULT_TOWN_CONFIG, EMPLOYER_KINDS, type TownConfig } from '../town/town';
 import { DEFAULT_BOARD_CONFIG, type BoardConfig } from './board';
 import { DEFAULT_EXPEDITION_CONFIG, type ExpeditionConfig } from './expedition';
 import { DEFAULT_WORLD_CONFIG, TICKS_PER_DAY, type WorldConfig } from './game-rules';
@@ -145,6 +145,7 @@ const intelSpec = withFields(sectionField(GAME_SPEC, 'intel'), {
   divinationCostPerLevel: price,
   roundCostPerLevel: price,
   assaultRevealsCount: flag,
+  steps: { kind: 'strings' },
 });
 
 const expeditionSpec = withFields(sectionField(GAME_SPEC, 'expedition'), {
@@ -160,6 +161,7 @@ const servicesSpec = withFields(sectionField(GAME_SPEC, 'services'), {
   blessingCostPerLevel: price,
   blessingHpPerLevel: count,
   blessingReserveFactor: fraction,
+  steps: { kind: 'strings' },
 });
 
 const lairsSpec = withFields(sectionField(GAME_SPEC, 'lairs'), {
@@ -364,8 +366,34 @@ export function mergeConfig(base: unknown, override: unknown): unknown {
 export function validateGameConfig(value: unknown): ConfigResult {
   const errors: string[] = [];
   check(value, SPEC, '', errors);
+  if (errors.length === 0 && isPlainObject(value)) checkNames(value, errors);
   if (errors.length > 0) return { ok: false, errors };
   return { ok: true, config: value as GameConfig };
+}
+
+/** Names a configuration may use, each checked against the catalogue that defines it. */
+const NAME_LISTS: readonly { path: string; label: string; allowed: readonly string[] }[] = [
+  { path: 'town.retiredHoldings', label: 'holding', allowed: Object.keys(ASSET_KINDS) },
+  { path: 'quests.relicHoldings', label: 'holding', allowed: Object.keys(ASSET_KINDS) },
+  { path: 'quests.guildOnlyKinds', label: 'employer kind', allowed: EMPLOYER_KINDS },
+  { path: 'services.steps', label: 'step', allowed: SERVICE_STEP_NAMES },
+  { path: 'intel.steps', label: 'step', allowed: INTEL_STEP_NAMES },
+];
+
+function checkNames(value: Record<string, unknown>, errors: string[]): void {
+  for (const list of NAME_LISTS) {
+    const names = namesAt(value, list.path);
+    if (!names) continue;
+    for (const name of names) {
+      if (!list.allowed.includes(name)) errors.push(`${list.path}: unknown ${list.label} "${name}"`);
+    }
+  }
+}
+
+function namesAt(value: Record<string, unknown>, path: string): readonly string[] | undefined {
+  const found = path.split('.').reduce<unknown>((current, key) => (isPlainObject(current) ? current[key] : undefined), value);
+  if (!Array.isArray(found) || found.some((item) => typeof item !== 'string')) return undefined;
+  return found as string[];
 }
 
 /** Fill a deep partial from the defaults, then validate the result. */
@@ -455,6 +483,9 @@ function check(value: unknown, spec: Spec, path: string, errors: string[]): void
     return;
   }
   value.forEach((item, index) => check(item, spec.item, `${place}[${index}]`, errors));
+  if (spec.weights && value.length > 0 && value.every((item) => isPlainObject(item) && item.weight === 0)) {
+    errors.push(`${place}: every weight is zero`);
+  }
 }
 
 function seen(value: unknown): string {

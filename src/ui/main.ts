@@ -147,9 +147,10 @@ function questCard(quest: GameQuestView): string {
   const hidden = quest.encounterCountKnown
     ? unknown.map((encounter) => `<div class="row muted"><span>${encounter.number}. ?</span><span>unknown</span></div>`).join('')
     : unknown.length > 0 ? `<div class="row muted"><span>…</span><span>nobody knows how far it goes</span></div>` : '';
-  const origin = quest.lair ? `<div class="row muted"><span>${quest.kind === 'assault' ? 'assault on' : 'raid out of'} ${esc(quest.lair.name)}</span><span>${quest.kind === 'assault' ? `hoard ${quest.lair.hoardGold} gp` : `strength ${quest.lair.strength}`}</span></div>` : '';
+  const origin = quest.origin ? `<div class="row muted"><span>${esc(quest.origin)}</span><span>${esc(quest.originDetail ?? '')}</span></div>` : '';
+  const badge = quest.badge ? `<span class="badge ${esc(quest.badgeClass)}">${esc(quest.badge)}</span> ` : '';
   const item = quest.itemReward ? ` + <span class="item" title="${esc(quest.itemReward.effect)}">${esc(quest.itemReward.name)}</span>` : '';
-  return `<div class="card ${quest.kind}"><h3><span>${quest.kind === 'assault' ? '<span class="badge assault">lair</span> ' : ''}${esc(quest.title)}</span><span class="status">lvl ${quest.level} [${quest.difficultyCode}]</span></h3>${origin}
+  return `<div class="card ${quest.kind}"><h3><span>${badge}${esc(quest.title)}</span><span class="status">lvl ${quest.level} [${quest.difficultyCode}]</span></h3>${origin}
     <div class="row"><span>${esc(quest.giverName)} · ${quest.themeLabel}${quest.guildOnly ? ' · <span class="badge">guild</span>' : ''}</span><span class="gold">${quest.reward} gp${item}</span></div>
     ${known}${hidden}${quest.partyName ? `<div class="row"><span class="muted">taken by ${esc(quest.partyName)}</span></div>` : ''}</div>`;
 }

@@ -7,13 +7,13 @@ import type { Lair } from '../town/lairs';
 import type { Employer, EmployerKind } from '../town/town';
 import { buildEncounter, type Difficulty, type EncounterConfig, type EncounterSpec } from './encounters';
 import { knowledgeAtPosting, type JobIntelConfig } from './job-intel';
+import { assaultProfile, contractProfile, type QuestKind } from '../sim/work-kinds';
 import { THEMES, themeMonsters, type ThemeId } from './themes';
 
 export { difficultyCode, isFullyKnown } from './job-intel';
+export type { QuestKind };
 
 export type QuestStatus = 'open' | 'taken' | 'done' | 'failed';
-
-export type QuestKind = 'contract' | 'assault' | (string & {});
 
 export type ReadonlyQuest = DeepReadonly<Quest>;
 
@@ -162,7 +162,7 @@ export function generateQuest(rng: Rng, terms: QuestTerms, generation: QuestGene
   const guildOnly = quests.guildOnlyKinds.includes(employer.kind) && level >= quests.guildOnlyLevel;
   return {
     id: rng.id('quest'),
-    kind: 'contract',
+    kind: contractProfile.id,
     title,
     place: asset.name,
     giverId: employer.id,
@@ -171,7 +171,7 @@ export function generateQuest(rng: Rng, terms: QuestTerms, generation: QuestGene
     theme,
     level,
     encounters,
-    ...knowledgeAtPosting('contract', intel),
+    ...knowledgeAtPosting(contractProfile.countAtPosting, intel),
     reward,
     itemReward,
     guildOnly,
@@ -198,7 +198,7 @@ export function generateAssault(rng: Rng, lair: Lair, guild: Employer, partySize
   const title = rng.pick(ASSAULT_TITLES).replace('{lair}', lair.name).replace('{boss}', lair.boss).replace('{place}', lair.place);
   return {
     id: rng.id('quest'),
-    kind: 'assault',
+    kind: assaultProfile.id,
     title: title.charAt(0).toUpperCase() + title.slice(1),
     place: lair.place,
     giverId: guild.id,
@@ -207,7 +207,7 @@ export function generateAssault(rng: Rng, lair: Lair, guild: Employer, partySize
     theme: lair.theme,
     level: lair.level,
     encounters,
-    ...knowledgeAtPosting('assault', intel),
+    ...knowledgeAtPosting(assaultProfile.countAtPosting, intel),
     reward: bounty,
     itemReward: rollLootItem(rng, lair.level + quests.bossLootLevelBonus, items),
     // The guild wants the lair gone more than it wants dues: anyone may take the bounty.

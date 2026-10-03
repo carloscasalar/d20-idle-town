@@ -1,7 +1,7 @@
 import { expect, it } from 'vitest';
 import { createParty } from '../src/adventurers/party';
 import { Rng } from '../src/core/rng';
-import { emptyGoldStatistics } from '../src/town/coin';
+import { emptyGoldStatistics, openCoin } from '../src/town/coin';
 import { buyPotions, buyArmour, visitTownServices, type TownServiceStep, type TownServiceContext } from '../src/town/services';
 import { generateTown } from '../src/town/town';
 import { SERVICE_SUPPLIES, STARTING_GOLD } from './helpers/supplied-config';
@@ -16,7 +16,7 @@ it('inserts a made-up service between potions and armour using only the supplied
   const events: string[] = [];
   const context: TownServiceContext = {
     ...SERVICE_SUPPLIES,
-    town, day: 1, ledger: { itemsSold: 0 }, statistics: emptyGoldStatistics(),
+    town, day: 1, ledger: { itemsSold: 0 }, coin: openCoin(emptyGoldStatistics()),
     report: (event) => events.push(event.text),
   };
   let shoeCleaning = 0;

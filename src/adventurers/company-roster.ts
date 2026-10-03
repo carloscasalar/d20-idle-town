@@ -6,7 +6,7 @@ import type { DeepReadonly } from '../core/readonly';
 import type { Rng } from '../core/rng';
 import { seekJobIntelligence, type JobIntelContext, type JobIntelStep } from '../quests/job-intel';
 import type { ReadonlyQuest } from '../quests/quest';
-import { coinReasons, purse, sink, transfer, treasury, type GoldStatistics } from '../town/coin';
+import { purse, treasury, type Coin } from '../town/coin';
 import { visitTownServices, type TownServiceStep, type TownServiceContext } from '../town/services';
 import { advanceExpedition, startExpedition, type ExpeditionContext } from '../sim/expedition';
 import type { Board, BoardContext, TakenWork } from '../sim/board';
@@ -68,7 +68,7 @@ export interface RosterLedger {
 }
 
 export interface RosterEventContext {
-  statistics: GoldStatistics;
+  coin: Coin;
   report: (event: RosterEvent) => void;
 }
 
@@ -175,8 +175,8 @@ export class CompanyRoster {
 
   disband(company: ReadonlyParty): void { disbandCompany(this.owned(company)); }
 
-  merge(host: ReadonlyParty, donor: ReadonlyParty, context: Pick<RosterEventContext, 'statistics'>): readonly DeepReadonly<Hero>[] {
-    return mergeMembers(this.owned(host), this.owned(donor), this.config.maxCompanySize, context.statistics);
+  merge(host: ReadonlyParty, donor: ReadonlyParty, context: Pick<RosterEventContext, 'coin'>): readonly DeepReadonly<Hero>[] {
+    return mergeMembers(this.owned(host), this.owned(donor), this.config.maxCompanySize, context.coin);
   }
 
   /** The caller places this step in its service list. Services know nothing of its rule. */
@@ -222,8 +222,8 @@ export class CompanyRoster {
     const capital = Math.floor(this.config.retirementPrice * this.config.retirementCapitalShare);
     const employer = retiredEmployer(context.rng, veteran.name, p.id, this.townRules, this.holdings);
     // By default 20,000 leaves the world and 5,000 opens the treasury. No event between them.
-    sink(purse(p), this.config.retirementPrice - capital, 'retirement', context.statistics, coinReasons);
-    transfer(purse(p), treasury(employer), capital, 'retirement', context.statistics, coinReasons);
+    context.coin.sink(purse(p), this.config.retirementPrice - capital, 'retirement');
+    context.coin.transfer(purse(p), treasury(employer), capital, 'retirement');
     context.town.employers.push(employer);
     context.ledger.retirements += 1;
     chronicleLog(context,
@@ -243,7 +243,7 @@ export class CompanyRoster {
       for (const dead of deadMembers(p)) {
         const cost = resurrectionCost(dead.level, this.heroes);
         if (p.gold < cost) continue;
-        transfer(purse(p), treasury(temple), cost, 'service', context.statistics, coinReasons, dead);
+        context.coin.transfer(purse(p), treasury(temple), cost, 'service', dead);
         resurrectHero(dead, this.heroes);
         context.ledger.resurrections += 1;
         raised.push(dead);
@@ -306,7 +306,7 @@ export class CompanyRoster {
   }
 }
 
-function mergeMembers(host: Party, donor: Party, maxCompanySize: number, statistics: GoldStatistics): Hero[] {
+function mergeMembers(host: Party, donor: Party, maxCompanySize: number, coin: Coin): Hero[] {
   const moved: Hero[] = [];
   for (const h of aliveMembers(donor)) {
     if (aliveMembers(host).length >= maxCompanySize) break;
@@ -314,7 +314,7 @@ function mergeMembers(host: Party, donor: Party, maxCompanySize: number, statist
     moved.push(h);
   }
   donor.members = donor.members.filter((h) => !moved.includes(h));
-  transfer(purse(donor), purse(host), donor.gold, 'merger', statistics, coinReasons);
+  coin.transfer(purse(donor), purse(host), donor.gold, 'merger');
   host.potions += donor.potions;
   donor.potions = 0;
   host.stash.push(...donor.stash);

@@ -10,6 +10,7 @@ import {
   type Party,
 } from '../src/adventurers/party';
 import { Rng } from '../src/core/rng';
+import { openCoin } from '../src/town/coin';
 import { instantiate, ITEM_CATALOGUE, type MagicItem } from '../src/items/items';
 import type { Quest } from '../src/quests/quest';
 import { Game, mergeConfig, type DeepPartial, type GameConfig, type GameScenario } from '../src/sim/game';
@@ -902,7 +903,7 @@ describe('merging and burying', () => {
     const fallen = donor.members[2]!;
     killHero(fallen);
     const survivors = donor.members.filter((hero) => hero.alive);
-    const leftover = rosterFor(host, donor).merge(host, donor, { statistics: { goldPaid: 0, goldSpentByHeroes: 0 } });
+    const leftover = rosterFor(host, donor).merge(host, donor, { coin: openCoin({ goldPaid: 0, goldSpentByHeroes: 0 }) });
     expect(leftover).toEqual([]);
     expect(aliveCount(host)).toBe(6);
     expect(host.members).toEqual(expect.arrayContaining(survivors));
@@ -915,7 +916,7 @@ describe('merging and burying', () => {
     const donor = createParty(rng, 2, 3, 0, STARTING_GOLD);
     const fallen = donor.members[2]!;
     killHero(fallen);
-    rosterFor(host, donor).merge(host, donor, { statistics: { goldPaid: 0, goldSpentByHeroes: 0 } });
+    rosterFor(host, donor).merge(host, donor, { coin: openCoin({ goldPaid: 0, goldSpentByHeroes: 0 }) });
     expect(donor.members).toEqual([fallen]);
     expect(host.members).not.toContain(fallen);
   });
@@ -926,7 +927,7 @@ describe('merging and burying', () => {
     const donor = createParty(rng, 2, 2, 0, STARTING_GOLD);
     host.gold = 10;
     donor.gold = 7;
-    rosterFor(host, donor).merge(host, donor, { statistics: { goldPaid: 0, goldSpentByHeroes: 0 } });
+    rosterFor(host, donor).merge(host, donor, { coin: openCoin({ goldPaid: 0, goldSpentByHeroes: 0 }) });
     expect(host.gold).toBe(17);
     expect(donor.gold).toBe(0);
   });
@@ -937,7 +938,7 @@ describe('merging and burying', () => {
     const donor = createParty(rng, 2, 2, 0, STARTING_GOLD);
     host.potions = 1;
     donor.potions = 3;
-    rosterFor(host, donor).merge(host, donor, { statistics: { goldPaid: 0, goldSpentByHeroes: 0 } });
+    rosterFor(host, donor).merge(host, donor, { coin: openCoin({ goldPaid: 0, goldSpentByHeroes: 0 }) });
     expect(host.potions).toBe(4);
     expect(donor.potions).toBe(0);
   });
@@ -950,7 +951,7 @@ describe('merging and burying', () => {
     const donorFind = sword(rng);
     host.stash = [hostFind];
     donor.stash = [donorFind];
-    rosterFor(host, donor).merge(host, donor, { statistics: { goldPaid: 0, goldSpentByHeroes: 0 } });
+    rosterFor(host, donor).merge(host, donor, { coin: openCoin({ goldPaid: 0, goldSpentByHeroes: 0 }) });
     expect(host.stash).toEqual([hostFind, donorFind]);
     expect(donor.stash).toEqual([]);
   });
@@ -964,7 +965,7 @@ describe('merging and burying', () => {
     const donor = createParty(rng, 2, 2, 0, STARTING_GOLD);
     host.renown = hostRenown;
     donor.renown = donorRenown;
-    rosterFor(host, donor).merge(host, donor, { statistics: { goldPaid: 0, goldSpentByHeroes: 0 } });
+    rosterFor(host, donor).merge(host, donor, { coin: openCoin({ goldPaid: 0, goldSpentByHeroes: 0 }) });
     expect(host.renown).toBe(9);
   });
 
@@ -975,7 +976,7 @@ describe('merging and burying', () => {
     const donor = createParty(rng, 2, 4, 0, STARTING_GOLD);
     const [first, second, third, fallen] = donor.members;
     killHero(fallen!);
-    const leftover = rosterFor(host, donor).merge(host, donor, { statistics: { goldPaid: 0, goldSpentByHeroes: 0 } });
+    const leftover = rosterFor(host, donor).merge(host, donor, { coin: openCoin({ goldPaid: 0, goldSpentByHeroes: 0 }) });
     expect(leftover).toEqual([second, third]);
     expect(aliveCount(host)).toBe(6);
     expect(host.members).toContain(first);
@@ -988,7 +989,7 @@ describe('merging and burying', () => {
     host.members.push(createHero(rng, 2, 'Fighter'), createHero(rng, 2, 'Fighter'));
     const donor = createParty(rng, 2, 2, 0, STARTING_GOLD);
     const staying = [...donor.members];
-    const leftover = rosterFor(host, donor).merge(host, donor, { statistics: { goldPaid: 0, goldSpentByHeroes: 0 } });
+    const leftover = rosterFor(host, donor).merge(host, donor, { coin: openCoin({ goldPaid: 0, goldSpentByHeroes: 0 }) });
     expect(leftover).toEqual(staying);
     expect(aliveCount(host)).toBe(6);
     expect(donor.members).toEqual(staying);
