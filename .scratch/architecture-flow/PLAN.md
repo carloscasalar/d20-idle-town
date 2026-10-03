@@ -17,7 +17,7 @@ Status values: `todo`, `in-progress`, `done`, `blocked`.
 | 06 | Coin transfers: one module moves gold, with reasons as data | refactor | done | 0288d2a, f11e248 (bug fix), a7ed2a9, 991b039 (Cursor; 2 correction rounds) |
 | 06c | A fight crashes when a Gargantuan monster does not fit (seed 75) | bug fix | done | b615320 (Cursor; reviewed by Sonnet, no corrections) |
 | 07 | Company roster: characterisation tests (arrivals, recruiting, merging, retirement) | tests | in-progress | beb00ac (Cursor); review pending |
-| 07b | The long simulation tests time out on a slow machine | test fix | in-progress | Codex (the Cursor run died on reconnects overnight, no file changed) |
+| 07b | The long simulation tests time out on a slow machine | test fix | done | 1d5e6ef (Codex; per-tick checking cut from about 5 s to under 2 s a run) |
 | 07c | Roster bugs found by turn 07 (band of five arrives as four; ruined temple still raises the dead; retirement does not pick the most seasoned veteran) | bug fix | todo | |
 | 08 | Company roster: deepen the module, remove the `tryRetire` callback | refactor | todo | |
 | 09 | Job intel: characterisation tests (investigation, divination, reading the road) | tests | todo | |
