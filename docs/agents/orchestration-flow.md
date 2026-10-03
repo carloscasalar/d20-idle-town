@@ -155,8 +155,9 @@ Recorded at the end of the first series (turns 01 to 11b), for turning this flow
 into agent and skill files.
 
 - **Characterise, then refactor, in separate turns.** Tests written first and
-  committed alone are what made each refactor checkable; nineteen bugs surfaced
-  in those test turns and were fixed before any code moved.
+  committed alone are what made each refactor checkable. Fifteen game bugs
+  were fixed during the series, most of them found by those test turns or
+  their audits, each before the code around it moved.
 - **Ask the implementer to report suspected bugs, never to pin them.** Most of
   the bugs came from that instruction.
 - **A mutation check is the review of a tests-only turn.** It found gaps in
