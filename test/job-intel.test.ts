@@ -88,6 +88,11 @@ function isFullyKnownFromView(game: Game) {
   return known.count && known.encounters.every((encounter) => encounter !== null);
 }
 
+function knownFacts(game: Game, id = 'tower') {
+  const known = knowledge(game, id);
+  return Number(known.count) + known.encounters.filter((encounter) => encounter !== null).length;
+}
+
 function longJob(overrides: Partial<Quest> = {}): Quest {
   return job({ encounters: structuredClone([...encounters, ...encounters]), ...overrides });
 }
@@ -257,17 +262,32 @@ describe('the free tavern attempt', () => {
     expect(events[0]!.text).toMatch(/^Mira .*\(Persuasion \d+\+5 = \d+, with advantage vs DC 15\)/);
   });
 
+  // This company on these seeds: Persuasion 16-1 = 15, and 15-1 = 14. The tavern's difficulty is 15.
+  it.each([
+    { seed: 21, total: 15, learned: true },
+    { seed: 9, total: 14, learned: false },
+  ])('a free attempt totalling $total learns the count=$learned', ({ seed, learned }) => {
+    const game = scene(() => {}, { seed });
+
+    const events = hour(game);
+
+    expect(events).toHaveLength(1);
+    expect(knowledge(game)).toEqual({ count: learned, encounters: ['Goblin Warrior', null, null] });
+    expect(game.view().parties[0]).toMatchObject({ gold: 300, spent: 0, statusText: 'looking at the board' });
+    expect(game.view().board.taken).toHaveLength(0);
+  });
+
   it.each(['success', 'failure'])('a free attempt on %s learns exactly the appropriate facts', (outcome) => {
     let observed = 0;
     for (let seed = 1; seed <= 40; seed++) {
       const game = scene(() => {}, { seed });
       const events = hour(game);
       expect(events).toHaveLength(1);
-      const success = !events[0]!.text.includes('gets nowhere');
+      const learned = knowledge(game);
+      const success = learned.count;
       if (success !== (outcome === 'success')) continue;
       observed++;
-      expect(knowledge(game)).toEqual({ count: success, encounters: ['Goblin Warrior', null, null] });
-      expect(events[0]!.text).toContain(success ? ': it means 3 fights.' : 'and gets nowhere.');
+      expect(learned).toEqual({ count: success, encounters: ['Goblin Warrior', null, null] });
       expect(game.view().parties[0]).toMatchObject({ gold: 300, spent: 0, statusText: 'looking at the board' });
       expect(game.view().board.taken).toHaveLength(0);
     }
@@ -282,9 +302,11 @@ describe('the free tavern attempt', () => {
       const events = hour(game);
 
       expect(events).toHaveLength(1);
-      const success = !events[0]!.text.includes('gets nowhere');
-      expect(knowledge(game)).toEqual({ count: true, encounters: ['Goblin Warrior', success ? '2x Wolf' : null, null] });
-      if (success) expect(events[0]!.text).toContain(': the next fight will be 2x Wolf (intermediate).');
+      const known = knowledge(game);
+      const success = known.encounters[1] === '2x Wolf';
+      expect(known).toEqual({ count: true, encounters: ['Goblin Warrior', success ? '2x Wolf' : null, null] });
+      expect(game.view().parties[0]).toMatchObject({ gold: 300, spent: 0, statusText: 'looking at the board' });
+      expect(game.view().board.taken).toHaveLength(0);
       outcomes.add(success);
     }
     expect(outcomes).toEqual(new Set([false, true]));
@@ -295,14 +317,15 @@ describe('the free tavern attempt', () => {
     for (let seed = 1; seed <= 40; seed++) {
       const game = scene((scenario) => { scenario.parties[0]!.gold = 0; }, { seed });
       const free = hour(game);
-      outcomes.add(!free[0]!.text.includes('gets nowhere'));
+      expect(free).toHaveLength(1);
+      outcomes.add(knowledge(game).count);
       const before = knowledge(game);
 
-      const next = hour(game);
+      hour(game);
 
-      expect(next.map((event) => event.kind)).toEqual(['quest']);
       expect(knowledge(game)).toEqual(before);
       expect(game.view().board.taken.map((work) => work.id)).toEqual(['tower']);
+      expect(game.view().parties[0]).toMatchObject({ gold: 0, spent: 0 });
     }
     expect(outcomes).toEqual(new Set([false, true]));
   });
@@ -313,7 +336,6 @@ describe('the free tavern attempt', () => {
     const events = hour(game);
 
     expect(events).toHaveLength(1);
-    expect(events[0]!.text).toContain('Persuasion');
     expect(game.view().parties[0]).toMatchObject({ gold: 1000, spent: 0 });
     expect(serviceView(game, 'temple').treasury).toBe(1000);
     expect(serviceView(game, 'tavern').treasury).toBe(1000);
@@ -338,26 +360,31 @@ describe('the free tavern attempt', () => {
 describe('temple divination', () => {
   // Mutation: allow divination while leaving less than two resurrection reserves.
   it.each([
-    { gold: 1200, divined: true, left: 1020, temple: 1180 },
-    { gold: 1199, divined: false, left: 1154, temple: 1000 },
-  ])('a level-three company with $gold gp can buy divination=$divined', ({ gold, divined, left, temple }) => {
+    { level: 3, gold: 1200, divined: true, left: 1020, temple: 1180, tavern: 1000 },
+    { level: 3, gold: 1199, divined: false, left: 1154, temple: 1000, tavern: 1045 },
+    { level: 2, gold: 740, divined: true, left: 620, temple: 1120, tavern: 1000 },
+    { level: 2, gold: 739, divined: false, left: 709, temple: 1000, tavern: 1030 },
+  ])('a level-$level company with $gold gp can buy divination=$divined', ({ level, gold, divined, left, temple, tavern }) => {
     const game = scene((scenario, rng) => {
-      scenario.parties = [company(rng, 3, gold)];
-      scenario.quests[0]!.level = 3;
+      scenario.parties = [company(rng, level, gold)];
+      scenario.quests[0]!.level = level;
     });
     hour(game); // The company's free attempt always comes first.
+    const before = knownFacts(game);
 
     const events = hour(game);
 
     expect(events).toHaveLength(1);
-    expect(events[0]!.text).toContain(divined ? 'pay 180 gp for a divination' : 'buy a round');
     expect(game.view().parties[0]!.gold).toBe(left);
     expect(serviceView(game, 'temple').treasury).toBe(temple);
+    expect(serviceView(game, 'tavern').treasury).toBe(tavern);
+    expect(game.view().board.taken).toHaveLength(0);
     if (divined) {
       expect(knowledge(game)).toEqual({ count: true, encounters: ['Goblin Warrior', '2x Wolf', 'Ogre'] });
-      expect(events[0]!.text).toContain('3 fights [E/I/H].');
+    } else {
+      expect(knownFacts(game) - before).toBe(1);
+      expect(isFullyKnownFromView(game)).toBe(false);
     }
-    expect(game.view().board.taken).toHaveLength(0);
   });
 
   it('a ruined temple offers no divination even to a rich company', () => {
@@ -367,14 +394,17 @@ describe('temple divination', () => {
       serviceOf(scenario.town, 'temple').ruined = true;
     });
     hour(game);
+    const before = knownFacts(game);
 
     const events = hour(game);
 
     expect(events).toHaveLength(1);
-    expect(events[0]!.text).toContain('buy a round');
     expect(game.view().parties[0]!.gold).toBe(1955);
     expect(serviceView(game, 'temple').treasury).toBe(1000);
+    expect(serviceView(game, 'tavern').treasury).toBe(1045);
+    expect(knownFacts(game) - before).toBe(1);
     expect(isFullyKnownFromView(game)).toBe(false);
+    expect(game.view().board.taken).toHaveLength(0);
   });
 
   it('prices divination for the company level rather than its strongest adventurer', () => {
@@ -389,28 +419,38 @@ describe('temple divination', () => {
     const events = hour(game);
 
     expect(game.view().parties[0]!.level).toBe(3);
-    expect(events[0]!.text).toContain('pay 180 gp for a divination');
+    expect(events).toHaveLength(1);
     expect(game.view().parties[0]!.gold).toBe(1020);
+    expect(serviceView(game, 'temple').treasury).toBe(1180);
+    expect(serviceView(game, 'tavern').treasury).toBe(1000);
+    expect(knowledge(game)).toEqual({ count: true, encounters: ['Goblin Warrior', '2x Wolf', 'Ogre'] });
+    expect(game.view().board.taken).toHaveLength(0);
   });
 
   it('takes the job in the hour after divination, without buying a round', () => {
     const game = scene((scenario) => { scenario.parties[0]!.gold = 1000; });
     const free = hour(game);
-    const divined = hour(game);
 
     expect(free).toHaveLength(1);
-    expect(free[0]!.text).toContain('Persuasion');
+    expect(game.view().parties[0]).toMatchObject({ gold: 1000, spent: 0 });
+    expect(serviceView(game, 'temple').treasury).toBe(1000);
+    expect(serviceView(game, 'tavern').treasury).toBe(1000);
+    expect(game.view().board.taken).toHaveLength(0);
+
+    const divined = hour(game);
+
     expect(divined).toHaveLength(1);
-    expect(divined[0]!.text).toContain('for a divination');
-    expect(divined[0]!.text).toContain('3 fights [E/I/H]');
+    expect(game.view().parties[0]).toMatchObject({ gold: 940, spent: 60 });
+    expect(serviceView(game, 'temple').treasury).toBe(1060);
     expect(isFullyKnownFromView(game)).toBe(true);
     expect(game.view().board.taken).toHaveLength(0);
     expect(serviceView(game, 'tavern').treasury).toBe(1000);
 
     const events = hour(game);
 
-    expect(events.map((event) => event.kind)).toEqual(['quest']);
+    expect(events).toHaveLength(1);
     expect(game.view().board.taken.map((work) => work.id)).toEqual(['tower']);
+    expect(game.view().parties[0]).toMatchObject({ gold: 940, spent: 60 });
     expect(serviceView(game, 'tavern').treasury).toBe(1000);
   });
 });
@@ -418,12 +458,14 @@ describe('temple divination', () => {
 describe('paid tavern rounds', () => {
   // Mutation: allow a third paid round for the same company and job.
   it.each([
-    { gold: 555, bought: true, left: 510, tavern: 1045 },
-    { gold: 554, bought: false, left: 554, tavern: 1000 },
-  ])('a level-three company with $gold gp buys a round=$bought only when 45 gp still leaves the 510 gp reserve', ({ gold, bought, left, tavern }) => {
+    { level: 3, gold: 555, bought: true, left: 510, tavern: 1045 },
+    { level: 3, gold: 554, bought: false, left: 554, tavern: 1000 },
+    { level: 2, gold: 340, bought: true, left: 310, tavern: 1030 },
+    { level: 2, gold: 339, bought: false, left: 339, tavern: 1000 },
+  ])('a level-$level company with $gold gp buys a round=$bought only when the price still leaves the resurrection reserve', ({ level, gold, bought, left, tavern }) => {
     const game = scene((scenario, rng) => {
-      scenario.parties = [company(rng, 3, gold)];
-      scenario.quests[0]!.level = 3;
+      scenario.parties = [company(rng, level, gold)];
+      scenario.quests[0]!.level = level;
     });
     hour(game);
     const before = knowledge(game);
@@ -431,43 +473,45 @@ describe('paid tavern rounds', () => {
     const events = hour(game);
 
     expect(events).toHaveLength(1);
-    expect(events[0]!.kind).toBe(bought ? 'shop' : 'quest');
     expect(game.view().parties[0]!.gold).toBe(left);
     expect(serviceView(game, 'tavern').treasury).toBe(tavern);
+    expect(serviceView(game, 'temple').treasury).toBe(1000);
     if (bought) {
-      expect(events[0]!.text).toContain('(45 gp)');
-      expect(knowledge(game)).toEqual(before.count
-        ? { count: true, encounters: ['Goblin Warrior', '2x Wolf', null] }
-        : { count: true, encounters: ['Goblin Warrior', null, null] });
+      const beforeFacts = Number(before.count) + before.encounters.filter((encounter) => encounter !== null).length;
+      expect(knownFacts(game) - beforeFacts).toBe(1);
       expect(game.view().board.taken).toHaveLength(0);
-    } else expect(knowledge(game)).toEqual(before);
+    } else {
+      expect(knowledge(game)).toEqual(before);
+      expect(game.view().board.taken.map((work) => work.id)).toEqual(['tower']);
+    }
   });
 
   it('buys exactly two rounds after one free attempt, then takes the still-unknown job', () => {
     const game = scene((scenario) => {
       scenario.quests = [longJob({ giverId: scenario.town.employers[0]!.id })];
     });
-    expect(hour(game)[0]!.text).toContain('Persuasion');
-    for (const gold of [285, 270]) {
-      const before = knowledge(game);
+    const free = hour(game);
+    expect(free).toHaveLength(1);
+    expect(game.view().parties[0]).toMatchObject({ gold: 300, spent: 0 });
+    expect(serviceView(game, 'tavern').treasury).toBe(1000);
+    expect(game.view().board.taken).toHaveLength(0);
+    for (const [gold, tavern] of [[285, 1015], [270, 1030]] as const) {
+      const before = knownFacts(game);
       const events = hour(game);
       expect(events).toHaveLength(1);
-      expect(events[0]!.text).toContain('buy a round');
-      const after = knowledge(game);
-      const newFacts = Number(after.count) - Number(before.count)
-        + after.encounters.filter((encounter) => encounter !== null).length
-        - before.encounters.filter((encounter) => encounter !== null).length;
-      expect(newFacts).toBe(1);
+      expect(knownFacts(game) - before).toBe(1);
       expect(game.view().parties[0]!.gold).toBe(gold);
+      expect(serviceView(game, 'tavern').treasury).toBe(tavern);
       expect(game.view().board.taken).toHaveLength(0);
     }
     expect(isFullyKnownFromView(game)).toBe(false);
 
-    expect(hour(game).map((event) => event.kind)).toEqual(['quest']);
+    const taking = hour(game);
 
+    expect(taking).toHaveLength(1);
     expect(game.view().parties[0]!.gold).toBe(270);
+    expect(serviceView(game, 'tavern').treasury).toBe(1030);
     expect(game.view().board.taken.map((work) => work.id)).toEqual(['tower']);
-    expect(game.view().events.filter((event) => event.text.includes('Persuasion'))).toHaveLength(1);
   });
 
   it.each([
@@ -483,19 +527,13 @@ describe('paid tavern rounds', () => {
     const events = hour(game);
 
     expect(events).toHaveLength(1);
-    expect(events[0]!.text).not.toContain('Persuasion');
-    expect(events[0]!.text).not.toContain('buy a round');
     expect(game.view().parties[0]).toMatchObject({ gold: left, spent });
     expect(serviceView(game, 'tavern').treasury).toBe(1000);
     expect(serviceView(game, 'temple').treasury).toBe(temple);
     if (divined) {
-      expect(events[0]!.text).toContain('pay 60 gp for a divination');
-      expect(events[0]!.text).toContain('3 fights [E/I/H]');
-      expect(isFullyKnownFromView(game)).toBe(true);
+      expect(knowledge(game)).toEqual({ count: true, encounters: ['Goblin Warrior', '2x Wolf', 'Ogre'] });
       expect(game.view().board.taken).toHaveLength(0);
     } else {
-      expect(events[0]!.kind).toBe('quest');
-      expect(events[0]!.text).toContain('accept "Recover the tower"');
       expect(knowledge(game)).toEqual(before);
       expect(game.view().board.taken.map((work) => work.id)).toEqual(['tower']);
     }
@@ -515,17 +553,29 @@ describe('reading the road with a ranger', () => {
 
       expect(events).toHaveLength(1);
       expect(events[0]!.text).toMatch(/Rowan .*\(Survival \d+\+4 = \d+, with advantage vs DC 15\)/);
-      const success = events[0]!.text.includes('reads the tracks');
-      const learned = kind === 'assault' ? ': the next fight will be 2x Wolf (intermediate).' : ': it means 3 fights.';
-      expect(events[0]!.text).toContain(success ? learned : 'and learns nothing.');
       const hidden = kind === 'assault' ? 'E/?/?' : 'E/…';
       const opened = kind === 'assault' ? 'E/I/?' : 'E/?/?';
+      const success = difficultyCode(board.byId('tower')!) === opened;
+      const learned = kind === 'assault' ? ': the next fight will be 2x Wolf (intermediate).' : ': it means 3 fights.';
+      expect(events[0]!.text).toContain(success ? learned : 'and learns nothing.');
       expect(difficultyCode(board.byId('tower')!)).toBe(success ? opened : hidden);
       expect(p.status).toBe('traveling');
       expect(p.ticksLeft).toBe(3);
       outcomes.add(success);
     }
     expect(outcomes).toEqual(new Set([false, true]));
+  });
+
+  // Seed 1 with this company: Survival 13+3 = 16.
+  it('reads the road at a difficulty of 16 and learns nothing at 17', () => {
+    for (const [difficulty, code] of [[16, 'E/?/?'], [17, 'E/…']] as const) {
+      const { p, board, context, events } = road(job(), difficulty, 1);
+      advanceExpedition(p, context);
+
+      expect(events).toHaveLength(1);
+      expect(difficultyCode(board.byId('tower')!)).toBe(code);
+      expect(p).toMatchObject({ status: 'traveling', ticksLeft: 3 });
+    }
   });
 
   it('does not read the same road again on the next hour', () => {
@@ -536,7 +586,6 @@ describe('reading the road with a ranger', () => {
     advanceExpedition(p, context);
 
     expect(first).toHaveLength(1);
-    expect(first[0]).toContain('learns nothing');
     expect(events.map((event) => event.text)).toEqual(first);
     expect(difficultyCode(board.byId('tower')!)).toBe('E/…');
     expect(p).toMatchObject({ status: 'traveling', ticksLeft: 2 });
@@ -606,21 +655,25 @@ describe('separate companies and jobs', () => {
     const free = hour(game);
 
     expect(free).toHaveLength(2);
-    expect(free.every((event) => event.text.includes('Persuasion'))).toBe(true);
-    expect(free.some((event) => event.text.startsWith('Lanterns'))).toBe(true);
-    expect(free.some((event) => event.text.startsWith('Foxes'))).toBe(true);
-    for (const gold of [285, 270]) {
+    expect(game.view().parties.map((company) => company.gold)).toEqual([300, 300]);
+    expect(serviceView(game, 'tavern').treasury).toBe(1000);
+    expect(game.view().board.taken).toHaveLength(0);
+    for (const [gold, tavern] of [[285, 1030], [270, 1060]] as const) {
+      const before = knownFacts(game);
       const events = hour(game);
       expect(events).toHaveLength(2);
-      expect(events.map((event) => event.text.split(' buy a round')[0]).sort()).toEqual(['Foxes', 'Lanterns']);
+      expect(knownFacts(game) - before).toBe(2);
       expect(game.view().parties.map((company) => company.gold)).toEqual([gold, gold]);
+      expect(serviceView(game, 'tavern').treasury).toBe(tavern);
+      expect(game.view().board.taken).toHaveLength(0);
     }
     expect(isFullyKnownFromView(game)).toBe(false);
 
     const taking = hour(game);
 
-    expect(taking.some((event) => event.text.includes('buy a round'))).toBe(false);
-    expect(game.view().events.filter((event) => event.text.includes('buy a round'))).toHaveLength(4);
+    expect(taking).toHaveLength(1);
+    expect(game.view().parties.map((company) => company.gold)).toEqual([270, 270]);
+    expect(serviceView(game, 'tavern').treasury).toBe(1060);
     expect(game.view().board.taken.map((work) => work.id)).toEqual(['tower']);
   });
 
@@ -646,22 +699,29 @@ describe('separate companies and jobs', () => {
     const free = hour(game);
 
     expect(free).toHaveLength(1);
-    expect(free[0]!.text).toContain('Persuasion');
-    for (const gold of [305, 290]) {
+    expect(game.view().parties[0]).toMatchObject({ gold: 320, spent: 30 });
+    expect(serviceView(game, 'tavern').treasury).toBe(1030);
+    expect(game.view().board.taken).toHaveLength(0);
+    for (const [gold, tavern] of [[305, 1045], [290, 1060]] as const) {
+      const before = knownFacts(game, 'bridge');
       const events = hour(game);
       expect(events).toHaveLength(1);
-      expect(events[0]!.text).toContain('buy a round');
-      expect(events[0]!.text).toContain('Recover the bridge');
+      expect(knownFacts(game, 'bridge') - before).toBe(1);
       expect(game.view().parties[0]!.gold).toBe(gold);
+      expect(serviceView(game, 'tavern').treasury).toBe(tavern);
       expect(game.view().board.taken).toHaveLength(0);
     }
-    expect(hour(game).map((event) => event.kind)).toEqual(['quest']);
+    const taking = hour(game);
+    expect(taking).toHaveLength(1);
+    expect(game.view().parties[0]).toMatchObject({ gold: 290, spent: 60 });
+    expect(serviceView(game, 'tavern').treasury).toBe(1060);
     expect(game.view().board.taken.map((work) => work.id)).toEqual(['bridge']);
   });
 
   it('another company can read the same road after the first company failed its check', () => {
     const { p, board, context, events } = road(job(), 100);
     advanceExpedition(p, context);
+    expect(difficultyCode(board.byId('tower')!)).toBe('E/…');
     const next = company(new Rng(72), 1, 300, 'Foxes');
     Object.assign(next, { status: 'traveling', questId: 'tower', ticksLeft: 4 });
     context.skillDc = 0;
@@ -669,10 +729,6 @@ describe('separate companies and jobs', () => {
     advanceExpedition(next, context);
 
     expect(events).toHaveLength(2);
-    expect(events[0]!.text).toContain('learns nothing');
-    expect(events[1]!.text).toContain('Foxes');
-    expect(events[1]!.text).toContain('reads the tracks');
-    expect(events[1]!.text).toContain('it means 3 fights');
     expect(difficultyCode(board.byId('tower')!)).toBe('E/?/?');
     advanceExpedition(next, context);
     expect(events).toHaveLength(2);
@@ -692,9 +748,6 @@ describe('separate companies and jobs', () => {
     advanceExpedition(p, context);
 
     expect(events).toHaveLength(2);
-    expect(events[0]!.text).toContain('learns nothing');
-    expect(events[1]!.text).toContain('reads the tracks');
-    expect(events[1]!.text).toContain('it means 3 fights');
     expect(difficultyCode(tower)).toBe('E/…');
     expect(difficultyCode(board.byId('bridge')!)).toBe('E/?/?');
     expect(p).toMatchObject({ status: 'traveling', ticksLeft: 3 });
@@ -708,7 +761,7 @@ describe('separate companies and jobs', () => {
     const events = hour(game);
 
     expect(events).toHaveLength(1);
-    expect(events[0]!.text).toContain('Survival');
     expect(game.view().parties[0]!.statusText).toBe('on the road to Old Tower (3h)');
+    expect(game.view().board.taken.map((work) => work.id)).toEqual(['tower']);
   });
 });
