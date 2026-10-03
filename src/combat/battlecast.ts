@@ -1,4 +1,4 @@
-import { buildHero, Encounter, getMonsterByName, type BattleLog, type Creature, type HeroClassName, type MonsterData } from 'battlecast-engine';
+import { buildHero, Encounter, EncounterError, getFootprintSize, getMonsterByName, type BattleLog, type Creature, type HeroClassName, type MonsterData } from 'battlecast-engine';
 import type { DeepReadonly } from '../core/readonly';
 import { Rng } from '../core/rng';
 import { combinedEffect, heroAc, isBloodied, potionHeal, skillBonus, WEAPON_CLASSES, type Hero } from '../adventurers/hero';
@@ -110,23 +110,48 @@ export function runCombat(heroes: Hero[], spec: DeepReadonly<EncounterSpec>, see
   const layout = deploy(rng, fighters, monsters, ambush, tactic);
 
   const taken = new Set<string>();
-  const place = (wanted: { x: number; y: number } | undefined, add: (pos?: { x: number; y: number }) => void) => {
-    if (!wanted) return add();
-    for (const pos of candidates(rng, wanted)) {
-      if (taken.has(`${pos.x},${pos.y}`)) continue;
-      try {
-        add(pos);
-        taken.add(`${pos.x},${pos.y}`);
-        return;
-      } catch {
-        // occupied by a larger footprint or terrain; try the next cell
+  const place = (
+    wanted: { x: number; y: number } | undefined,
+    footprint: number,
+    side: 'left' | 'right',
+    add: (pos?: { x: number; y: number }) => void,
+  ) => {
+    if (wanted) {
+      for (const pos of candidates(rng, wanted)) {
+        if (taken.has(`${pos.x},${pos.y}`)) continue;
+        try {
+          add(pos);
+          taken.add(`${pos.x},${pos.y}`);
+          return;
+        } catch {
+          // occupied by a larger footprint or terrain; try the next cell
+        }
       }
     }
-    add();
+    try {
+      add();
+      return;
+    } catch (error) {
+      // The engine's own scan only tries a sparse lattice, then refuses the
+      // creature even when its space still fits on the field. Keep the
+      // formation for every fight that already placed, and search the rest.
+      if (!(error instanceof EncounterError) || !error.message.includes('fit in the')) throw error;
+      for (const pos of openSpaces(footprint, side)) {
+        if (taken.has(`${pos.x},${pos.y}`)) continue;
+        try {
+          add(pos);
+          taken.add(`${pos.x},${pos.y}`);
+          return;
+        } catch {
+          // footprint hangs off the grid or overlaps someone already there
+        }
+      }
+      throw error;
+    }
   };
 
   fighters.forEach((h, i) => {
-    place(layout.party[i], (position) => {
+    place(layout.party[i], getFootprintSize('Medium'), 'right', (position) => {
       const [added] = enc.addCreature({
         heroClass: h.heroClass,
         heroLevel: h.level,
@@ -141,7 +166,7 @@ export function runCombat(heroes: Hero[], spec: DeepReadonly<EncounterSpec>, see
   });
   const monsterIds: string[] = [];
   monsters.forEach((m, i) => {
-    place(layout.monsters[i], (position) => {
+    place(layout.monsters[i], getFootprintSize(m.size), 'left', (position) => {
       const [added] = enc.addCreature({ monster: m.name, team: 'red', ...(position ? { position } : {}) });
       if (added) monsterIds.push(added.id);
     });
@@ -421,6 +446,19 @@ function ring(rng: Rng, count: number, around: { x: number; y: number }[]): { x:
 
 function clamp(v: number): number {
   return Math.max(0, Math.min(GRID - 1, v));
+}
+
+/**
+ * Origins where a creature's space lies entirely on the battlefield.
+ * Its own side comes first: monsters from the left, the company from the right.
+ */
+function openSpaces(footprint: number, side: 'left' | 'right'): { x: number; y: number }[] {
+  const last = GRID - footprint;
+  const out: { x: number; y: number }[] = [];
+  for (let y = 0; y <= last; y++) {
+    for (let i = 0; i <= last; i++) out.push({ x: side === 'left' ? i : last - i, y });
+  }
+  return out;
 }
 
 /** The wanted cell first, then its neighbours in a widening, shuffled search. */

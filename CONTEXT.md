@@ -52,6 +52,9 @@ Implemented by `shortRest`: heals a configured fraction of maximum hit points (d
 **Healing potion**:
 A draught from the company's shared supply that restores hit points to the adventurer who drinks it or receives it from a companion.
 
+**Space**:
+The squares a creature controls on the battlefield. In the 2024 rules a Huge creature's space is 15 by 15 feet (three squares) and a Gargantuan creature's space is 20 by 20 feet (four squares). The battlefield is 16 squares, 80 feet, on a side.
+
 ## Relationships
 
 - The **Board** posts, accepts, and ends each **Contract** and **Bounty**.
@@ -61,6 +64,7 @@ A draught from the company's shared supply that restores hit points to the adven
 - A **Lair** may threaten multiple **Holdings**.
 - After each encounter round that does not end the fight, before checking whether to flee, each conscious **Bloodied** adventurer drinks one **Healing potion** if the **Company** has one. A fallen adventurer at 0 hit points who is not dead is given the potion by a conscious companion, chosen first in company order. If no companion is conscious, nobody uses a potion. **Bloodied** uses the maximum hit points in that fight, including items and blessings; healing uses the game's `potionHeal` amount. The game does not check distance or spend a Bonus Action when administering a potion; D&D 2024 requires the companion to be within 5 feet and spend a Bonus Action.
 - After the healing from a **Short rest**, each living adventurer who is still **Bloodied** drinks one **Healing potion** if the **Company** has one. The default rest fraction brings every living adventurer above half, so this applies only with a smaller configured fraction.
+- An encounter places every creature it asked for, on a cell where that creature's **Space** lies on the battlefield and does not overlap another creature.
 
 ## Example dialogue
 
