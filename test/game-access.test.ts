@@ -15,7 +15,7 @@ describe('Game access boundaries', () => {
   it('builds a controlled scenario without exposing mutable state from a running game', () => {
     const party = createParty(new Rng(9), 1, 4, 0);
     let capturedScenario: GameScenario | undefined;
-    const game = Game.forTesting({ seed: 9, maxParties: 1, maxOpenQuests: 0 }, (scenario) => {
+    const game = Game.forTesting({ seed: 9, roster: { maxCompanies: 1 }, world: { maxOpenQuests: 0 } }, (scenario) => {
       capturedScenario = scenario;
       scenario.lairs = [];
       scenario.parties = [party];
@@ -35,7 +35,7 @@ describe('Game access boundaries', () => {
 
   it('delivers immutable events to subscribers', () => {
     let event: GameEventView | undefined;
-    const game = Game.forTesting({ seed: 10, maxParties: 1, maxOpenQuests: 0 }, (scenario) => {
+    const game = Game.forTesting({ seed: 10, roster: { maxCompanies: 1 }, world: { maxOpenQuests: 0 } }, (scenario) => {
       scenario.lairs = [];
       scenario.parties = [];
     });

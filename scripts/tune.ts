@@ -7,7 +7,7 @@ const seeds = (process.env.SEEDS ?? '1,2,3').split(',').map(Number);
 for (const difficultyScale of scales) {
   const totals = { quests: 0, deaths: 0, wiped: 0, arrived: 0, failed: 0, res: 0 };
   for (const seed of seeds) {
-    const g = new Game({ seed, difficultyScale });
+    const g = new Game({ seed, board: { difficultyScale } });
     for (let i = 0; i < ticks; i++) g.step();
     const { stats } = g.view();
     totals.quests += stats.questsCompleted;

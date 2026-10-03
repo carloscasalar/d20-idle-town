@@ -66,7 +66,7 @@ The paths below link to implementations. Names in code font identify the main ex
 | Module | Interface and usage contract |
 | --- | --- |
 | [`hero.ts`](../src/adventurers/hero.ts) | `Hero`; `createHero(rng, level, heroClass?)`; progression and life-cycle functions `gainXp`, `healHero`, `killHero`, `resurrectHero`; `isBloodied({ hp, maxHp })` tests half HP or fewer; prices and attributes `resurrectionCost`, `potionCost`, `potionHeal`, `armorUpgradeCost`, `heroAc`, `fixedHp`; equipment functions `itemInSlot`, `wantsItem`, `equipItem`, `combinedEffect`; skills `skillBonus`, `rollSkill`, and `SkillRoll`; plus `describeHero`. `WEAPON_CLASSES`, `MAX_ARMOR_TIER`, and `SKILL_ADVANTAGE` are shared tables. `gainXp` returns levels gained and does not advance a dead hero. `equipItem` replaces the item in a slot and returns the former item; the caller decides suitability with `wantsItem` first. `rollSkill` returns `null` when no hero is alive. |
-| [`party.ts`](../src/adventurers/party.ts) | `Party`, `ReadonlyParty` (deeply read-only), `PartyStatus` and `JobInquiry`; `createParty(rng, level, size, tick)`, `rollClasses`, `aliveMembers`, `deadMembers`, `partyLevel`, `describeParty`. `investigations` holds one `JobInquiry` per job: `freeAttempt`, `roundsBought` and `roadRead`. Job intelligence is the only writer. `PARTY_SIZE` is 4 and `MAX_PARTY_SIZE` is 6, defined once here; `MAX_RENOWN` is 10. `partyLevel` uses living members and returns 1 if none remain. Readiness and capacity are supplied by the configured roster, not duplicated here; Party imports no roster code. |
+| [`party.ts`](../src/adventurers/party.ts) | `Party`, `ReadonlyParty` (deeply read-only), `PartyStatus` and `JobInquiry`; `createParty(rng, level, size, tick, startingGoldPerLevel?)`, `rollClasses`, `aliveMembers`, `deadMembers`, `partyLevel`, `describeParty(party, companySize)`. `investigations` holds one `JobInquiry` per job: `freeAttempt`, `roundsBought` and `roadRead`. Job intelligence is the only writer. Company size and the renown cap are defined once on the roster configuration and passed in; this module does not restate them. `partyLevel` uses living members and returns 1 if none remain. Readiness and capacity are supplied by the configured roster, not duplicated here; Party imports no roster code. |
 | [`company-roster.ts`](../src/adventurers/company-roster.ts) | `CompanyRoster(config = DEFAULT_COMPANY_ROSTER_CONFIG)`, `CompanyRosterConfig`; `RosterEvent`, `RosterLedger`, `RosterEventContext`, `ArrivalContext`, `RecruitmentContext`, `RetirementContext` and the combined `RosterContext`. `all()`, `active()` and `byId(id)` return deeply read-only live company records; query arrays are frozen copies. `arrivals(context)` owns the arrival schedule and admits normal or stranger companies, spending scheduled arrivals even at capacity. `recruit(company, context)` raises the affordable fallen, merges with a short idle company of the same level, then seeks a ready nearby host after `disbandTicks`. `merge(host, donor, context)` moves survivors up to the configured maximum and transfers the entire purse, potions and stash; it returns read-only leftovers. `absorb(host, donor, gaveUp, context)` additionally disbands an emptied donor, buries the dead and reports the join. `retire(company, context)` selects the living veteran by descending level then XP, retaining the resurrection reserve, moving equipment and creating a business through coin movements. `disband(company)` retains company history. These operations accept roster query views and refuse unknown companies. `isReady(company)` and `hasRoom(company)` use configured sizes. `retirementStep(context)` contributes a `TownServiceStep`. `updateActive(action)` passes deeply read-only records to Game’s hourly actions in stable descending renown order over the initial active population, even if an earlier action disbands a donor. `recordsForScenario()` and `replaceForScenario(companies)` back scenario-only setup. `bury(company)` removes the fallen through an ownership check and returns read-only records. `wait(company)` increments idle time; `advance(company, context)` invokes Expedition on the owned company; `depart(company, work, { board, work: boardContext })` asks the Board to take work, starts Expedition and returns acceptance data for Game to report. `visitServices(company, steps, context)` invokes the supplied service list on the owned company. `seekIntelligence(company, steps, context)` runs the supplied job-intelligence steps on the owned company. No free merger, burial or disbanding function is exported. Contexts go last and carry only narrow domain dependencies, never Game. |
 | [`items.ts`](../src/items/items.ts) | `ItemSlot`, `ItemRarity`, `ItemEffect`, `ItemTemplate`, `ItemSource`, `MagicItem`, and `ITEM_CATALOGUE`. `instantiate(rng, template)` creates an item with an ID; `rollStockItem(rng, source)` may return `null`; `rollLootItem(rng, level)` creates loot. `describeEffect` renders an effect, and `resalePrice` returns half the price, rounded down. `combinedEffect` sums equipped effects; `heroOverrides` translates them for the engine. |
 
@@ -84,7 +84,7 @@ The paths below link to implementations. Names in code font identify the main ex
 | Module | Interface and usage contract |
 | --- | --- |
 | [`assets.ts`](../src/town/assets.ts) | `AssetKind`, `AssetStatus`, `Asset`, `AssetKindDef`, and `ASSET_KINDS`; `createAsset(rng, kind, ownerId)` creates a safe asset; `rollThreat(rng, asset)` chooses a theme using its weights. Statuses are `safe`, `threatened`, and `ravaged`. The Board changes them when a contract is posted, settled, expired, or withdrawn because its lair fell. |
-| [`lairs.ts`](../src/town/lairs.ts) | `Lair`, `LAIR_THEMES`, `MAX_STRENGTH`; `createLair(rng, theme, level, tick)` creates an active lair; `pickBoss(theme, level)` chooses its monster; `raidInterval(lair)` calculates raid timing; `describeLair` provides a label. Creation and later changes to strength, hoard, or status are separate steps. The Board posts and ends the bounty, and clears the lair when that bounty succeeds. `Game` still decides when a lair raids or respawns, and pays out the hoard when the Board asks. |
+| [`lairs.ts`](../src/town/lairs.ts) | `Lair`, `LAIR_THEMES`, `LairConfig`, `DEFAULT_LAIR_CONFIG`; `createLair(rng, theme, level, tick, companySize, rules?)` creates an active lair; `pickBoss(theme, level, companySize)` chooses its monster; `raidInterval(lair, rules?)` calculates raid timing; `describeLair` provides a label. `strengthCap` is defined here. The Board and raid timing receive it; they do not keep a second copy. Creation and later changes to strength, hoard, or status are separate steps. The Board posts and ends the bounty, and clears the lair when that bounty succeeds. `Game` still decides when a lair raids or respawns, and pays out the hoard when the Board asks. |
 | [`town.ts`](../src/town/town.ts) | `EmployerKind`, `ServiceKind`, `Employer`, `Town`; `generateTown(rng)`, `retiredEmployer(rng, heroName, partyId)`, `serviceOf(town, service)`, `assetById(town, id)`, and `dailyIncome(employer)`. `ITEM_SHOPS`, `MAX_STOCK`, `RETIREMENT_PRICE`, and `RETIREMENT_LEVEL` define shops and retirement. A retired employer starts with an empty treasury; the coin module credits the opening capital. `serviceOf` throws if the service is missing; `assetById` returns `undefined`. Safe assets pay full income, threatened assets pay half rounded down, and ravaged assets pay nothing. |
 | [`coin.ts`](../src/town/coin.ts) | `purse`, `treasury`, `hoard`, `loot`; `transfer`, `source`, `sink`; `balance`, `counters`, `heldGold`; `coinReasons`, `CoinReason`, `CoinTable`, `GoldStatistics`, `emptyGoldStatistics`. A movement takes a whole, non-negative amount, a reason, a `GoldStatistics`, and the table that defines it. `coinReasons` is frozen; a reason is one of its keys, so a typo is a compile error. `intel` has the same counters as `service`. A caller may pass another frozen table instead of adding a key to the shared one. The reason's entry decides the giver's `spent`, the receiver's `earned`, `goldPaid`, `goldSpentByHeroes`, and whether a named adventurer's `goldSpent` increases. Holders without those counters are unchanged by the flags. Unknown reasons, and negative or fractional amounts, throw before any balance changes. The module does not refuse an overdraft. `heldGold` is unchanged by transfers and moves by exactly the amount of a source or a sink. |
 | [`services.ts`](../src/town/services.ts) | `ServiceLedger`, `ServiceEvent`, `TownServiceContext`, `TownServiceStep`, `BLESSING_HP_PER_LEVEL`; `visitTownServices(party, context, steps): boolean` tries the supplied list in order, stopping at the first `true`. Named steps are `buyPotions`, `sellLoot`, `buyMagicItem`, `payGuildDues`, `buyBlessing` and `buyArmour`, each `(party, context): boolean`. `defaultTownServiceSteps(companyStep?)` builds the sole default order with the contributed step between blessing and armour (a no-op by default). Game supplies the roster’s retirement step; this module has no retirement dependency. Any caller can add or reorder steps using list data alone. `false` may still change state, such as lapsed guild membership. Gold moves only through coin; `ledger` counts items sold and `statistics` holds coin statistics. Reporting is synchronous. |
@@ -100,20 +100,19 @@ The paths below link to implementations. Names in code font identify the main ex
 | Module | Interface and usage contract |
 | --- | --- |
 | [`board.ts`](../src/sim/board.ts) | `Board(config, kinds = WORK_KINDS)`, `BoardConfig`, `DEFAULT_BOARD_CONFIG`, `BoardContext`, `BoardLedger`, `BoardEvent`, `WorkPosting`, `WorkContext`, `WorkBehavior`, `WorkKinds`, `TakenWork`, `Contract`, `Bounty`, and `WORK_KINDS`. The Board owns work and all its links. `post(kind, terms, context)` dispatches registered creation/posting rules; `postContract(employer, holding, theme, level, origin, context)` and `postBounty(lair, context)` are conveniences. Duplicate links throw before generation. `take(company, work, context)` links open work and returns `{ travelTicks, acceptance }`; Game starts the expedition, then reports the acceptance. `settle(work, company, success, context)` releases the company and settles taken work, including payment and breaking a successful bounty's lair. Non-open acceptance, non-taken settlement, a missing employer in settlement, or a missing bounty lair throws. `expireContracts(context)` dispatches expiry rules for open work older than `contractOpenTicks`, then prunes finished work above `pruningThreshold`; a Contract without its employer or holding throws before being closed or counted. `withdrawOpenWork(employer, context)` withdraws an employer's open work. `knowledge(work)` returns the learning handle: learn the next fact, or reveal every fact. Knowledge only grows. `open()`, `taken()`, `byId(id)`, and `all()` expose deeply read-only `ReadonlyQuest` views; query arrays are frozen copies with live records. `recordsForScenario()` and `replaceForScenario(work)` are mutable escape hatches used only inside `Game.forTesting`. Context goes last and carries town, lairs, RNG, tick, ledger, gold statistics, synchronous reporting and hoard payout; tuning belongs to configuration. Reward, windfall, expiry loss and hoard payout are coin movements. `BoardLedger` counts work and carries no gold field. |
-| [`game.ts`](../src/sim/game.ts) | `Game`, `GameConfig`, `DEFAULT_CONFIG`, `TICKS_PER_DAY`, `GameView` and its view types, `GameEvent`/`GameEventView`, and `GameStats`. `new Game(config?)` creates the world, `step()` advances one hour, `view()` returns an immutable snapshot, and `onEvent(listener)` adds an observer. `Game.seedFrom(text)` accepts a numeric seed or derives one from text; `formatTime`, `heroStatusLine`, and `assetStatusLabel` help display data. `Game.forTesting(config, configure)` permits mutable scenario setup **only during** the configuration callback; later scenario access throws. During setup, `scenario.quests` is the Board's list and `scenario.parties` is the roster's list. `regressionState()` serializes state for determinism tests, and `encounterSamples()` returns immutable compositions for calibration. `GameConfig` includes roster tuning, mapping `maxParties` to `maxCompanies` and `disbandDays` to `disbandTicks`, plus Board tuning while retaining `contractDays`, `travelTicks` and `difficultyScale`; Game converts days to Board ticks. `Game` still chooses when to post, which company takes which work, when a lair raids, and pays a broken lair's hoard. |
-| [`expedition.ts`](../src/sim/expedition.ts) | `startExpedition(company, travelTicks)` sets traveling status, outbound travel time and idle ticks after Board acceptance. `Game.acceptQuest` invokes roster `depart` for Board acceptance and starting the journey, then publishes acceptance. `advanceExpedition(party, context)` advances one non-idle company by one hour through travel, combat, return and rest. Traveling, questing and returning require matching read-only work; resting needs none. The context supplies RNG, town, timing, `shortRestHealFraction`, ledger, gold statistics, combat, synchronous reporting, the job's learning handle, which job intelligence uses when it reads the road and takes stock on arrival and settlement/lost-loot callbacks. Rooms and carousing are coin movements. `ExpeditionLedger` counts deaths and wipes and carries no gold field. On a wipe, Expedition calls `ExpeditionContext.disband` before wipe counting and loot storage; Game supplies roster disbanding. A wipe or homecoming resets progress and calls `settleQuest` exactly once with the outcome; the Board clears the company reference. Combat takes a read-only encounter and uses exactly one child seed per fight. `runCombat` is the production adapter; tests supply scripted outcomes. `shortRest` heals the configured fraction of maximum HP (default 0.5), rounded up, then gives each still-Bloodied living hero one potion while supplies last. |
-| [`main.ts`](../src/ui/main.ts) | Browser entry point with no exports. It reads `?seed` and `?difficulty`, creates `Game`, subscribes to events, controls the timer, and renders the views. [`style.css`](../src/ui/style.css) is its stylesheet and has no TypeScript interface. |
+| [`game.ts`](../src/sim/game.ts) | `Game`, `GameConfig`, `DeepPartial`, `DEFAULT_CONFIG`, `mergeConfig`, `resolveGameConfig`, `validateGameConfig`, `TICKS_PER_DAY`, `GameView` and its view types, `GameEvent`/`GameEventView`, and `GameStats`. `new Game(partial?)` deep-merges a partial configuration, validates it, and creates the world. `step()` advances one hour, `view()` returns an immutable snapshot, and `onEvent(listener)` adds an observer. `Game.seedFrom(text)` accepts a numeric seed or derives one from text; `formatTime`, `heroStatusLine`, and `assetStatusLabel` help display data. `Game.forTesting(partial, configure)` permits mutable scenario setup **only during** the configuration callback; later scenario access throws. During setup, `scenario.quests` is the Board's list and `scenario.parties` is the roster's list. `regressionState()` serializes state for determinism tests, and `encounterSamples()` returns immutable compositions for calibration. `GameConfig` is the module defaults in sections; no field is renamed or converted between days and ticks on the way in. `Game` still chooses when to post, which company takes which work, when a lair raids, and pays a broken lair's hoard. Those choices read the `world` section. |
+| [`expedition.ts`](../src/sim/expedition.ts) | `startExpedition(company, travelTicks)` sets traveling status, outbound travel time and idle ticks after Board acceptance. `Game.acceptQuest` invokes roster `depart` for Board acceptance and starting the journey, then publishes acceptance. `advanceExpedition(party, context)` advances one non-idle company by one hour through travel, combat, return and rest. Traveling, questing and returning require matching read-only work; resting needs none. The context supplies RNG, town, the Board's `travelTicks`, the expedition section, the job-intelligence section (including the road's skill difficulty), the roster's renown cap and company size, the blessing's hit points per level, the hero economy, ledger, gold statistics, combat, synchronous reporting, the job's learning handle, which job intelligence uses when it reads the road and takes stock on arrival and settlement/lost-loot callbacks. Rooms and carousing are coin movements. `ExpeditionLedger` counts deaths and wipes and carries no gold field. On a wipe, Expedition calls `ExpeditionContext.disband` before wipe counting and loot storage; Game supplies roster disbanding. A wipe or homecoming resets progress and calls `settleQuest` exactly once with the outcome; the Board clears the company reference. Combat takes a read-only encounter and uses exactly one child seed per fight. `runCombat` is the production adapter; tests supply scripted outcomes. `shortRest` heals the configured fraction of maximum HP (default 0.5), rounded up, then gives each still-Bloodied living hero one potion while supplies last. |
+| [`main.ts`](../src/ui/main.ts) | Browser entry point with no exports. It reads `?seed` and `?difficulty`, creates `Game` with that seed and, when difficulty is set, `board.difficultyScale`, subscribes to events, controls the timer, and renders the views. [`style.css`](../src/ui/style.css) is its stylesheet and has no TypeScript interface. |
 
 ### Board configuration
 
 Every field is a number, except the inclusive `[min, max]` cooldown pairs.
-Game uses these fields directly from `GameConfig`, with `contractDays` converted
-to `contractOpenTicks`; `travelTicks` and `difficultyScale` keep their names.
-`renownCap`, `encounterPartySize` and `lairStrengthCap` default from the shared
-`MAX_RENOWN`, `PARTY_SIZE` and `MAX_STRENGTH` constants. Other modules use those
-same constants; explicit Board overrides remain local tuning. Encounter
-scaling, lair boss budgets and calibration scripts also read `PARTY_SIZE`
-rather than maintaining separate copies of its default.
+Game's `board` section is this object. Durations stay in the unit the Board
+already uses: `contractOpenTicks` is 72 ticks, not a day count converted on
+the way in. `travelTicks` and `difficultyScale` are defined only here.
+Company size and the renown cap are received from the roster. The lair
+strength cap is received from the lair module. The Board still owns
+`lairStrengthGain`.
 
 | Field | Default | Meaning |
 | --- | --- | --- |
@@ -122,7 +121,6 @@ rather than maintaining separate copies of its default.
 | `bountyRenown` | 3 | Renown gained for breaking a lair |
 | `contractRenown` | 1 | Renown gained on Contract success |
 | `failureRenownLoss` | 1 | Renown lost on failed work |
-| `renownCap` | 10 | Cap applied to Board renown gains |
 | `reputationGain` | 1 | Employer reputation gained on success |
 | `expiryCooldown` | [4, 10] | Employer cooldown after expiry |
 | `failureCooldown` | [2, 8] | Employer cooldown after Contract failure |
@@ -130,9 +128,7 @@ rather than maintaining separate copies of its default.
 | `contractOpenTicks` | 72 | Maximum unanswered Contract age, inclusive |
 | `travelTicks` | 2 | Outbound journey time supplied on acceptance |
 | `difficultyScale` | 1.15 | Encounter XP budget multiplier |
-| `encounterPartySize` | 4 | Company size used when generating encounters |
 | `lairStrengthGain` | 1 | Strength gained after unanswered raids or failed Bounties |
-| `lairStrengthCap` | 10 | Cap applied to those strength gains |
 
 A kind entry supplies `create(kind, terms, context)`,
 `post(work, terms, context)`, `success`, `failure`, and `acceptance`. Creators
@@ -156,22 +152,19 @@ settlement, expiry and withdrawal operations. `WorkContext` adds the read-only c
 
 ### Company roster configuration
 
-All fields are numbers, ready for serialization. Game retains all existing
-`GameConfig` field names: `maxParties` maps to `maxCompanies`, and the new
-`disbandDays` is converted to ticks. All other fields keep their names.
-`companySize`, `maxCompanySize`, `retirementLevel` and `retirementPrice` default
-from the shared `PARTY_SIZE`, `MAX_PARTY_SIZE`, `RETIREMENT_LEVEL` and
-`RETIREMENT_PRICE`; those constants retain one definition. Explicit roster size
-or retirement overrides are local tuning, as with Board defaults.
+All fields are numbers, ready for serialization. Game's `roster` section is
+this object. `companySize` and `renownCap` are defined here and passed to the
+Board and to Expedition. `maxCompanySize` is the merge ceiling.
 
 | Field | Default | Meaning |
 | --- | --- | --- |
 | `maxCompanies` | 8 | Cap on active companies; disbanded history takes no place |
 | `arrivalInterval` | 10 | Arrival waits range from half (rounded up) to twice this number of ticks |
 | `patienceTicks` | 12 | Idle wait before strangers arrive for a stranded company |
-| `disbandTicks` | 72 | Wait before survivors seek a ready host (Game: `disbandDays` = 3) |
-| `companySize` | 4 | Readiness threshold and normal arrival size |
+| `disbandTicks` | 72 | Wait before survivors seek a ready host |
+| `companySize` | 4 | Readiness threshold, normal arrival size, and the size encounters are built for |
 | `maxCompanySize` | 6 | Maximum living members after a merge |
+| `renownCap` | 10 | Cap on company renown, received by the Board and Expedition |
 | `retirementLevel` | 8 | Minimum eligible veteran level |
 | `retirementPrice` | 25,000 | Business price, retaining the resurrection reserve |
 | `retirementCapitalShare` | 0.2 | Price fraction, rounded down, transferred into the business; the remainder is sunk |
@@ -179,6 +172,33 @@ or retirement overrides are local tuning, as with Board defaults.
 | `arrivalQuestLevelChance` | 0.3 | Chance to match the level of randomly selected open work |
 | `strangerExtraMembers` | 1 | Extra possible members above the stranded company's missing seats |
 | `recruitLevelTolerance` | 1 | Allowed level difference when survivors join a ready host |
+
+### Game configuration
+
+`GameConfig` in `src/sim/config.ts` is one plain object. `seed` (default
+`20260907`) and `ticksPerDay` (24, one hour per tick) sit at the top. Each
+other section is the owning module's configuration, frozen at the module and
+composed into `DEFAULT_CONFIG` without renaming a field or converting a unit.
+
+`mergeConfig` deep-merges objects and replaces arrays and `[min, max]` pairs
+whole. A key whose value is `undefined` keeps the default. `resolveGameConfig`
+merges a deep partial onto `DEFAULT_CONFIG` and then validates.
+`validateGameConfig` takes an unknown value, such as a parsed document, and
+returns the configuration or a list of readable errors: a missing section, a
+missing field, a wrong type, a negative price, or a range whose minimum
+exceeds its maximum. `new Game` and `Game.forTesting` use `resolveGameConfig`
+and throw the joined errors.
+
+Three values have one home and are handed to the other module that needs them:
+
+| Value | Home | Received by |
+| --- | --- | --- |
+| Company size | `roster.companySize` | Board encounter budgets, Expedition scaling, lair bosses |
+| Renown cap | `roster.renownCap` | Board renown gains, Expedition carousing |
+| Lair strength cap | `lairs.strengthCap` | Board strength gains, raid interval |
+
+Every section, field, default and meaning is listed in
+[Configuration](CONFIGURATION.md).
 
 ## Working across boundaries
 

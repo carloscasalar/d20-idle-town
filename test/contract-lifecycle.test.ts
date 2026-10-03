@@ -4,15 +4,16 @@ import { Rng } from '../src/core/rng';
 import { ITEM_CATALOGUE, type MagicItem } from '../src/items/items';
 import type { Quest } from '../src/quests/quest';
 import type { ThemeId } from '../src/quests/themes';
-import { Game, type GameConfig, type GameEventView, type GameScenario } from '../src/sim/game';
+import { Game, mergeConfig, type DeepPartial, type GameConfig, type GameEventView, type GameScenario } from '../src/sim/game';
+import { DEFAULT_COMPANY_ROSTER_CONFIG } from '../src/adventurers/company-roster';
 import { ASSET_KINDS, createAsset, type Asset } from '../src/town/assets';
 import { createLair, type Lair } from '../src/town/lairs';
 import { serviceOf, type Employer, type Town } from '../src/town/town';
 
 // All mutation happens inside forTesting. The default scene keeps arrivals,
 // shops, daily income and unrelated posting out of these one-hour decisions.
-function scene(configure: (scenario: GameScenario, rng: Rng) => void, config: Partial<GameConfig> = {}): Game {
-  return Game.forTesting({ seed: 31, maxParties: 0, maxOpenQuests: 0, ...config }, (scenario) => {
+function scene(configure: (scenario: GameScenario, rng: Rng) => void, config: DeepPartial<GameConfig> = {}): Game {
+  return Game.forTesting(mergeConfig({ seed: 31, roster: { maxCompanies: 0 }, world: { maxOpenQuests: 0 } }, config) as DeepPartial<GameConfig>, (scenario) => {
     scenario.tick = 100;
     scenario.parties = [];
     scenario.quests = [];
@@ -58,7 +59,7 @@ function company(rng: Rng, level = 5): Party {
 }
 
 function lair(rng: Rng, theme: ThemeId = 'goblins', level = 5): Lair {
-  const result = createLair(rng, theme, level, 100);
+  const result = createLair(rng, theme, level, 100, DEFAULT_COMPANY_ROSTER_CONFIG.companySize);
   Object.assign(result, { raidCooldown: 10_000, hoard: { gold: 100, items: [] } });
   return result;
 }
@@ -108,7 +109,7 @@ describe('posting Contracts', () => {
   ])('an employer with $treasury gold posts $posted Contract', ({ treasury, posted }) => {
     const game = scene((scenario, rng) => {
       postingEmployer(scenario, rng, { treasury });
-    }, { maxOpenQuests: 1 });
+    }, { world: { maxOpenQuests: 1 } });
     game.step();
     expect(game.view().board.open).toHaveLength(posted);
     expect(employerView(game).questsPosted).toBe(posted);
@@ -117,7 +118,7 @@ describe('posting Contracts', () => {
   it('a ruined employer cannot post a Contract', () => {
     const game = scene((scenario, rng) => {
       postingEmployer(scenario, rng, { ruined: true });
-    }, { maxOpenQuests: 1 });
+    }, { world: { maxOpenQuests: 1 } });
     game.step();
     expect(game.view().board.open).toHaveLength(0);
     expect(employerView(game).questsPosted).toBe(0);
@@ -126,7 +127,7 @@ describe('posting Contracts', () => {
   it('an employer waits the entire last hour of its posting cooldown', () => {
     const game = scene((scenario, rng) => {
       postingEmployer(scenario, rng, { cooldown: 1 });
-    }, { maxOpenQuests: 1 });
+    }, { world: { maxOpenQuests: 1 } });
     game.step();
     expect(game.view().board.open).toHaveLength(0);
     expect(hidden(game).town.employers[0]!.cooldown).toBe(0);
@@ -137,7 +138,7 @@ describe('posting Contracts', () => {
   it('posting a Contract sets a cooldown from twelve to thirty hours, including both limits', () => {
     const cooldowns = new Set<number>();
     for (let seed = 101; seed <= 140; seed++) {
-      const game = scene((scenario, rng) => { postingEmployer(scenario, rng); }, { seed, maxOpenQuests: 1 });
+      const game = scene((scenario, rng) => { postingEmployer(scenario, rng); }, { seed, world: { maxOpenQuests: 1 } });
       game.step();
       expect(game.view().board.open).toHaveLength(1);
       const cooldown = hidden(game).town.employers[0]!.cooldown;
@@ -156,7 +157,7 @@ describe('posting Contracts', () => {
       if (reason === 'all Holdings committed') {
         scenario.quests = [contract(employer, holding(rng, employer), 'existing', { status: 'taken' })];
       }
-    }, { maxOpenQuests: 2 });
+    }, { world: { maxOpenQuests: 2 } });
     game.step();
     expect(game.view().board.open).toHaveLength(0);
     expect(employerView(game).questsPosted).toBe(0);
@@ -169,7 +170,7 @@ describe('posting Contracts', () => {
       const overrun = holding(rng, employer, 'Overrun tower');
       overrun.status = 'ravaged';
       employer.cooldown = 0;
-    }, { maxOpenQuests: 1 });
+    }, { world: { maxOpenQuests: 1 } });
     game.step();
     expect(hidden(game).quests[0]!.assetId).toBe(hidden(game).town.employers[0]!.assets[1]!.id);
     expect(employerView(game).assets.map((asset) => asset.status)).toEqual(['safe', 'ravaged']);
@@ -178,7 +179,7 @@ describe('posting Contracts', () => {
   it('a newly posted Contract threatens its Holding and links it to the work', () => {
     const game = scene((scenario, rng) => {
       postingEmployer(scenario, rng);
-    }, { maxOpenQuests: 1 });
+    }, { world: { maxOpenQuests: 1 } });
     game.step();
     const quest = game.view().board.open[0]!;
     expect(employerView(game).assets[0]!.status).toBe('threatened');
@@ -200,7 +201,7 @@ describe('posting Contracts', () => {
         const other = scenario.town.employers[1]!;
         scenario.quests = [contract(other, holding(rng, other), 'existing')];
       }
-    }, { maxOpenQuests: 1 });
+    }, { world: { maxOpenQuests: 1 } });
     game.step();
     expect(game.view().board.open.map((quest) => quest.id)).toEqual(['existing']);
     expect(employerView(game).questsPosted).toBe(0);
@@ -211,7 +212,7 @@ describe('posting Contracts', () => {
       postingEmployer(scenario, rng);
       const other = scenario.town.employers[1]!;
       scenario.quests = [contract(other, holding(rng, other), 'existing', { status: 'taken' })];
-    }, { maxOpenQuests: 1 });
+    }, { world: { maxOpenQuests: 1 } });
     game.step();
     expect(game.view().board.open).toHaveLength(1);
     expect(game.view().board.taken).toHaveLength(1);
@@ -223,7 +224,7 @@ describe('posting Contracts', () => {
         holding(rng, employer);
         employer.cooldown = 0;
       }
-    }, { maxOpenQuests: 1 });
+    }, { world: { maxOpenQuests: 1 } });
     game.step();
     expect(game.view().board.open).toHaveLength(1);
     expect([employerView(game).questsPosted, employerView(game, 1).questsPosted]).toEqual([1, 0]);
@@ -235,7 +236,7 @@ describe('posting Contracts', () => {
       const asset = employer.assets[0]!;
       // Every possible threat has an origin, so no particular draw is required.
       scenario.lairs = ASSET_KINDS[asset.kind].threats.map((threat) => lair(rng, threat.item));
-    }, { maxOpenQuests: 1 });
+    }, { world: { maxOpenQuests: 1 } });
     game.step();
     const quest = hidden(game).quests[0]!;
     const origin = hidden(game).lairs.find((candidate) => candidate.id === quest.lairId)!;
@@ -252,7 +253,7 @@ describe('posting Contracts', () => {
       const employer = postingEmployer(scenario, rng);
       const asset = employer.assets[0]!;
       scenario.lairs = ASSET_KINDS[asset.kind].threats.map((threat) => ({ ...lair(rng, threat.item), status: 'cleared' as const, clearedAt: 100 }));
-    }, { maxOpenQuests: 1 });
+    }, { world: { maxOpenQuests: 1 } });
     game.step();
     expect(game.view().board.open[0]!.lair).toBeNull();
     expect(game.view().stats.raids).toBe(0);
@@ -267,7 +268,7 @@ describe('Contract levels', () => {
         const party = company(rng, 20);
         Object.assign(party, { status: 'resting', ticksLeft: 100 });
         scenario.parties = [party];
-      }, { seed, maxOpenQuests: 1 });
+      }, { seed, world: { maxOpenQuests: 1 } });
       game.step();
       expect(game.view().board.open).toHaveLength(1);
       expect(game.view().board.open[0]!.level).toBe(20);
@@ -281,7 +282,7 @@ describe('Contract levels', () => {
         const party = company(rng, 7);
         Object.assign(party, { status: 'resting', ticksLeft: 100 });
         scenario.parties = [party];
-      }, { seed, maxOpenQuests: 1 });
+      }, { seed, world: { maxOpenQuests: 1 } });
       game.step();
       expect(game.view().board.open).toHaveLength(1);
       expect(game.view().board.open[0]!.level).toBe(7);
@@ -294,7 +295,7 @@ describe('Contract levels', () => {
       const gone = company(rng, 8);
       gone.status = 'disbanded';
       scenario.parties = [gone];
-    }, { maxOpenQuests: 1 });
+    }, { world: { maxOpenQuests: 1 } });
     game.step();
     expect(game.view().board.open[0]!.level).toBe(1);
   });
@@ -305,7 +306,7 @@ describe('Contract levels', () => {
       const party = company(rng, 7);
       Object.assign(party, { status, ticksLeft: 100 });
       scenario.parties = [party];
-    }, { maxOpenQuests: 1 });
+    }, { world: { maxOpenQuests: 1 } });
     game.step();
     const work = [...game.view().board.open, ...game.view().board.taken];
     expect(work).toHaveLength(1);
@@ -319,7 +320,7 @@ describe('Contract levels', () => {
         postingEmployer(scenario, rng);
         scenario.parties = [company(rng, 3), company(rng, 7)];
         for (const party of scenario.parties) Object.assign(party, { status: 'resting', ticksLeft: 100 });
-      }, { seed, maxOpenQuests: 1 });
+      }, { seed, world: { maxOpenQuests: 1 } });
       game.step();
       const level = game.view().board.open[0]!.level;
       expect([3, 7]).toContain(level);
@@ -335,7 +336,7 @@ describe('Contract levels', () => {
         postingEmployer(scenario, rng, { reputation: 3 });
         scenario.parties = [company(rng, 3), company(rng, 7)];
         for (const party of scenario.parties) Object.assign(party, { status: 'resting', ticksLeft: 100 });
-      }, { seed, maxOpenQuests: 1 });
+      }, { seed, world: { maxOpenQuests: 1 } });
       game.step();
       const level = game.view().board.open[0]!.level;
       expect([3, 7, 8]).toContain(level);
@@ -357,7 +358,7 @@ describe('Contract levels', () => {
         Object.assign(busy, { status: 'traveling', questId: work.id, ticksLeft: 100 });
         scenario.parties = [available, busy];
         scenario.quests = [work];
-      }, { seed, maxOpenQuests: 1 });
+      }, { seed, world: { maxOpenQuests: 1 } });
       game.step();
       const posted = [...game.view().board.open, ...game.view().board.taken].find((quest) => quest.id !== 'busy')!;
       expect([3, 7]).toContain(posted.level);
@@ -379,7 +380,7 @@ describe('Lair raids', () => {
       Object.assign(raider, { name: 'Raiding goblin warcamp', raidCooldown: 1 });
       // The first matching theme is deliberately not the Lair whose raid is due.
       scenario.lairs = [quiet, raider];
-    }, { maxOpenQuests: 1 });
+    }, { world: { maxOpenQuests: 1 } });
     game.step();
     expect(game.view().board.open).toHaveLength(1);
     expect(game.view().board.open[0]!.lair!.name).toBe('Raiding goblin warcamp');
@@ -395,7 +396,7 @@ describe('Lair raids', () => {
       const target = lair(rng);
       target.raidCooldown = 1;
       scenario.lairs = [target];
-    }, { maxOpenQuests: 1 });
+    }, { world: { maxOpenQuests: 1 } });
     game.step();
     expect(game.view().board.open).toHaveLength(1);
     expect(game.view().lairs[0]!.raids).toBe(1);
@@ -407,7 +408,7 @@ describe('Lair raids', () => {
       const target = lair(rng);
       target.raidCooldown = 2;
       scenario.lairs = [target];
-    }, { maxOpenQuests: 1 });
+    }, { world: { maxOpenQuests: 1 } });
     game.step();
     expect(game.view().board.open).toHaveLength(0);
     expect(game.view().lairs[0]!.nextRaidIn).toBe(1);
@@ -426,7 +427,7 @@ describe('Lair raids', () => {
       const target = lair(rng);
       target.raidCooldown = 1;
       scenario.lairs = [target];
-    }, { maxOpenQuests: 2 });
+    }, { world: { maxOpenQuests: 2 } });
     game.step();
     expect(hidden(game).quests[0]!.assetId).toBe(hidden(game).town.employers[0]!.assets[0]!.id);
     expect(employerView(game).assets.map((asset) => asset.status)).toEqual(['threatened', 'safe']);
@@ -439,7 +440,7 @@ describe('Lair raids', () => {
       const target = lair(rng);
       target.raidCooldown = 1;
       scenario.lairs = [target];
-    }, { maxOpenQuests: 2 });
+    }, { world: { maxOpenQuests: 2 } });
     game.step();
     expect([...game.view().board.open, ...game.view().board.taken].map((quest) => quest.id)).toEqual(['existing']);
     expect(game.view().lairs[0]).toMatchObject({ raids: 0, nextRaidIn: 90 });
@@ -455,7 +456,7 @@ describe('Lair raids', () => {
       const target = lair(rng);
       Object.assign(target, { raidCooldown: 1, strength: 10 });
       scenario.lairs = [target];
-    }, { maxOpenQuests: reason === 'full board' ? 0 : 1 });
+    }, { world: { maxOpenQuests: reason === 'full board' ? 0 : 1 } });
     game.step();
     expect(game.view().board.open).toHaveLength(0);
     expect(game.view().lairs[0]).toMatchObject({ raids: 0, nextRaidIn: 36 });
@@ -467,7 +468,7 @@ describe('Lair raids', () => {
       const target = lair(rng);
       Object.assign(target, { status: 'cleared', clearedAt: 100, raidCooldown: 1 });
       scenario.lairs = [target];
-    }, { maxOpenQuests: 1 });
+    }, { world: { maxOpenQuests: 1 } });
     game.step();
     expect(game.view().board.open).toHaveLength(0);
     expect(game.view().lairs[0]!.nextRaidIn).toBe(1);
@@ -628,7 +629,7 @@ describe('choosing Contracts', () => {
       const party = company(rng);
       party.idleTicks = 12;
       scenario.parties = [party];
-    }, { travelTicks: 7 });
+    }, { board: { travelTicks: 7 } });
     const events: GameEventView[] = [];
     game.onEvent((event) => { events.push(event); });
     game.step();
@@ -1290,7 +1291,7 @@ describe('employer ruin', () => {
       const older = contract(employer, asset, 'older');
       const newer = contract(employer, asset, 'newer', { status: 'taken' });
       scenario.quests = [older, newer];
-    }, { ruinDays: 1 });
+    }, { world: { ruinDays: 1 } });
     game.step();
     expect(hidden(game).quests.map((quest) => quest.status)).toEqual(['failed', 'taken']);
     expect(hidden(game).town.employers[0]!.assets[0]!.questId).toBe('newer');
@@ -1306,7 +1307,7 @@ describe('employer ruin', () => {
       const newer = bounty(guild, target, 'newer', { status: 'taken' });
       scenario.lairs = [target];
       scenario.quests = [older, newer];
-    }, { ruinDays: 1 });
+    }, { world: { ruinDays: 1 } });
     game.step();
     expect(hidden(game).quests.map((quest) => quest.status)).toEqual(['failed', 'taken']);
     expect(hidden(game).lairs[0]!.questId).toBe('newer');
@@ -1324,7 +1325,7 @@ describe('employer ruin', () => {
       Object.assign(party, { status: 'traveling', ticksLeft: 100, questId: quest.id });
       scenario.parties = [party];
       scenario.quests = [quest];
-    }, { ruinDays: 1 });
+    }, { world: { ruinDays: 1 } });
     game.step();
     expect(employerView(game).ruined).toBe(true);
     expect(game.view().board.taken.map((quest) => quest.id)).toEqual(['taken']);
@@ -1338,7 +1339,7 @@ describe('employer ruin', () => {
       scenario.tick = 23;
       const employer = scenario.town.employers[0]!;
       Object.assign(employer, { treasury: 0, upkeepPerDay: 100 });
-    }, { ruinDays: 1 });
+    }, { world: { ruinDays: 1 } });
     game.step();
     expect(game.view().stats.employersRuined).toBe(1);
     for (let hour = 0; hour < 24; hour++) game.step();
@@ -1354,7 +1355,7 @@ describe('employer ruin', () => {
       scenario.tick = 23;
       const employer = scenario.town.employers[0]!;
       Object.assign(employer, { treasury: 0, upkeepPerDay: 100, title });
-    }, { ruinDays: 1 });
+    }, { world: { ruinDays: 1 } });
     game.step();
     expect(game.view().chronicle.some((event) => event.kind === 'economy' && event.text.includes(fate))).toBe(true);
   });

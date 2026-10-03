@@ -1,17 +1,39 @@
-import { describeHero, gainXp, healHero, isBloodied, killHero, potionHeal, resurrectionCost, type Hero } from '../adventurers/hero';
-import { aliveMembers, deadMembers, MAX_RENOWN, partyLevel, type Party } from '../adventurers/party';
+import { describeHero, gainXp, healHero, isBloodied, killHero, potionHeal, resurrectionCost, type Hero, type HeroEconomyConfig } from '../adventurers/hero';
+import { aliveMembers, deadMembers, partyLevel, type Party } from '../adventurers/party';
 import type { CombatOptions, CombatOutcome } from '../combat/battlecast';
+import { freeze } from '../core/freeze';
 import { listNames } from '../core/names';
 import type { DeepReadonly } from '../core/readonly';
 import type { Rng } from '../core/rng';
 import { describeEncounter, scaleEncounter, type EncounterSpec } from '../quests/encounters';
-import { learnOnArrival, readTheRoad, type JobKnowledge } from '../quests/job-intel';
+import { learnOnArrival, readTheRoad, type JobIntelConfig, type JobKnowledge } from '../quests/job-intel';
 import { difficultyCode, type ReadonlyQuest } from '../quests/quest';
 import { coinReasons, purse, transfer, treasury, type GoldStatistics } from '../town/coin';
-import { BLESSING_HP_PER_LEVEL } from '../town/services';
 import { serviceOf, type Town } from '../town/town';
 
-const CAROUSING_SHARE = 0.05;
+/** Recovery, rooms and the decision to turn back. Travel time is received from the Board. */
+export interface ExpeditionConfig {
+  restTicks: number;
+  shortRestHealFraction: number;
+  carousingShare: number;
+  carousingMinimum: number;
+  carousingRenown: number;
+  roomFeePerLevel: number;
+  /** Turn back when this many companies would fill the original line. 2 means half are down. */
+  retreatAliveDivisor: number;
+  retreatHpFraction: number;
+}
+
+export const DEFAULT_EXPEDITION_CONFIG: ExpeditionConfig = freeze({
+  restTicks: 8,
+  shortRestHealFraction: 0.5,
+  carousingShare: 0.05,
+  carousingMinimum: 10,
+  carousingRenown: 1,
+  roomFeePerLevel: 3,
+  retreatAliveDivisor: 2,
+  retreatHpFraction: 0.35,
+});
 
 export type CombatResolver = (heroes: Hero[], spec: DeepReadonly<EncounterSpec>, seed: number, options?: CombatOptions) => CombatOutcome;
 
@@ -35,10 +57,18 @@ export interface ExpeditionContext {
   rng: Rng;
   ledger: ExpeditionLedger;
   statistics: GoldStatistics;
+  /** Received from the Board. */
   travelTicks: number;
-  restTicks: number;
-  shortRestHealFraction: number;
-  skillDc: number;
+  config: ExpeditionConfig;
+  /** Job intelligence, including the skill difficulty of reading the road. */
+  intel: JobIntelConfig;
+  /** Received from the company roster. */
+  renownCap: number;
+  /** Received from town services. */
+  blessingHpPerLevel: number;
+  /** Received from the company roster. Encounters were built for a company of this size. */
+  companySize: number;
+  heroes: HeroEconomyConfig;
   combat: CombatResolver;
   /** Roster-owned disbanding, called at the existing wipe point. */
   disband: (company: Party) => void;
@@ -103,7 +133,7 @@ function chronicleLog(context: ExpeditionContext, kind: ExpeditionEvent['kind'],
 function travel(p: Party, q: ReadonlyQuest, context: ExpeditionContext): void {
   readTheRoad(p, q, {
     rng: context.rng,
-    skillDc: context.skillDc,
+    skillDc: context.intel.skillDc,
     knowledge: context.knowledge(q),
     report: (text) => log(context, 'party', text),
   });
@@ -118,12 +148,12 @@ function travel(p: Party, q: ReadonlyQuest, context: ExpeditionContext): void {
 function resolveFight(p: Party, q: ReadonlyQuest, context: ExpeditionContext): void {
   const { town, rng, ledger, travelTicks, combat, settleQuest, leaveLoot } = context;
   const fighters = aliveMembers(p);
-  const spec = scaleEncounter(q.encounters[p.progress]!, fighters.length);
+  const spec = scaleEncounter(q.encounters[p.progress]!, fighters.length, context.companySize);
   const n = p.progress + 1;
   const bossFight = q.kind === 'assault' && p.progress === q.encounters.length - 1;
   const outcome = combat(fighters, spec, rng.seed(), {
     potions: p.potions,
-    ...(p.blessed ? { blessingHp: BLESSING_HP_PER_LEVEL * partyLevel(p) } : {}),
+    ...(p.blessed ? { blessingHp: context.blessingHpPerLevel * partyLevel(p) } : {}),
     noRetreat: bossFight,
     ...(q.kind === 'assault' ? { lairDepth: { index: p.progress, total: q.encounters.length } } : {}),
   });
@@ -163,7 +193,7 @@ function resolveFight(p: Party, q: ReadonlyQuest, context: ExpeditionContext): v
     }
 
     p.progress += 1;
-    if (p.progress < q.encounters.length && shouldRetreat(p, fighters.length)) {
+    if (p.progress < q.encounters.length && shouldRetreat(p, fighters.length, context.config)) {
       log(context, 'party', `${p.name} are too battered to go on. They abandon ${q.place} and turn back.`);
       headHome(p, travelTicks);
       return;
@@ -211,11 +241,11 @@ function resolveFight(p: Party, q: ReadonlyQuest, context: ExpeditionContext): v
 function shortRest(p: Party, context: ExpeditionContext): void {
   let drunk = 0;
   for (const h of aliveMembers(p)) {
-    healHero(h, Math.ceil(h.maxHp * context.shortRestHealFraction));
+    healHero(h, Math.ceil(h.maxHp * context.config.shortRestHealFraction));
     if (p.potions > 0 && isBloodied(h)) {
       p.potions -= 1;
       drunk += 1;
-      healHero(h, potionHeal(h));
+      healHero(h, potionHeal(h, context.heroes));
     }
   }
   if (drunk > 0) log(context, 'party', `${p.name} catch their breath. ${drunk} potion${drunk > 1 ? 's' : ''} drunk; ${p.potions} left.`);
@@ -227,7 +257,8 @@ function headHome(p: Party, travelTicks: number): void {
 }
 
 function arriveHome(p: Party, q: ReadonlyQuest, context: ExpeditionContext): void {
-  const { town, statistics, restTicks, settleQuest } = context;
+  const { town, statistics, settleQuest } = context;
+  const { restTicks } = context.config;
   const success = p.progress >= q.encounters.length && aliveMembers(p).length > 0;
   p.progress = 0;
   settleQuest(q, p, success);
@@ -235,21 +266,21 @@ function arriveHome(p: Party, q: ReadonlyQuest, context: ExpeditionContext): voi
   const dead = deadMembers(p);
   if (dead.length > 0) {
     const temple = serviceOf(town, 'temple');
-    const bill = dead.map((h) => `${h.name}: ${resurrectionCost(h.level)} gp`).join(', ');
+    const bill = dead.map((h) => `${h.name}: ${resurrectionCost(h.level, context.heroes)} gp`).join(', ');
     log(context, 'temple', `${p.name} carry their dead to the ${temple.name}. The priests ask ${bill}. Purse: ${p.gold} gp.`);
   }
 
   p.blessed = false;
   const tavern = serviceOf(town, 'tavern');
-  const fee = 3 * partyLevel(p) * aliveMembers(p).length;
+  const fee = context.config.roomFeePerLevel * partyLevel(p) * aliveMembers(p).length;
   if (!tavern.ruined && p.gold >= fee) {
     transfer(purse(p), treasury(tavern), fee, 'service', statistics, coinReasons);
     let line = `${p.name} take rooms at ${tavern.name} for ${fee} gp.`;
-    if (success && dead.length === 0 && p.renown < MAX_RENOWN) {
-      const spree = Math.max(10, Math.floor(p.gold * CAROUSING_SHARE));
-      if (p.gold - spree >= resurrectionCost(partyLevel(p))) {
+    if (success && dead.length === 0 && p.renown < context.renownCap) {
+      const spree = Math.max(context.config.carousingMinimum, Math.floor(p.gold * context.config.carousingShare));
+      if (p.gold - spree >= resurrectionCost(partyLevel(p), context.heroes)) {
         transfer(purse(p), treasury(tavern), spree, 'service', statistics, coinReasons);
-        p.renown = Math.min(MAX_RENOWN, p.renown + 1);
+        p.renown = Math.min(context.renownCap, p.renown + context.config.carousingRenown);
         line += ` They drink ${spree} gp away telling the tale (renown ${p.renown}).`;
       }
     }
@@ -261,9 +292,9 @@ function arriveHome(p: Party, q: ReadonlyQuest, context: ExpeditionContext): voi
   p.ticksLeft = restTicks;
 }
 
-function shouldRetreat(p: Party, startedWith: number): boolean {
+function shouldRetreat(p: Party, startedWith: number, config: ExpeditionConfig): boolean {
   const alive = aliveMembers(p);
-  if (alive.length <= startedWith / 2) return true;
+  if (alive.length <= startedWith / config.retreatAliveDivisor) return true;
   const hpFraction = alive.reduce((s, h) => s + h.hp / h.maxHp, 0) / alive.length;
-  return hpFraction < 0.35;
+  return hpFraction < config.retreatHpFraction;
 }

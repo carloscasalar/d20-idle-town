@@ -3,14 +3,7 @@ import type { Rng } from '../core/rng';
 import type { MagicItem } from '../items/items';
 import { HERO_CLASS_NAMES, type HeroClassName } from 'battlecast-engine';
 import type { DeepReadonly } from '../core/readonly';
-import { createHero, type Hero } from './hero';
-
-/** Shared default company sizes; roster and encounter configuration read these definitions. */
-export const PARTY_SIZE = 4;
-export const MAX_PARTY_SIZE = 6;
-
-/** Maximum fame from expeditions; Board configuration uses the same default. */
-export const MAX_RENOWN = 10;
+import { createHero, DEFAULT_HERO_ECONOMY, type Hero } from './hero';
 
 export type PartyStatus =
   | 'idle'
@@ -85,13 +78,13 @@ export function rollClasses(rng: Rng, size: number): HeroClassName[] {
   return chosen;
 }
 
-export function createParty(rng: Rng, level: number, size: number, tick: number): Party {
+export function createParty(rng: Rng, level: number, size: number, tick: number, startingGoldPerLevel = DEFAULT_HERO_ECONOMY.startingGoldPerLevel): Party {
   const members: Hero[] = rollClasses(rng, size).map((cls) => createHero(rng, level, cls));
   return {
     id: rng.id('party'),
     name: partyName(rng),
     members,
-    gold: 20 * level,
+    gold: startingGoldPerLevel * level,
     status: 'idle',
     questId: null,
     progress: 0,
@@ -132,7 +125,7 @@ export function partyLevel(p: ReadonlyParty): number {
   return Math.max(1, Math.round(alive.reduce((s, h) => s + h.level, 0) / alive.length));
 }
 
-export function describeParty(p: ReadonlyParty, companySize = PARTY_SIZE): string {
+export function describeParty(p: ReadonlyParty, companySize: number): string {
   const n = aliveMembers(p).length;
   return `${p.name} (lvl ${partyLevel(p)}, ${n < companySize ? `${n} of ${companySize} needed` : `${n} strong`})`;
 }

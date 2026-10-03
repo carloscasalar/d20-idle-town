@@ -1,14 +1,31 @@
-import { armorUpgradeCost, equipItem, wantsItem, MAX_ARMOR_TIER, potionCost, resurrectionCost, type Hero } from '../adventurers/hero';
+import { armorUpgradeCost, equipItem, wantsItem, potionCost, resurrectionCost, DEFAULT_HERO_ECONOMY, type Hero, type HeroEconomyConfig } from '../adventurers/hero';
 import { aliveMembers, partyLevel, type Party } from '../adventurers/party';
+import { freeze } from '../core/freeze';
 import { listNames } from '../core/names';
-import { describeEffect, resalePrice, type MagicItem } from '../items/items';
+import { describeEffect, resalePrice, DEFAULT_ITEM_CONFIG, type ItemConfig, type MagicItem } from '../items/items';
 import { coinReasons, purse, transfer, treasury, type GoldStatistics } from './coin';
-import { MAX_STOCK, serviceOf, type Employer, type Town } from './town';
+import { serviceOf, DEFAULT_TOWN_CONFIG, type Employer, type Town } from './town';
 
-const GUILD_DUES_PER_LEVEL = 15;
-const DUES_PERIOD_DAYS = 7;
-const BLESSING_COST_PER_LEVEL = 40;
-export const BLESSING_HP_PER_LEVEL = 3;
+/** Prices and limits for an idle hour in town. */
+export interface TownServiceConfig {
+  guildDuesPerLevel: number;
+  duesPeriodDays: number;
+  blessingCostPerLevel: number;
+  blessingHpPerLevel: number;
+  /** Gold that must remain after a blessing, as a multiple of the resurrection price. */
+  blessingReserveFactor: number;
+}
+
+export const DEFAULT_TOWN_SERVICE_CONFIG: TownServiceConfig = freeze({
+  guildDuesPerLevel: 15,
+  duesPeriodDays: 7,
+  blessingCostPerLevel: 40,
+  blessingHpPerLevel: 3,
+  blessingReserveFactor: 1.5,
+});
+
+/** The configured blessing. Expedition receives this when a company is blessed. */
+export const BLESSING_HP_PER_LEVEL = DEFAULT_TOWN_SERVICE_CONFIG.blessingHpPerLevel;
 
 /** Item statistics for a service visit. Gold statistics live on the context. */
 export interface ServiceLedger {
@@ -28,6 +45,11 @@ export interface TownServiceContext {
   statistics: GoldStatistics;
   /** Publish immediately, so subscribers see state at the same point as the event. */
   report: (event: ServiceEvent) => void;
+  services?: TownServiceConfig;
+  heroes?: HeroEconomyConfig;
+  items?: ItemConfig;
+  /** Shop shelf size. The town section is its home. */
+  maxStock?: number;
 }
 
 /** One service may spend the hour; false allows the following step to try. */
@@ -51,11 +73,11 @@ export function visitTownServices(p: Party, services: TownServiceContext, steps:
   return false;
 }
 
-export function buyPotions(p: Party, services: TownServiceContext): boolean {
-  const { town, level, reserve, alive, pay, log } = serviceVisit(p, services);
+export function buyPotions(p: Party, context: TownServiceContext): boolean {
+  const { town, level, reserve, alive, pay, log, heroes } = serviceVisit(p, context);
   if (p.potions < alive.length) {
     const apothecary = serviceOf(town, 'apothecary');
-    const cost = potionCost(level);
+    const cost = potionCost(level, heroes);
     const wanted = alive.length - p.potions;
     const affordable = Math.min(wanted, Math.floor((p.gold - reserve) / cost));
     if (affordable > 0 && !apothecary.ruined) {
@@ -68,16 +90,16 @@ export function buyPotions(p: Party, services: TownServiceContext): boolean {
   return false;
 }
 
-export function buyArmour(p: Party, services: TownServiceContext): boolean {
-  const { town, reserve, alive, pay, log } = serviceVisit(p, services);
+export function buyArmour(p: Party, context: TownServiceContext): boolean {
+  const { town, reserve, alive, pay, log, heroes } = serviceVisit(p, context);
   const smith = serviceOf(town, 'smith');
   if (!smith.ruined) {
     // Everyone who can afford it gets fitted in the same visit, the worst-armoured first.
     const fitted: string[] = [];
     let bill = 0;
     for (const h of [...alive].sort((a, b) => a.armorTier - b.armorTier)) {
-      if (h.armorTier >= MAX_ARMOR_TIER) continue;
-      const cost = armorUpgradeCost(h.armorTier, h.level);
+      if (h.armorTier >= heroes.maxArmorTier) continue;
+      const cost = armorUpgradeCost(h.armorTier, h.level, heroes);
       if (p.gold - cost < reserve) continue;
       pay(p, smith, cost, h);
       h.armorTier += 1;
@@ -95,8 +117,8 @@ export function buyArmour(p: Party, services: TownServiceContext): boolean {
 }
 
 /** Equip loot from the stash where it helps; sell the rest to the enchanter, who puts it back on sale. */
-export function sellLoot(p: Party, services: TownServiceContext): boolean {
-  const { town, ledger, statistics, log } = serviceVisit(p, services);
+export function sellLoot(p: Party, context: TownServiceContext): boolean {
+  const { town, ledger, statistics, log, items, maxStock } = serviceVisit(p, context);
   if (p.stash.length === 0) return false;
   const equipped: string[] = [];
   let guard = 0;
@@ -115,8 +137,8 @@ export function sellLoot(p: Party, services: TownServiceContext): boolean {
   }
   const item = p.stash.shift()!;
   const enchanter = serviceOf(town, 'enchanter');
-  const price = Math.min(resalePrice(item), enchanter.treasury);
-  if (enchanter.ruined || price <= 0 || enchanter.stock.length >= MAX_STOCK) {
+  const price = Math.min(resalePrice(item, items), enchanter.treasury);
+  if (enchanter.ruined || price <= 0 || enchanter.stock.length >= maxStock) {
     p.stash.push(item);
     return false;
   }
@@ -128,8 +150,8 @@ export function sellLoot(p: Party, services: TownServiceContext): boolean {
 }
 
 /** Buy the best affordable item any member could use. Prices are steep on purpose. */
-export function buyMagicItem(p: Party, services: TownServiceContext): boolean {
-  const { town, reserve, pay, chronicleLog } = serviceVisit(p, services);
+export function buyMagicItem(p: Party, context: TownServiceContext): boolean {
+  const { town, reserve, pay, chronicleLog } = serviceVisit(p, context);
   const budget = p.gold - reserve;
   let best: { shop: Employer; item: MagicItem; hero: Hero } | null = null;
   for (const shop of town.employers) {
@@ -151,13 +173,13 @@ export function buyMagicItem(p: Party, services: TownServiceContext): boolean {
 }
 
 /** Weekly dues keep a company on the guild's books; noble and faction contracts go through the guild. */
-export function payGuildDues(p: Party, services: TownServiceContext): boolean {
-  const { town, day, reserve, pay, log } = serviceVisit(p, services);
+export function payGuildDues(p: Party, context: TownServiceContext): boolean {
+  const { town, day, reserve, pay, log, services } = serviceVisit(p, context);
   const guild = serviceOf(town, 'guild');
   if (guild.ruined) return false;
-  const due = p.duesPaidDay < 0 || day - p.duesPaidDay >= DUES_PERIOD_DAYS;
+  const due = p.duesPaidDay < 0 || day - p.duesPaidDay >= services.duesPeriodDays;
   if (!due) return false;
-  const cost = GUILD_DUES_PER_LEVEL * partyLevel(p) * aliveMembers(p).length;
+  const cost = services.guildDuesPerLevel * partyLevel(p) * aliveMembers(p).length;
   if (p.gold - cost < reserve) {
     if (p.guildMember) {
       p.guildMember = false;
@@ -174,29 +196,36 @@ export function payGuildDues(p: Party, services: TownServiceContext): boolean {
 }
 
 /** A donation at the temple buys the company a blessing for its next contract. */
-export function buyBlessing(p: Party, services: TownServiceContext): boolean {
-  const { town, reserve, pay, log } = serviceVisit(p, services);
+export function buyBlessing(p: Party, context: TownServiceContext): boolean {
+  const { town, reserve, pay, log, services } = serviceVisit(p, context);
   if (p.blessed) return false;
   const temple = serviceOf(town, 'temple');
   if (temple.ruined) return false;
   const level = partyLevel(p);
-  const cost = BLESSING_COST_PER_LEVEL * level;
-  if (p.gold - cost < reserve * 1.5) return false;
+  const cost = services.blessingCostPerLevel * level;
+  if (p.gold - cost < reserve * services.blessingReserveFactor) return false;
   pay(p, temple, cost);
   p.blessed = true;
-  log('temple', `${p.name} leave ${cost} gp at the ${temple.name} and are blessed (+${BLESSING_HP_PER_LEVEL * level} hp on their next contract).`);
+  log('temple', `${p.name} leave ${cost} gp at the ${temple.name} and are blessed (+${services.blessingHpPerLevel * level} hp on their next contract).`);
   return true;
 }
 
 /** Per-step inputs and the existing coin/event operations; no random draws. */
-function serviceVisit(p: Party, services: TownServiceContext) {
-  const { town, day, ledger, statistics, report } = services;
+function serviceVisit(p: Party, context: TownServiceContext) {
+  const { town, day, ledger, statistics, report } = context;
+  const services = context.services ?? DEFAULT_TOWN_SERVICE_CONFIG;
+  const heroes = context.heroes ?? DEFAULT_HERO_ECONOMY;
+  const items = context.items ?? DEFAULT_ITEM_CONFIG;
+  const maxStock = context.maxStock ?? DEFAULT_TOWN_CONFIG.maxStock;
   const pay = (from: Party, to: Employer, amount: number, adventurer?: Hero) =>
     transfer(purse(from), treasury(to), amount, 'service', statistics, coinReasons, adventurer);
   const log = (kind: ServiceEvent['kind'], text: string) => report({ kind, text });
   const chronicleLog = (kind: ServiceEvent['kind'], text: string) => report({ kind, text, chronicle: true });
   const level = partyLevel(p);
-  return { town, day, ledger, statistics, pay, log, chronicleLog, level, reserve: resurrectionCost(level), alive: aliveMembers(p) };
+  return {
+    town, day, ledger, statistics, pay, log, chronicleLog, level, services, heroes, items, maxStock,
+    reserve: resurrectionCost(level, heroes), alive: aliveMembers(p),
+  };
 }
 
 /** Who gets an item: whoever can use it and carries the least magic already. */

@@ -1,6 +1,12 @@
 import assert from 'node:assert/strict';
 import { describe, expect, it } from 'vitest';
+import { DEFAULT_COMPANY_ROSTER_CONFIG } from '../src/adventurers/company-roster';
 import { createParty, type Party } from '../src/adventurers/party';
+import { DEFAULT_ENCOUNTER_CONFIG } from '../src/quests/encounters';
+import { DEFAULT_ITEM_CONFIG } from '../src/items/items';
+import { DEFAULT_JOB_INTEL_CONFIG } from '../src/quests/job-intel';
+import { DEFAULT_QUEST_CONFIG } from '../src/quests/quest';
+import { DEFAULT_LAIR_CONFIG } from '../src/town/lairs';
 import { Rng } from '../src/core/rng';
 import { generateAssault, generateQuest } from '../src/quests/quest';
 import { Board, WORK_KINDS, DEFAULT_BOARD_CONFIG, type BoardConfig, type BoardContext, type BoardLedger, type WorkKinds, type WorkBehavior } from '../src/sim/board';
@@ -90,7 +96,8 @@ function employer(rng: Rng, service: ServiceKind | null = null): Employer {
   };
 }
 
-function world(config: Partial<BoardConfig> = {}, kinds: WorkKinds = WORK_KINDS) {
+function world(config: Partial<BoardConfig> & { renownCap?: number; companySize?: number; lairStrengthCap?: number } = {}, kinds: WorkKinds = WORK_KINDS) {
+  const { renownCap, companySize, lairStrengthCap, ...boardConfig } = config;
   const rng = new Rng(4);
   const patron = employer(rng);
   const guild = employer(rng, 'guild');
@@ -110,6 +117,13 @@ function world(config: Partial<BoardConfig> = {}, kinds: WorkKinds = WORK_KINDS)
     ledger,
     statistics: { goldPaid: 0, goldSpentByHeroes: 0 },
     report: () => {},
+    companySize: companySize ?? DEFAULT_COMPANY_ROSTER_CONFIG.companySize,
+    renownCap: renownCap ?? DEFAULT_COMPANY_ROSTER_CONFIG.renownCap,
+    lairStrengthCap: lairStrengthCap ?? DEFAULT_LAIR_CONFIG.strengthCap,
+    quests: DEFAULT_QUEST_CONFIG,
+    encounters: DEFAULT_ENCOUNTER_CONFIG,
+    intel: DEFAULT_JOB_INTEL_CONFIG,
+    items: DEFAULT_ITEM_CONFIG,
     payHoard: (lair, company) => {
       const gold = lair.hoard.gold;
       company.gold += gold;
@@ -120,7 +134,7 @@ function world(config: Partial<BoardConfig> = {}, kinds: WorkKinds = WORK_KINDS)
       return found;
     },
   };
-  const board = new Board({ ...DEFAULT_BOARD_CONFIG, difficultyScale: 1, ...config }, kinds);
+  const board = new Board({ ...DEFAULT_BOARD_CONFIG, difficultyScale: 1, ...boardConfig }, kinds);
   const check = () => assertBoardInvariant({ quests: board.all(), town, lairs, parties });
   return { rng, patron, guild, holding, town, lairs, parties, context, board, check };
 }
@@ -132,7 +146,7 @@ function companyOf(rng: Rng, parties: Party[]): Party {
 }
 
 function lairOf(rng: Rng, lairs: Lair[]): Lair {
-  const lair = createLair(rng, 'goblins', 5, 0);
+  const lair = createLair(rng, 'goblins', 5, 0, DEFAULT_COMPANY_ROSTER_CONFIG.companySize);
   lairs.push(lair);
   return lair;
 }
@@ -566,8 +580,8 @@ describe('Board configuration', () => {
   });
 
   it.each(['contract', 'assault'] as const)('budgets a %s for the configured company size', (kind) => {
-    const totals = [1, 8].map((encounterPartySize) => {
-      const { board, patron, holding, rng, lairs, context, check } = world({ encounterPartySize });
+    const totals = [1, 8].map((companySize) => {
+      const { board, patron, holding, rng, lairs, context, check } = world({ companySize });
       const work = kind === 'contract'
         ? board.postContract(patron, holding, 'goblins', 5, null, context)
         : board.postBounty(lairOf(rng, lairs), context);
@@ -784,7 +798,7 @@ describe('Board refusals and intelligence', () => {
 
 describe('Game and Board expedition ownership', () => {
   it.each(['contract', 'assault'] as const)('publishes %s acceptance after linking work and starting the journey', (kind) => {
-    const game = Game.forTesting({ seed: 31, maxParties: 0, maxOpenQuests: 0, travelTicks: 7 }, (scenario) => {
+    const game = Game.forTesting({ seed: 31, roster: { maxCompanies: 0 }, world: { maxOpenQuests: 0 }, board: { travelTicks: 7 } }, (scenario) => {
       const rng = new Rng(71);
       scenario.tick = 100;
       scenario.lairs = [];
@@ -800,7 +814,7 @@ describe('Game and Board expedition ownership', () => {
       const company = createParty(rng, 5, 4, scenario.tick);
       Object.assign(company, { gold: kind === 'assault' ? 2000 : 0, potions: 100, blessed: true, duesPaidDay: 5, guildMember: true, idleTicks: 12 });
       for (const hero of company.members) hero.armorTier = 3;
-      const lair = createLair(rng, 'goblins', 5, scenario.tick);
+      const lair = createLair(rng, 'goblins', 5, scenario.tick, DEFAULT_COMPANY_ROSTER_CONFIG.companySize);
       lair.raidCooldown = 10_000;
       const work = kind === 'contract'
         ? generateQuest(rng, { employer: patron, asset: holding, theme: 'goblins', level: 5, partySize: 4, tick: scenario.tick })
@@ -843,11 +857,11 @@ describe('Game and Board expedition ownership', () => {
     { kind: 'contract', end: 'wipe' }, { kind: 'assault', end: 'wipe' },
     { kind: 'contract', end: 'homecoming' }, { kind: 'assault', end: 'homecoming' },
   ] as const)('settlement releases the company after $kind $end through Game', ({ kind, end }) => {
-    const game = Game.forTesting({ seed: 31, maxParties: 0, maxOpenQuests: 0 }, (scenario) => {
+    const game = Game.forTesting({ seed: 31, roster: { maxCompanies: 0 }, world: { maxOpenQuests: 0 } }, (scenario) => {
       const rng = new Rng(71);
       const patron = scenario.town.employers[0]!;
       const holding = patron.assets[0]!;
-      const lair = createLair(rng, 'goblins', 5, 0);
+      const lair = createLair(rng, 'goblins', 5, 0, DEFAULT_COMPANY_ROSTER_CONFIG.companySize);
       lair.raidCooldown = 10_000;
       const company = createParty(rng, 1, 4, 0);
       const work = kind === 'contract'

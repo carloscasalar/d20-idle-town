@@ -1,4 +1,4 @@
-import { CompanyRoster } from '../src/adventurers/company-roster';
+import { CompanyRoster, DEFAULT_COMPANY_ROSTER_CONFIG } from '../src/adventurers/company-roster';
 import { describe, expect, it } from 'vitest';
 import { createHero, gainXp, killHero, resurrectHero, resurrectionCost } from '../src/adventurers/hero';
 import { aliveMembers, createParty, partyLevel } from '../src/adventurers/party';
@@ -55,10 +55,10 @@ describe('bigger companies', () => {
   it('meet proportionally more monsters', async () => {
     const { scaleEncounter } = await import('../src/quests/encounters');
     const spec = { difficulty: 'intermediate' as const, monsters: [{ name: 'Goblin Warrior', count: 4, xpEach: 50 }, { name: 'Goblin Boss', count: 1, xpEach: 200 }], totalXp: 400, tier: 'Moderate' };
-    const six = scaleEncounter(spec, 6);
+    const six = scaleEncounter(spec, 6, DEFAULT_COMPANY_ROSTER_CONFIG.companySize);
     expect(six.monsters[0]!.count).toBe(6);
     expect(six.monsters[1]!.count).toBe(1);
     expect(six.totalXp).toBe(500);
-    expect(scaleEncounter(spec, 4)).toBe(spec);
+    expect(scaleEncounter(spec, 4, DEFAULT_COMPANY_ROSTER_CONFIG.companySize)).toBe(spec);
   });
 });

@@ -1,3 +1,4 @@
+import { freeze } from '../core/freeze';
 import type { Rng } from '../core/rng';
 import type { MagicItem } from '../items/items';
 import type { ThemeId } from '../quests/themes';
@@ -158,10 +159,21 @@ export const ASSET_KINDS: Record<AssetKind, AssetKindDef> = {
   },
 };
 
-export function createAsset(rng: Rng, kind: AssetKind, ownerId: string): Asset {
+/** How far a holding's income varies around its kind's base. */
+export interface HoldingConfig {
+  incomeSpreadMin: number;
+  incomeSpreadSpan: number;
+}
+
+export const DEFAULT_HOLDING_CONFIG: HoldingConfig = freeze({
+  incomeSpreadMin: 0.7,
+  incomeSpreadSpan: 0.6,
+});
+
+export function createAsset(rng: Rng, kind: AssetKind, ownerId: string, holdings: HoldingConfig = DEFAULT_HOLDING_CONFIG): Asset {
   const def = ASSET_KINDS[kind];
   const name = rng.pick(def.names).replace('{name}', rng.pick(def.nameParts));
-  const spread = 0.7 + rng.next() * 0.6;
+  const spread = holdings.incomeSpreadMin + rng.next() * holdings.incomeSpreadSpan;
   return {
     id: rng.id('asset'),
     kind,

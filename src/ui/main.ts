@@ -12,7 +12,7 @@ const params = new URLSearchParams(location.search);
 const seedParam = params.get('seed');
 const seed = seedParam ? Game.seedFrom(seedParam) : Math.floor(Math.random() * 1e9);
 const difficultyParam = Number(params.get('difficulty'));
-const game = new Game({ seed, ...(difficultyParam > 0 ? { difficultyScale: difficultyParam } : {}) });
+const game = new Game({ seed, ...(difficultyParam > 0 ? { board: { difficultyScale: difficultyParam } } : {}) });
 const initialView = game.view();
 
 const SPEEDS: { label: string; ms: number }[] = [

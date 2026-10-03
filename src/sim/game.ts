@@ -1,6 +1,6 @@
 import { coinReasons, emptyGoldStatistics, hoard, loot, purse, sink, source, transfer, treasury } from '../town/coin';
 import { defaultTownServiceSteps } from '../town/services';
-import { CompanyRoster, DEFAULT_COMPANY_ROSTER_CONFIG, type CompanyRosterConfig, type RosterContext } from '../adventurers/company-roster';
+import { CompanyRoster, type RosterContext } from '../adventurers/company-roster';
 import {
   resurrectionCost,
   type Hero,
@@ -17,7 +17,7 @@ import type { DeepReadonly } from '../core/readonly';
 import { hashString, Rng } from '../core/rng';
 import { MAX_LEVEL, xpToNextLevel } from '../core/xp';
 import { describeEncounter, type Difficulty } from '../quests/encounters';
-import { DEFAULT_JOB_INTEL_CONFIG, defaultJobIntelSteps } from '../quests/job-intel';
+import { defaultJobIntelSteps } from '../quests/job-intel';
 import { difficultyCode, type Quest, type ReadonlyQuest } from '../quests/quest';
 import { THEMES, type ThemeId } from '../quests/themes';
 import { ASSET_KINDS, rollThreat, type Asset } from '../town/assets';
@@ -26,13 +26,15 @@ import {
   assetById,
   dailyIncome,
   generateTown,
-  ITEM_SHOPS,
-  MAX_STOCK,
   serviceOf,
   type Employer,
   type Town,
 } from '../town/town';
-import { Board, DEFAULT_BOARD_CONFIG, type BoardConfig, type BoardContext } from './board';
+import { Board, type BoardContext } from './board';
+import { resolveGameConfig, TICKS_PER_DAY, type DeepPartial, type GameConfig } from './config';
+
+export { TICKS_PER_DAY, type GameConfig, type DeepPartial };
+export { DEFAULT_CONFIG, mergeConfig, resolveGameConfig, validateGameConfig } from './config';
 
 export type EventKind = 'town' | 'quest' | 'party' | 'combat' | 'death' | 'levelup' | 'temple' | 'reward' | 'economy' | 'shop';
 
@@ -60,32 +62,6 @@ export interface GameStats {
   retirements: number;
   raids: number;
   lairsCleared: number;
-}
-
-export interface GameConfig extends Omit<BoardConfig, 'contractOpenTicks'>, Omit<CompanyRosterConfig, 'maxCompanies' | 'disbandTicks'> {
-  /** Days before a broken company joins a host. */
-  disbandDays: number;
-  seed: number;
-  maxOpenQuests: number;
-  maxParties: number;
-  /** Mean ticks between party arrivals. */
-  arrivalInterval: number;
-  travelTicks: number;
-  restTicks: number;
-  /** Fraction of maximum HP healed during a short rest between encounters. */
-  shortRestHealFraction: number;
-  /** Ticks an incomplete party waits before a band of strangers shows up to fill it. */
-  patienceTicks: number;
-  /** Days a contract stays on the board before the employer gives up and the asset is overrun. */
-  contractDays: number;
-  /** Consecutive days in the red before an employer is ruined. */
-  ruinDays: number;
-  /**
-   * Multiplier on every encounter's XP budget. 1 = the bands in encounters.ts, which
-   * are safe once potions, armour and retreats are in play; 1.15 (scripts/tune.ts) brings
-   * back most of a death per contract and a wiped company every few days.
-   */
-  difficultyScale: number;
 }
 
 /**
@@ -246,36 +222,6 @@ export interface GameQuestView {
   readonly encounters: readonly GameEncounterView[];
 }
 
-export const TICKS_PER_DAY = 24;
-
-const { contractOpenTicks: _contractOpenTicks, ...boardDefaults } = DEFAULT_BOARD_CONFIG;
-const { maxCompanies, disbandTicks, ...rosterDefaults } = DEFAULT_COMPANY_ROSTER_CONFIG;
-
-export const DEFAULT_CONFIG: GameConfig = {
-  ...boardDefaults,
-  ...rosterDefaults,
-  disbandDays: disbandTicks / TICKS_PER_DAY,
-  seed: 20260907,
-  maxOpenQuests: 8,
-  maxParties: maxCompanies,
-  travelTicks: 2,
-  restTicks: 8,
-  shortRestHealFraction: 0.5,
-  contractDays: 3,
-  ruinDays: 3,
-  difficultyScale: 1.15,
-};
-
-/** An employer posts work only when its treasury is at least this much. */
-export const POSTING_THRESHOLD = 25;
-
-/** Lairs: how many the town starts with, their level range, and how long a cleared one stays quiet. */
-const STARTING_LAIRS: [number, number] = [2, 3];
-const LAIR_LEVELS: [number, number] = [5, 8];
-const LAIR_RESPAWN_DAYS = 12;
-/** The odds an eligible company goes for a lair on a given idle hour. */
-const ASSAULT_APPETITE = 0.35;
-
 export class Game {
   private readonly config: GameConfig;
   private readonly rng: Rng;
@@ -305,51 +251,22 @@ export class Game {
   private debtDays = new Map<string, number>();
   private listeners: ((event: GameEventView) => void)[] = [];
 
-  constructor(config: Partial<GameConfig> = {}) {
-    this.config = { ...DEFAULT_CONFIG, ...config };
-    this.board = new Board({
-      windfallDays: this.config.windfallDays,
-      lootingDays: this.config.lootingDays,
-      bountyRenown: this.config.bountyRenown,
-      contractRenown: this.config.contractRenown,
-      failureRenownLoss: this.config.failureRenownLoss,
-      renownCap: this.config.renownCap,
-      reputationGain: this.config.reputationGain,
-      expiryCooldown: this.config.expiryCooldown,
-      failureCooldown: this.config.failureCooldown,
-      pruningThreshold: this.config.pruningThreshold,
-      contractOpenTicks: TICKS_PER_DAY * this.config.contractDays,
-      travelTicks: this.config.travelTicks,
-      difficultyScale: this.config.difficultyScale,
-      encounterPartySize: this.config.encounterPartySize,
-      lairStrengthGain: this.config.lairStrengthGain,
-      lairStrengthCap: this.config.lairStrengthCap,
-    });
+  constructor(partial: DeepPartial<GameConfig> = {}) {
+    const resolved = resolveGameConfig(partial);
+    if (!resolved.ok) throw new Error(resolved.errors.join('\n'));
+    this.config = resolved.config;
+    this.board = new Board(this.config.board);
     this.rng = new Rng(this.config.seed);
-    this.town = generateTown(this.rng);
-    this.roster = new CompanyRoster({
-      maxCompanies: this.config.maxParties,
-      arrivalInterval: this.config.arrivalInterval,
-      patienceTicks: this.config.patienceTicks,
-      disbandTicks: this.config.disbandDays * TICKS_PER_DAY,
-      companySize: this.config.companySize,
-      maxCompanySize: this.config.maxCompanySize,
-      retirementLevel: this.config.retirementLevel,
-      retirementPrice: this.config.retirementPrice,
-      retirementCapitalShare: this.config.retirementCapitalShare,
-      firstArrivalTick: this.config.firstArrivalTick,
-      arrivalQuestLevelChance: this.config.arrivalQuestLevelChance,
-      strangerExtraMembers: this.config.strangerExtraMembers,
-      recruitLevelTolerance: this.config.recruitLevelTolerance,
-    });
+    this.town = generateTown(this.rng, this.config.town, this.config.holdings);
+    this.roster = new CompanyRoster(this.config.roster, this.config.heroes, this.config.town, this.config.holdings);
     const temple = serviceOf(this.town, 'temple');
     this.log('town', `Welcome to ${this.town.name}. Adventurers gather at ${this.town.tavernName}; the ${temple.name} keeps its doors open for the fallen.`);
     for (const e of this.town.employers) {
       const holdings = e.assets.map((a) => `${a.name} (${a.incomePerDay} gp/day)`).join(', ');
       this.log('town', `${e.name} (${e.title}) holds ${holdings}. Treasury ${e.treasury} gp, upkeep ${e.upkeepPerDay} gp/day.`);
     }
-    const themes = this.rng.shuffle(LAIR_THEMES).slice(0, this.rng.int(...STARTING_LAIRS));
-    for (const theme of themes) this.spawnLair(theme, this.rng.int(...LAIR_LEVELS));
+    const themes = this.rng.shuffle(LAIR_THEMES).slice(0, this.rng.int(...this.config.world.startingLairs));
+    for (const theme of themes) this.spawnLair(theme, this.rng.int(...this.config.world.startingLairLevels));
   }
 
   static seedFrom(value: string): number {
@@ -361,7 +278,7 @@ export class Game {
   }
 
   /** Build a controlled world for a scenario test without exposing runtime state. */
-  static forTesting(config: Partial<GameConfig>, configure: (scenario: GameScenario) => void): Game {
+  static forTesting(config: DeepPartial<GameConfig>, configure: (scenario: GameScenario) => void): Game {
     const game = new Game(config);
     let configuring = true;
     const duringSetup = <Value>(read: () => Value): Value => {
@@ -424,7 +341,7 @@ export class Game {
   }
 
   private spawnLair(theme: ThemeId, level: number): Lair {
-    const lair = createLair(this.rng, theme, level, this.tick);
+    const lair = createLair(this.rng, theme, level, this.tick, this.config.roster.companySize, this.config.lairs);
     this.lairs.push(lair);
     this.chronicleLog('town', `Word spreads of ${describeLair(lair)}, holed up at ${lair.place}. Nothing good will come out of there.`);
     return lair;
@@ -435,7 +352,7 @@ export class Game {
   }
 
   private get day(): number {
-    return Math.floor(this.tick / TICKS_PER_DAY) + 1;
+    return Math.floor(this.tick / this.config.ticksPerDay) + 1;
   }
 
   private get openQuests(): readonly ReadonlyQuest[] {
@@ -451,8 +368,8 @@ export class Game {
     const partyNames = new Map(this.roster.all().map((party) => [party.id, party.name]));
     const lairs = new Map(this.lairs.map((lair) => [lair.id, lair]));
     return Object.freeze({
-      time: formatTime(this.tick),
-      difficultyScale: this.config.difficultyScale,
+      time: formatTime(this.tick, this.config.ticksPerDay),
+      difficultyScale: this.config.board.difficultyScale,
       town: Object.freeze({
         name: this.town.name,
         employers: Object.freeze(
@@ -471,7 +388,7 @@ export class Game {
           questsDone: party.questsDone,
           questsFailed: party.questsFailed,
           members: Object.freeze(party.members.map(heroView)),
-          templeBill: deadMembers(party).reduce((total, hero) => total + resurrectionCost(hero.level), 0),
+          templeBill: deadMembers(party).reduce((total, hero) => total + resurrectionCost(hero.level, this.config.heroes), 0),
           potions: party.potions,
           blessed: party.blessed,
           guildMember: party.guildMember,
@@ -502,7 +419,7 @@ export class Game {
       title: employer.title,
       service: employer.service,
       treasury: employer.treasury,
-      dailyNet: dailyIncome(employer) - employer.upkeepPerDay,
+      dailyNet: dailyIncome(employer, this.config.town.threatenedIncomeDivisor) - employer.upkeepPerDay,
       ruined: employer.ruined,
       reputation: employer.reputation,
       generosity: employer.generosity,
@@ -535,7 +452,7 @@ export class Game {
       raids: lair.raids,
       raidsWon: lair.raidsWon,
       nextRaidIn: Math.max(0, lair.raidCooldown),
-      raidInterval: raidInterval(lair),
+      raidInterval: raidInterval(lair, this.config.lairs),
       hoardGold: lair.hoard.gold,
       hoardItems: Object.freeze(lair.hoard.items.map((item) => item.name)),
       bountyPosted: lair.questId !== null,
@@ -595,7 +512,7 @@ export class Game {
   /** Advances the world by one hour. */
   step(): void {
     this.tick += 1;
-    if (this.tick % TICKS_PER_DAY === 0) {
+    if (this.tick % this.config.ticksPerDay === 0) {
       this.closeTheBooks();
       this.respawnLairs();
     }
@@ -614,11 +531,12 @@ export class Game {
   /** Magic items trickle onto the shelves of the few shops that deal in them. */
   private restock(): void {
     for (const e of this.town.employers) {
-      if (e.ruined || !e.service || !ITEM_SHOPS[e.service]) continue;
-      if (e.stock.length >= MAX_STOCK) continue;
+      const restock = e.service ? this.config.town.restockTicks[e.service as keyof typeof this.config.town.restockTicks] : undefined;
+      if (e.ruined || !restock) continue;
+      if (e.stock.length >= this.config.town.maxStock) continue;
       if (--e.restockIn > 0) continue;
-      e.restockIn = ITEM_SHOPS[e.service]!;
-      const item = rollStockItem(this.rng, e.service as 'enchanter' | 'temple' | 'smith');
+      e.restockIn = restock;
+      const item = rollStockItem(this.rng, e.service as 'enchanter' | 'temple' | 'smith', this.config.items);
       if (!item) continue;
       e.stock.push(item);
       this.log('shop', `${e.name} put a ${item.name} on the shelf (${describeEffect(item.effect)}) for ${item.price} gp.`);
@@ -633,7 +551,7 @@ export class Game {
     let paid = 0;
     for (const e of this.town.employers) {
       if (e.ruined) continue;
-      const income = dailyIncome(e);
+      const income = dailyIncome(e, this.config.town.threatenedIncomeDivisor);
       source(treasury(e), income, 'income', this.stats, coinReasons);
       sink(treasury(e), e.upkeepPerDay, 'upkeep', this.stats, coinReasons);
       earned += income;
@@ -641,7 +559,7 @@ export class Game {
       if (e.treasury < 0) {
         const days = (this.debtDays.get(e.id) ?? 0) + 1;
         this.debtDays.set(e.id, days);
-        if (days >= this.config.ruinDays) this.ruin(e);
+        if (days >= this.config.world.ruinDays) this.ruin(e);
         else this.log('economy', `${e.name} cannot meet their upkeep (${e.treasury} gp). Creditors are circling.`);
       } else {
         this.debtDays.delete(e.id);
@@ -667,8 +585,8 @@ export class Game {
         employer.cooldown -= 1;
         continue;
       }
-      if (this.openQuests.length >= this.config.maxOpenQuests) continue;
-      if (employer.treasury < POSTING_THRESHOLD) continue;
+      if (this.openQuests.length >= this.config.world.maxOpenQuests) continue;
+      if (employer.treasury < this.config.world.postingThreshold) continue;
       const free = employer.assets.filter((a) => a.questId === null);
       if (free.length === 0) continue;
       // The overrun holding is always the priority; otherwise trouble strikes at random.
@@ -676,7 +594,7 @@ export class Game {
       const theme = rollThreat(this.rng, asset);
       const level = this.pickQuestLevel(employer);
       this.board.postContract(employer, asset, theme, level, null, this.boardContext());
-      employer.cooldown = this.rng.int(12, 30);
+      employer.cooldown = this.rng.int(...this.config.world.postingCooldown);
     }
   }
 
@@ -687,10 +605,10 @@ export class Game {
     for (const lair of this.activeLairs) {
       if (--lair.raidCooldown > 0) continue;
       lair.raidCooldown = raidInterval(lair);
-      if (this.openQuests.length >= this.config.maxOpenQuests) continue;
+      if (this.openQuests.length >= this.config.world.maxOpenQuests) continue;
       const targets: { employer: Employer; asset: Asset }[] = [];
       for (const employer of this.town.employers) {
-        if (employer.ruined || employer.treasury < POSTING_THRESHOLD) continue;
+        if (employer.ruined || employer.treasury < this.config.world.postingThreshold) continue;
         for (const asset of employer.assets) {
           if (asset.questId === null && ASSET_KINDS[asset.kind].threats.some((t) => t.item === lair.theme)) targets.push({ employer, asset });
         }
@@ -705,11 +623,11 @@ export class Game {
   /** The guild keeps a standing contract on every lair once someone in town could plausibly take it. */
   private postAssaults(): void {
     const guild = serviceOf(this.town, 'guild');
-    if (guild.ruined || guild.treasury < POSTING_THRESHOLD) return;
+    if (guild.ruined || guild.treasury < this.config.world.postingThreshold) return;
     for (const lair of this.activeLairs) {
       if (lair.questId) continue;
       const strongest = Math.max(0, ...this.activeParties.map(partyLevel));
-      if (strongest < lair.level - 1) continue;
+      if (strongest < lair.level - this.config.world.bountyLevelGap) continue;
       this.board.postBounty(lair, this.boardContext());
     }
   }
@@ -718,10 +636,10 @@ export class Game {
   private respawnLairs(): void {
     for (const lair of this.lairs) {
       if (lair.status !== 'cleared' || lair.clearedAt === null) continue;
-      if (this.tick - lair.clearedAt < LAIR_RESPAWN_DAYS * TICKS_PER_DAY) continue;
+      if (this.tick - lair.clearedAt < this.config.world.lairRespawnDays * this.config.ticksPerDay) continue;
       lair.clearedAt = null;
-      const theme = this.rng.chance(0.5) ? lair.theme : this.rng.pick(LAIR_THEMES);
-      this.spawnLair(theme, Math.min(20, lair.level + this.rng.int(1, 2)));
+      const theme = this.rng.chance(this.config.world.lairRespawnSameThemeChance) ? lair.theme : this.rng.pick(LAIR_THEMES);
+      this.spawnLair(theme, Math.min(MAX_LEVEL, lair.level + this.rng.int(...this.config.world.lairRespawnLevelGain)));
     }
   }
 
@@ -734,9 +652,14 @@ export class Game {
   private pickQuestLevel(employer: Employer): number {
     const parties = this.activeParties;
     if (parties.length === 0) return 1;
-    const weights = parties.map((p) => ({ item: partyLevel(p), weight: p.status === 'idle' || p.status === 'resting' ? 3 : 1 }));
+    const weights = parties.map((p) => ({
+      item: partyLevel(p),
+      weight: p.status === 'idle' || p.status === 'resting' ? this.config.world.idleLevelWeight : this.config.world.busyLevelWeight,
+    }));
     const top = Math.max(...weights.map((w) => w.item));
-    if (employer.reputation >= 3 && this.rng.chance(0.1)) return Math.min(MAX_LEVEL, top + 1);
+    if (employer.reputation >= this.config.world.stretchReputation && this.rng.chance(this.config.world.stretchPostChance)) {
+      return Math.min(MAX_LEVEL, top + this.config.world.levelStretch);
+    }
     return this.rng.weighted(weights);
   }
 
@@ -754,11 +677,14 @@ export class Game {
       rng: this.rng,
       ledger: this.stats,
       statistics: this.stats,
-      travelTicks: this.config.travelTicks,
-      restTicks: this.config.restTicks,
-      shortRestHealFraction: this.config.shortRestHealFraction,
-      skillDc: DEFAULT_JOB_INTEL_CONFIG.skillDc,
-      combat: runCombat,
+      travelTicks: this.config.board.travelTicks,
+      config: this.config.expedition,
+      intel: this.config.intel,
+      renownCap: this.config.roster.renownCap,
+      blessingHpPerLevel: this.config.services.blessingHpPerLevel,
+      companySize: this.config.roster.companySize,
+      heroes: this.config.heroes,
+      combat: (heroes, spec, seed, options) => runCombat(heroes, spec, seed, { ...options, rules: this.config.combat, heroes: this.config.heroes }),
       disband: (company) => this.roster.disband(company),
       report: ({ kind, text, detail, chronicle }) => {
         if (chronicle) this.chronicleLog(kind, text);
@@ -781,9 +707,9 @@ export class Game {
     // Companies take work at their level or a little below; nobody signs up to punch above their weight.
     // A company takes work at its own level. After a slow day it will stretch one level either way,
     // never more: the small jobs are for the companies that need them.
-    const stretch = p.idleTicks >= TICKS_PER_DAY ? 1 : 0;
+    const stretch = p.idleTicks >= this.config.world.idleStretchTicks ? this.config.world.levelStretch : 0;
     const assault = this.openQuests.find((q) => q.kind === 'assault' && q.level <= level);
-    if (assault && p.gold >= resurrectionCost(level) && this.rng.chance(ASSAULT_APPETITE)) {
+    if (assault && p.gold >= resurrectionCost(level, this.config.heroes) && this.rng.chance(this.config.world.assaultAppetite)) {
       this.acceptQuest(p, assault);
       return;
     }
@@ -804,7 +730,8 @@ export class Game {
       town: this.town,
       rng: this.rng,
       statistics: this.stats,
-      config: DEFAULT_JOB_INTEL_CONFIG,
+      config: this.config.intel,
+      heroes: this.config.heroes,
       report: ({ kind, text }) => this.log(kind, text),
     })) return;
     this.acceptQuest(p, quest);
@@ -822,7 +749,7 @@ export class Game {
     if (!employer?.favoredPartyId || employer.favoredPartyId === p.id) return true;
     const friends = this.roster.byId(employer.favoredPartyId);
     if (!friends || friends.status === 'disbanded') return true;
-    return this.tick - q.postedAt >= TICKS_PER_DAY;
+    return this.tick - q.postedAt >= this.config.world.firstRefusalTicks;
   }
 
   /** The complete service order is data supplied by Game. */
@@ -836,6 +763,10 @@ export class Game {
         if (chronicle) this.chronicleLog(kind, text);
         else this.log(kind, text);
       },
+      services: this.config.services,
+      heroes: this.config.heroes,
+      items: this.config.items,
+      maxStock: this.config.town.maxStock,
     });
   }
 
@@ -883,6 +814,13 @@ export class Game {
         else this.log(kind, text);
       },
       payHoard: (lair, company) => this.payHoard(lair, company),
+      companySize: this.config.roster.companySize,
+      renownCap: this.config.roster.renownCap,
+      lairStrengthCap: this.config.lairs.strengthCap,
+      quests: this.config.quests,
+      encounters: this.config.encounters,
+      intel: this.config.intel,
+      items: this.config.items,
     };
   }
 
@@ -914,7 +852,7 @@ export class Game {
   private log(kind: EventKind, text: string, detail?: string[]): GameEvent {
     const e: GameEvent = { tick: this.tick, kind, text, detail };
     this.events.push(e);
-    if (this.events.length > 600) this.events.splice(0, this.events.length - 600);
+    if (this.events.length > this.config.world.eventLogLimit) this.events.splice(0, this.events.length - this.config.world.eventLogLimit);
     for (const listener of this.listeners) listener(eventView(e));
     return e;
   }
@@ -922,7 +860,7 @@ export class Game {
   private chronicleLog(kind: EventKind, text: string): void {
     const e = this.log(kind, text);
     this.chronicle.push(e);
-    if (this.chronicle.length > 300) this.chronicle.splice(0, this.chronicle.length - 300);
+    if (this.chronicle.length > this.config.world.chronicleLimit) this.chronicle.splice(0, this.chronicle.length - this.config.world.chronicleLimit);
   }
 }
 
@@ -956,9 +894,9 @@ function eventView(event: GameEvent): GameEventView {
   });
 }
 
-export function formatTime(tick: number): string {
-  const day = Math.floor(tick / TICKS_PER_DAY) + 1;
-  const hour = tick % TICKS_PER_DAY;
+export function formatTime(tick: number, ticksPerDay = TICKS_PER_DAY): string {
+  const day = Math.floor(tick / ticksPerDay) + 1;
+  const hour = tick % ticksPerDay;
   return `Day ${day}, ${String(hour).padStart(2, '0')}:00`;
 }
 

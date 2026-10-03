@@ -1,16 +1,18 @@
 import { describe, expect, it } from 'vitest';
+import { DEFAULT_COMPANY_ROSTER_CONFIG } from '../src/adventurers/company-roster';
 import { createHero } from '../src/adventurers/hero';
 import { createParty, type Party } from '../src/adventurers/party';
 import { Rng } from '../src/core/rng';
 import type { EncounterSpec } from '../src/quests/encounters';
-import { jobKnowledge } from '../src/quests/job-intel';
+import { DEFAULT_JOB_INTEL_CONFIG, jobKnowledge } from '../src/quests/job-intel';
 import { difficultyCode, isFullyKnown, type Quest } from '../src/quests/quest';
 import { Board, DEFAULT_BOARD_CONFIG } from '../src/sim/board';
 import { advanceExpedition, type ExpeditionContext, type ExpeditionEvent } from '../src/sim/expedition';
-import { Game, type GameConfig, type GameScenario } from '../src/sim/game';
+import { Game, mergeConfig, type DeepPartial, type GameConfig, type GameScenario } from '../src/sim/game';
 import { createAsset } from '../src/town/assets';
 import { createLair } from '../src/town/lairs';
 import { generateTown, serviceOf, type ServiceKind } from '../src/town/town';
+import { expeditionRules } from './helpers/expedition-rules';
 
 const encounters: EncounterSpec[] = [
   { difficulty: 'easy', monsters: [{ name: 'Goblin Warrior', count: 1, xpEach: 50 }], totalXp: 50, tier: 'Low' },
@@ -43,8 +45,8 @@ function company(rng: Rng, level = 1, gold = 300, name = 'Lanterns'): Party {
 
 // Only scenario setup mutates Game state. Provisioning leaves the idle hour
 // available for job intelligence, with no arrivals, raids or unrelated work.
-function scene(configure: (scenario: GameScenario, rng: Rng) => void = () => {}, config: Partial<GameConfig> = {}): Game {
-  return Game.forTesting({ seed: 31, maxParties: 0, maxOpenQuests: 0, ...config }, (scenario) => {
+function scene(configure: (scenario: GameScenario, rng: Rng) => void = () => {}, config: DeepPartial<GameConfig> = {}): Game {
+  return Game.forTesting(mergeConfig({ seed: 31, roster: { maxCompanies: 0 }, world: { maxOpenQuests: 0 } }, config) as DeepPartial<GameConfig>, (scenario) => {
     scenario.parties = [];
     scenario.quests = [];
     scenario.lairs = [];
@@ -98,7 +100,7 @@ function longJob(overrides: Partial<Quest> = {}): Quest {
   return job({ encounters: structuredClone([...encounters, ...encounters]), ...overrides });
 }
 
-function road(work = job(), skillDc = 15, seed = 1) {
+function road(work = job(), skillDc = DEFAULT_JOB_INTEL_CONFIG.skillDc, seed = 1) {
   const rng = new Rng(71);
   const p = company(rng);
   Object.assign(p, { status: 'traveling', questId: work.id, ticksLeft: 4 });
@@ -109,7 +111,7 @@ function road(work = job(), skillDc = 15, seed = 1) {
   const context: ExpeditionContext = {
     quest: board.byId(work.id), town: generateTown(rng), rng: new Rng(seed),
     ledger: { heroesDied: 0, partiesWiped: 0 }, statistics: { goldPaid: 0, goldSpentByHeroes: 0 },
-    travelTicks: 4, restTicks: 8, shortRestHealFraction: 0.5, skillDc,
+    ...expeditionRules({ travelTicks: 4, skillDc }),
     combat: () => { throw new Error('Travel does not fight'); },
     disband: () => { throw new Error('Travel does not disband'); },
     settleQuest: () => { throw new Error('Travel does not settle work'); },
@@ -129,7 +131,7 @@ describe('intelligence on newly posted work', () => {
       const employer = scenario.town.employers[0]!;
       employer.cooldown = 0;
       employer.assets.push(createAsset(rng, 'watchtower', employer.id));
-    }, { maxOpenQuests: 1 });
+    }, { world: { maxOpenQuests: 1 } });
 
     game.step();
 
@@ -146,7 +148,7 @@ describe('intelligence on newly posted work', () => {
   it('posts a Bounty with its count public but only its first encounter described', () => {
     const game = scene((scenario, rng) => {
       scenario.quests = [];
-      const lair = createLair(rng, 'goblins', 1, 0);
+      const lair = createLair(rng, 'goblins', 1, 0, DEFAULT_COMPANY_ROSTER_CONFIG.companySize);
       lair.raidCooldown = 10_000;
       scenario.lairs = [lair];
       scenario.parties[0]!.status = 'resting';
@@ -256,7 +258,7 @@ describe('the free tavern attempt', () => {
       p.members[2].hp = 0;
       // No resurrection purchase; three members are enough in this scenario.
       serviceOf(scenario.town, 'temple').ruined = true;
-    }, { companySize: 3 });
+    }, { roster: { companySize: 3 } });
 
     const events = hour(game);
 
@@ -726,7 +728,7 @@ describe('separate companies and jobs', () => {
     expect(difficultyCode(board.byId('tower')!)).toBe('E/…');
     const next = company(new Rng(72), 1, 300, 'Foxes');
     Object.assign(next, { status: 'traveling', questId: 'tower', ticksLeft: 4 });
-    context.skillDc = 0;
+    context.intel = { ...context.intel, skillDc: 0 };
 
     advanceExpedition(next, context);
 
@@ -745,7 +747,7 @@ describe('separate companies and jobs', () => {
     board.replaceForScenario([tower, bridge]);
     Object.assign(p, { questId: bridge.id, ticksLeft: 4 });
     context.quest = board.byId('bridge');
-    context.skillDc = 0;
+    context.intel = { ...context.intel, skillDc: 0 };
 
     advanceExpedition(p, context);
 
@@ -756,7 +758,7 @@ describe('separate companies and jobs', () => {
   });
 
   it('the tavern attempt leaves the company a separate road check on that job', () => {
-    const game = scene((scenario) => { scenario.parties[0]!.gold = 0; }, { travelTicks: 4 });
+    const game = scene((scenario) => { scenario.parties[0]!.gold = 0; }, { board: { travelTicks: 4 } });
     hour(game);
     hour(game); // No paid option: take the Contract.
 

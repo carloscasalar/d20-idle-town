@@ -1,5 +1,5 @@
 import { HERO_CLASS_NAMES } from 'battlecast-engine';
-import { PARTY_SIZE } from '../src/adventurers/party';
+import { DEFAULT_COMPANY_ROSTER_CONFIG } from '../src/adventurers/company-roster';
 import { createHero } from '../src/adventurers/hero';
 import { runCombat } from '../src/combat/battlecast';
 import { Rng } from '../src/core/rng';
@@ -14,16 +14,16 @@ for (const level of levels) {
   for (const difficulty of DIFFICULTIES) {
     let wins = 0, deaths = 0, tpk = 0, rounds = 0;
     for (let t = 0; t < trials; t++) {
-      const heroes = Array.from({ length: PARTY_SIZE }, () => createHero(rng, level, rng.pick(HERO_CLASS_NAMES)));
-      const spec = buildEncounter(rng, rng.pick(THEME_IDS), PARTY_SIZE, level, difficulty);
+      const heroes = Array.from({ length: DEFAULT_COMPANY_ROSTER_CONFIG.companySize }, () => createHero(rng, level, rng.pick(HERO_CLASS_NAMES)));
+      const spec = buildEncounter(rng, rng.pick(THEME_IDS), DEFAULT_COMPANY_ROSTER_CONFIG.companySize, level, difficulty);
       const out = runCombat(heroes, spec, rng.seed());
       if (out.winner === 'party') wins++;
       const d = out.heroes.filter((h) => !h.alive).length;
       deaths += d;
-      if (d === PARTY_SIZE) tpk++;
+      if (d === DEFAULT_COMPANY_ROSTER_CONFIG.companySize) tpk++;
       rounds += out.rounds;
     }
-    const band = xpBand(PARTY_SIZE, level, difficulty);
+    const band = xpBand(DEFAULT_COMPANY_ROSTER_CONFIG.companySize, level, difficulty);
     console.log(
       `L${level} ${difficulty.padEnd(12)} band ${band.min}-${band.max}  win ${(100 * wins / trials).toFixed(0)}%  deaths/fight ${(deaths / trials).toFixed(2)}  tpk ${(100 * tpk / trials).toFixed(0)}%  rounds ${(rounds / trials).toFixed(1)}`,
     );

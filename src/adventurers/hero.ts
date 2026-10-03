@@ -1,5 +1,6 @@
 import type { DeepReadonly } from '../core/readonly';
 import { buildHero, HERO_CLASS_NAMES, type HeroClassName } from 'battlecast-engine';
+import { freeze } from '../core/freeze';
 import { heroName } from '../core/names';
 import type { Rng } from '../core/rng';
 import { levelForXp, MAX_LEVEL } from '../core/xp';
@@ -59,10 +60,46 @@ export function combinedEffect(hero: Hero): Required<Pick<ItemEffect, 'ac' | 'we
   return total;
 }
 
-export const MAX_ARMOR_TIER = 3;
+/** Prices and caps for an adventurer's gear, potions and return from death. */
+export interface HeroEconomyConfig {
+  maxArmorTier: number;
+  armorBase: number;
+  armorPerLevel: number;
+  armorTierFactor: number;
+  resurrectionBase: number;
+  resurrectionQuadratic: number;
+  potionBase: number;
+  potionPerLevel: number;
+  potionHealMinimum: number;
+  potionHealDivisor: number;
+  startingGoldPerLevel: number;
+  /** Fraction of maximum hit points restored by resurrection, before the minimum. */
+  resurrectedHpFraction: number;
+  /** Least hit points a resurrected hero is left with. */
+  resurrectedHpMinimum: number;
+}
 
-export function armorUpgradeCost(tier: number, level: number): number {
-  return Math.round((80 + 40 * level) * Math.pow(2.2, tier));
+export const DEFAULT_HERO_ECONOMY: HeroEconomyConfig = freeze({
+  maxArmorTier: 3,
+  armorBase: 80,
+  armorPerLevel: 40,
+  armorTierFactor: 2.2,
+  resurrectionBase: 150,
+  resurrectionQuadratic: 40,
+  potionBase: 25,
+  potionPerLevel: 10,
+  potionHealMinimum: 8,
+  potionHealDivisor: 3,
+  startingGoldPerLevel: 20,
+  resurrectedHpFraction: 0.5,
+  resurrectedHpMinimum: 1,
+});
+
+/** The configured armour cap. Tests and callers that only need the default read this. */
+export const MAX_ARMOR_TIER = DEFAULT_HERO_ECONOMY.maxArmorTier;
+
+export function armorUpgradeCost(tier: number, level: number, economy: HeroEconomyConfig = DEFAULT_HERO_ECONOMY): number {
+  return Math.round((economy.armorBase + economy.armorPerLevel * level) * Math.pow(economy.armorTierFactor, tier));
 }
 
 /** What the hero's AC is in combat: class chassis, the smith's work, and magic on top. */
@@ -126,23 +163,23 @@ export function killHero(hero: Hero): void {
   hero.deaths += 1;
 }
 
-export function resurrectHero(hero: Hero): void {
+export function resurrectHero(hero: Hero, economy: HeroEconomyConfig = DEFAULT_HERO_ECONOMY): void {
   hero.alive = true;
-  hero.hp = Math.max(1, Math.floor(hero.maxHp / 2));
+  hero.hp = Math.max(economy.resurrectedHpMinimum, Math.floor(hero.maxHp * economy.resurrectedHpFraction));
 }
 
 /** Gold the temple asks to bring someone back. Grows with level, like a 5e diamond bill would. */
-export function resurrectionCost(level: number): number {
-  return 150 + level * level * 40;
+export function resurrectionCost(level: number, economy: HeroEconomyConfig = DEFAULT_HERO_ECONOMY): number {
+  return economy.resurrectionBase + level * level * economy.resurrectionQuadratic;
 }
 
 /** A healing draught scaled to the buyer's level: one potion is about a third of a hero's hit points. */
-export function potionCost(level: number): number {
-  return 25 + 10 * level;
+export function potionCost(level: number, economy: HeroEconomyConfig = DEFAULT_HERO_ECONOMY): number {
+  return economy.potionBase + economy.potionPerLevel * level;
 }
 
-export function potionHeal(hero: Hero): number {
-  return Math.max(8, Math.ceil(hero.maxHp / 3));
+export function potionHeal(hero: Hero, economy: HeroEconomyConfig = DEFAULT_HERO_ECONOMY): number {
+  return Math.max(economy.potionHealMinimum, Math.ceil(hero.maxHp / economy.potionHealDivisor));
 }
 
 /** Skills a class is good at beyond the numbers: the bard talks, the ranger reads the land. Rolled with advantage. */

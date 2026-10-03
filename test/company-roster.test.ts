@@ -12,7 +12,7 @@ import {
 import { Rng } from '../src/core/rng';
 import { instantiate, ITEM_CATALOGUE, type MagicItem } from '../src/items/items';
 import type { Quest } from '../src/quests/quest';
-import { Game, type GameConfig, type GameScenario } from '../src/sim/game';
+import { Game, mergeConfig, type DeepPartial, type GameConfig, type GameScenario } from '../src/sim/game';
 import { serviceOf, type Employer } from '../src/town/town';
 
 function rosterFor(...companies: Party[]): CompanyRoster {
@@ -40,8 +40,8 @@ function coversFourRoles(classes: readonly string[]): boolean {
   return classes.length === ROLES.length && assign(0);
 }
 
-function scene(configure: (scenario: GameScenario, rng: Rng) => void, config: Partial<GameConfig> = {}): Game {
-  return Game.forTesting({ seed: 42, maxParties: 0, maxOpenQuests: 0, patienceTicks: 10_000, ...config }, (scenario) => {
+function scene(configure: (scenario: GameScenario, rng: Rng) => void, config: DeepPartial<GameConfig> = {}): Game {
+  return Game.forTesting(mergeConfig({ seed: 42, roster: { maxCompanies: 0, patienceTicks: 10_000 }, world: { maxOpenQuests: 0 } }, config) as DeepPartial<GameConfig>, (scenario) => {
     scenario.tick = TICK;
     scenario.parties = [];
     scenario.quests = [];
@@ -130,7 +130,7 @@ function sword(rng: Rng): MagicItem {
 
 function hoursUntilNextArrival(seed: number, arrivalInterval: number): number {
   const game = scene((scenario) => { scenario.tick = 0; }, {
-    seed, arrivalInterval, maxParties: 6, patienceTicks: 10_000,
+    seed, roster: { arrivalInterval, maxCompanies: 6, patienceTicks: 10_000 },
   });
   let steps = 0;
   while (game.view().stats.partiesArrived < 1) {
@@ -149,7 +149,7 @@ function hoursUntilNextArrival(seed: number, arrivalInterval: number): number {
 
 describe('companies arriving', () => {
   it('the first company arrives in the first hour', () => {
-    const game = scene((scenario) => { scenario.tick = 0; }, { maxParties: 4 });
+    const game = scene((scenario) => { scenario.tick = 0; }, { roster: { maxCompanies: 4 } });
     expect(game.view().parties).toHaveLength(0);
     game.step();
     expect(game.view().time).toBe('Day 1, 01:00');
@@ -184,7 +184,7 @@ describe('companies arriving', () => {
   it('a town that already holds its companies admits nobody', () => {
     const game = scene((scenario, rng) => {
       scenario.parties = [company(rng, 1, ['A', 'B', 'C', 'D']), company(rng, 1, ['E', 'F', 'G', 'H'])];
-    }, { maxParties: 2 });
+    }, { roster: { maxCompanies: 2 } });
     game.step();
     expect(game.view().stats.partiesArrived).toBe(0);
     expect(game.view().parties).toHaveLength(2);
@@ -195,7 +195,7 @@ describe('companies arriving', () => {
       const gone = company(rng, 1, ['A', 'B', 'C', 'D']);
       gone.status = 'disbanded';
       scenario.parties = [gone];
-    }, { maxParties: 1 });
+    }, { roster: { maxCompanies: 1 } });
     game.step();
     expect(game.view().stats.partiesArrived).toBe(1);
     expect(game.view().parties).toHaveLength(1);
@@ -210,7 +210,7 @@ describe('companies arriving', () => {
         broken = company(rng, 3, ['Ada']);
         broken.idleTicks = 71;
         scenario.parties = [broken, company(rng, 3, ['H1', 'H2', 'H3', 'H4'])];
-      }, { seed, maxParties: 2, arrivalInterval: 2 });
+      }, { seed, roster: { maxCompanies: 2, arrivalInterval: 2 } });
       game.step();
       expect(game.view().stats.partiesArrived, `seed ${seed}`).toBe(0);
       expect(game.view().parties, `seed ${seed}`).toHaveLength(1);
@@ -266,7 +266,7 @@ describe('who arrives', () => {
   });
 
   it('with no Contract open, the company that arrives is four adventurers of level 1', () => {
-    const game = scene((scenario) => { scenario.tick = 0; }, { maxParties: 4 });
+    const game = scene((scenario) => { scenario.tick = 0; }, { roster: { maxCompanies: 4 } });
     game.step();
     const arrived = game.view().parties[0]!;
     expect(arrived.members.map((member) => member.level)).toEqual([1, 1, 1, 1]);
@@ -276,7 +276,7 @@ describe('who arrives', () => {
 
   it('a company of four covers the four roles', () => {
     for (let seed = 1; seed <= 40; seed++) {
-      const game = scene((scenario) => { scenario.tick = 0; }, { seed, maxParties: 4 });
+      const game = scene((scenario) => { scenario.tick = 0; }, { seed, roster: { maxCompanies: 4 } });
       game.step();
       const classes = game.view().parties[0]!.members.map((member) => member.heroClass);
       expect(coversFourRoles(classes), `seed ${seed}: ${classes.join(', ')}`).toBe(true);
@@ -304,7 +304,7 @@ describe('who arrives', () => {
       const game = scene((scenario) => {
         scenario.tick = 0;
         scenario.quests = [openContract(scenario.town.employers[0]!.id, 6)];
-      }, { seed, maxParties: 4, maxOpenQuests: 1 });
+      }, { seed, roster: { maxCompanies: 4 }, world: { maxOpenQuests: 1 } });
       game.step();
       const arrived = game.view().parties[0]!;
       expect([1, 6], `seed ${seed}`).toContain(arrived.level);
@@ -324,7 +324,7 @@ describe('strangers for a company that has waited', () => {
         const waiting = company(rng, 4, ['Ada', 'Bev']);
         waiting.idleTicks = 12;
         scenario.parties = [waiting];
-      }, { seed, maxParties: 4, patienceTicks: 12 });
+      }, { seed, roster: { maxCompanies: 4, patienceTicks: 12 } });
       game.step();
       const arrivals = game.view().events.filter((event) => event.kind === 'party' && event.text.includes('arrive at'));
       expect(arrivals, `seed ${seed}`).toHaveLength(1);
@@ -347,7 +347,7 @@ describe('strangers for a company that has waited', () => {
       waiting = company(rng, 4, ['Ada', 'Bev']);
       waiting.idleTicks = 11;
       scenario.parties = [waiting];
-    }, { maxParties: 4, patienceTicks: 12 });
+    }, { roster: { maxCompanies: 4, patienceTicks: 12 } });
     game.step();
     const arrivals = game.view().events.filter((event) => event.kind === 'party' && event.text.includes('arrive at'));
     expect(arrivals).toHaveLength(1);
@@ -362,7 +362,7 @@ describe('strangers for a company that has waited', () => {
       const waiting = company(rng, 4, ['A', 'B', 'C', 'D']);
       waiting.idleTicks = 40;
       scenario.parties = [waiting];
-    }, { maxParties: 4, patienceTicks: 12 });
+    }, { roster: { maxCompanies: 4, patienceTicks: 12 } });
     game.step();
     expect(game.view().events.some((event) => event.text.includes('survivors of another company'))).toBe(false);
     expect(game.view().parties.map((party) => party.members.length)).toEqual([4, 4]);
@@ -376,7 +376,7 @@ describe('strangers for a company that has waited', () => {
       resting.ticksLeft = 6;
       resting.idleTicks = 40;
       scenario.parties = [resting];
-    }, { maxParties: 4, patienceTicks: 12 });
+    }, { roster: { maxCompanies: 4, patienceTicks: 12 } });
     game.step();
     expect(game.view().events.some((event) => event.text.includes('survivors of another company'))).toBe(false);
     expect(namesOf(game, resting.id)).toEqual(['Ada', 'Bev']);
@@ -392,7 +392,7 @@ describe('strangers for a company that has waited', () => {
       waiting = company(rng, 6, ['Cid', 'Dot']);
       waiting.idleTicks = 12;
       scenario.parties = [early, waiting];
-    }, { maxParties: 4, patienceTicks: 12 });
+    }, { roster: { maxCompanies: 4, patienceTicks: 12 } });
     game.step();
     const arrivals = game.view().events.filter((event) => event.text.includes('survivors of another company'));
     expect(arrivals).toHaveLength(1);
@@ -405,7 +405,7 @@ describe('strangers for a company that has waited', () => {
       const waiting = company(rng, 4, ['Ada', 'Bev']);
       waiting.idleTicks = 12;
       scenario.parties = [waiting];
-    }, { maxParties: 1, patienceTicks: 12 });
+    }, { roster: { maxCompanies: 1, patienceTicks: 12 } });
     game.step();
     expect(game.view().stats.partiesArrived).toBe(0);
     expect(game.view().events.some((event) => event.text.includes('survivors of another company'))).toBe(false);
@@ -1114,7 +1114,7 @@ describe('retirement', () => {
       others.gold = 0;
       others.renown = 5;
       scenario.parties = [veterans, others];
-    }, { maxParties: 2, maxOpenQuests: 4 });
+    }, { roster: { maxCompanies: 2 }, world: { maxOpenQuests: 4 } });
     game.step();
     const founded = snapshot(game).town.employers.find((employer) => employer.title === 'Retired adventurer');
     expect(founded?.favoredPartyId).toBe(veterans.id);

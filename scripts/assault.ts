@@ -1,5 +1,6 @@
 import { healHero, potionHeal } from '../src/adventurers/hero';
-import { aliveMembers, createParty, PARTY_SIZE } from '../src/adventurers/party';
+import { DEFAULT_COMPANY_ROSTER_CONFIG } from '../src/adventurers/company-roster';
+import { aliveMembers, createParty } from '../src/adventurers/party';
 import { runCombat } from '../src/combat/battlecast';
 import { Rng } from '../src/core/rng';
 import { generateAssault } from '../src/quests/quest';
@@ -16,9 +17,9 @@ for (const level of [5, 6, 8]) {
   for (const partyLevelOffset of [0, 1]) {
     let wins = 0, deaths = 0, reachedBoss = 0;
     for (let t = 0; t < trials; t++) {
-      const lair = createLair(rng, rng.pick(LAIR_THEMES), level, 0);
-      const quest = generateAssault(rng, lair, guild, PARTY_SIZE, 0, scale);
-      const party = createParty(rng, level + partyLevelOffset, PARTY_SIZE, 0);
+      const lair = createLair(rng, rng.pick(LAIR_THEMES), level, 0, DEFAULT_COMPANY_ROSTER_CONFIG.companySize);
+      const quest = generateAssault(rng, lair, guild, DEFAULT_COMPANY_ROSTER_CONFIG.companySize, 0, scale);
+      const party = createParty(rng, level + partyLevelOffset, DEFAULT_COMPANY_ROSTER_CONFIG.companySize, 0);
       party.potions = 4;
       let ok = true;
       for (let i = 0; i < quest.encounters.length && ok; i++) {

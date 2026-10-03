@@ -3,16 +3,17 @@ import { createHero, rollSkill, skillBonus } from '../src/adventurers/hero';
 import { createParty, rollClasses } from '../src/adventurers/party';
 import { Rng } from '../src/core/rng';
 import { generateAssault } from '../src/quests/quest';
+import { DEFAULT_COMPANY_ROSTER_CONFIG } from '../src/adventurers/company-roster';
 import { createLair, pickBoss } from '../src/town/lairs';
 import { generateTown, serviceOf } from '../src/town/town';
-import { Game, POSTING_THRESHOLD } from '../src/sim/game';
+import { DEFAULT_CONFIG, Game } from '../src/sim/game';
 import { LONG_SIMULATION_TIMEOUT_MS } from './helpers/simulation';
 
 describe('lairs', () => {
   it('have a boss the theme can field and an assault that ends with it', () => {
     const rng = new Rng(11);
-    const lair = createLair(rng, 'goblins', 6, 0);
-    expect(pickBoss('goblins', 6).name).toBe(lair.boss);
+    const lair = createLair(rng, 'goblins', 6, 0, DEFAULT_COMPANY_ROSTER_CONFIG.companySize);
+    expect(pickBoss('goblins', 6, DEFAULT_COMPANY_ROSTER_CONFIG.companySize).name).toBe(lair.boss);
     const town = generateTown(rng);
     const q = generateAssault(rng, lair, serviceOf(town, 'guild'), 4, 0);
     expect(q.kind).toBe('assault');
@@ -33,9 +34,9 @@ describe('lairs', () => {
   }, LONG_SIMULATION_TIMEOUT_MS);
 
   it('removes the posted bounty when a successful company returns and clears the lair', () => {
-    const game = Game.forTesting({ seed: 23, maxOpenQuests: 0, maxParties: 1 }, (scenario) => {
+    const game = Game.forTesting({ seed: 23, world: { maxOpenQuests: 0 }, roster: { maxCompanies: 1 } }, (scenario) => {
       const rng = new Rng(23);
-      const lair = createLair(rng, 'goblins', 5, 0);
+      const lair = createLair(rng, 'goblins', 5, 0, DEFAULT_COMPANY_ROSTER_CONFIG.companySize);
       lair.raidCooldown = 100;
       const bounty = generateAssault(rng, lair, serviceOf(scenario.town, 'guild'), 4, 0);
       const company = createParty(rng, 5, 4, 0);
@@ -64,13 +65,13 @@ describe('lairs', () => {
 });
 
 function bountyScene(treasury: number) {
-  return Game.forTesting({ seed: 14, maxParties: 1, maxOpenQuests: 0 }, (scenario) => {
+  return Game.forTesting({ seed: 14, roster: { maxCompanies: 1 }, world: { maxOpenQuests: 0 } }, (scenario) => {
     const rng = new Rng(14);
     const guild = serviceOf(scenario.town, 'guild');
     guild.ruined = false;
     guild.treasury = treasury;
     guild.upkeepPerDay = 0;
-    const lair = createLair(rng, 'goblins', 4, 0);
+    const lair = createLair(rng, 'goblins', 4, 0, DEFAULT_COMPANY_ROSTER_CONFIG.companySize);
     lair.raidCooldown = 10_000;
     const company = createParty(rng, 4, 4, 0);
     scenario.tick = 100;
@@ -87,14 +88,14 @@ function bounties(game: Game) {
 
 describe('posting a Bounty', () => {
   it('waits until the guild’s treasury meets the posting threshold', () => {
-    for (const treasury of [-40, POSTING_THRESHOLD - 1]) {
+    for (const treasury of [-40, DEFAULT_CONFIG.world.postingThreshold - 1]) {
       const game = bountyScene(treasury);
       game.step();
       expect(bounties(game)).toEqual([]);
       expect(game.view().lairs[0]).toMatchObject({ bountyPosted: false });
     }
 
-    const game = bountyScene(POSTING_THRESHOLD);
+    const game = bountyScene(DEFAULT_CONFIG.world.postingThreshold);
     game.step();
     const posted = bounties(game);
     expect(posted).toHaveLength(1);

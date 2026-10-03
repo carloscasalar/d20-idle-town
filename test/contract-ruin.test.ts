@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { DEFAULT_COMPANY_ROSTER_CONFIG } from '../src/adventurers/company-roster';
 import { createParty } from '../src/adventurers/party';
 import { Rng } from '../src/core/rng';
 import { generateAssault, generateQuest, type Quest } from '../src/quests/quest';
@@ -9,7 +10,7 @@ import { serviceOf, type Town } from '../src/town/town';
 describe('employer ruin', () => {
   it.each(['threatened', 'ravaged'] as const)('releases all open contracts from %s holdings without changing their status', (status) => {
     let employerId = '';
-    const game = Game.forTesting({ seed: 21, ruinDays: 1, maxOpenQuests: 0, maxParties: 0 }, (scenario) => {
+    const game = Game.forTesting({ seed: 21, world: { ruinDays: 1, maxOpenQuests: 0 }, roster: { maxCompanies: 0 } }, (scenario) => {
       const rng = new Rng(21);
       const employer = scenario.town.employers[0]!;
       employerId = employer.id;
@@ -17,7 +18,7 @@ describe('employer ruin', () => {
       employer.upkeepPerDay = 10_000;
       scenario.tick = TICKS_PER_DAY - 1;
       scenario.parties = [];
-      const lair = createLair(rng, 'goblins', 5, scenario.tick);
+      const lair = createLair(rng, 'goblins', 5, scenario.tick, DEFAULT_COMPANY_ROSTER_CONFIG.companySize);
       lair.raidCooldown = 100;
       const bounty = generateAssault(rng, lair, serviceOf(scenario.town, 'guild'), 4, scenario.tick);
       lair.questId = bounty.id;
@@ -48,13 +49,13 @@ describe('employer ruin', () => {
   });
 
   it('releases a ruined guild’s open bounty while keeping its taken bounty', () => {
-    const game = Game.forTesting({ seed: 22, ruinDays: 1, maxOpenQuests: 0, maxParties: 0 }, (scenario) => {
+    const game = Game.forTesting({ seed: 22, world: { ruinDays: 1, maxOpenQuests: 0 }, roster: { maxCompanies: 0 } }, (scenario) => {
       const rng = new Rng(22);
       const guild = serviceOf(scenario.town, 'guild');
       guild.treasury = 0;
       guild.upkeepPerDay = 10_000;
       scenario.tick = TICKS_PER_DAY - 1;
-      const lairs = [createLair(rng, 'goblins', 5, scenario.tick), createLair(rng, 'undead', 5, scenario.tick)];
+      const lairs = [createLair(rng, 'goblins', 5, scenario.tick, DEFAULT_COMPANY_ROSTER_CONFIG.companySize), createLair(rng, 'undead', 5, scenario.tick, DEFAULT_COMPANY_ROSTER_CONFIG.companySize)];
       const bounties = lairs.map((lair) => {
         lair.raidCooldown = 100;
         const bounty = generateAssault(rng, lair, guild, 4, scenario.tick);

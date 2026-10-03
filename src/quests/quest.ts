@@ -1,11 +1,12 @@
+import { freeze } from '../core/freeze';
 import type { DeepReadonly } from '../core/readonly';
 import type { Rng } from '../core/rng';
-import { rollLootItem, type MagicItem } from '../items/items';
-import { ASSET_KINDS, type Asset } from '../town/assets';
+import { rollLootItem, DEFAULT_ITEM_CONFIG, type ItemConfig, type MagicItem } from '../items/items';
+import { ASSET_KINDS, type Asset, type AssetKind } from '../town/assets';
 import type { Lair } from '../town/lairs';
-import type { Employer } from '../town/town';
-import { buildEncounter, type Difficulty, type EncounterSpec } from './encounters';
-import { knowledgeAtPosting } from './job-intel';
+import type { Employer, EmployerKind } from '../town/town';
+import { buildEncounter, DEFAULT_ENCOUNTER_CONFIG, type Difficulty, type EncounterConfig, type EncounterSpec } from './encounters';
+import { knowledgeAtPosting, DEFAULT_JOB_INTEL_CONFIG, type JobIntelConfig } from './job-intel';
 import { THEMES, themeMonsters, type ThemeId } from './themes';
 
 export { difficultyCode, isFullyKnown } from './job-intel';
@@ -45,30 +46,85 @@ export interface Quest {
   postedAt: number;
 }
 
-const DIFFICULTY_WEIGHTS: { item: Difficulty; weight: number }[] = [
-  { item: 'easy', weight: 4 },
-  { item: 'intermediate', weight: 4 },
-  { item: 'hard', weight: 2 },
-];
-
-const DIFFICULTY_PAY: Record<Difficulty, number> = { easy: 1, intermediate: 1.5, hard: 2.5 };
-
-export const MIN_ENCOUNTERS = 2;
-export const MAX_ENCOUNTERS = 6;
-
-/** Short jobs are common, long ones rare. */
-export function rollEncounterCount(rng: Rng): number {
-  return rng.weighted([
-    { item: 2, weight: 3 },
-    { item: 3, weight: 4 },
-    { item: 4, weight: 3 },
-    { item: 5, weight: 2 },
-    { item: 6, weight: 1 },
-  ]);
+/** How a Contract or Bounty is sized and paid. */
+export interface QuestConfig {
+  encounterCounts: { count: number; weight: number }[];
+  difficultyWeights: { difficulty: Difficulty; weight: number }[];
+  difficultyPay: Record<Difficulty, number>;
+  ravagedPayFactor: number;
+  incomeDays: number;
+  levelPayFactor: number;
+  rewardScale: number;
+  minimumReward: number;
+  treasuryShare: number;
+  relicHoldings: AssetKind[];
+  relicItemChance: number;
+  ordinaryItemChance: number;
+  nobleItemChance: number;
+  guildOnlyKinds: EmployerKind[];
+  guildOnlyLevel: number;
+  assaultEncounters: [number, number];
+  assaultDifficultyWeights: { difficulty: Difficulty; weight: number }[];
+  bountyPerLevel: number;
+  bossLootLevelBonus: number;
+  bossGuardCount: number;
 }
 
-export function rollDifficulties(rng: Rng, count: number): Difficulty[] {
-  return Array.from({ length: count }, () => rng.weighted(DIFFICULTY_WEIGHTS));
+export const DEFAULT_QUEST_CONFIG: QuestConfig = freeze({
+  encounterCounts: [
+    { count: 2, weight: 3 },
+    { count: 3, weight: 4 },
+    { count: 4, weight: 3 },
+    { count: 5, weight: 2 },
+    { count: 6, weight: 1 },
+  ],
+  difficultyWeights: [
+    { difficulty: 'easy', weight: 4 },
+    { difficulty: 'intermediate', weight: 4 },
+    { difficulty: 'hard', weight: 2 },
+  ],
+  difficultyPay: { easy: 1, intermediate: 1.5, hard: 2.5 },
+  ravagedPayFactor: 1.5,
+  incomeDays: 2,
+  levelPayFactor: 10,
+  rewardScale: 0.6,
+  minimumReward: 20,
+  treasuryShare: 0.8,
+  relicHoldings: ['archive', 'catacombs', 'shrine', 'cemetery'],
+  relicItemChance: 0.12,
+  ordinaryItemChance: 0.04,
+  nobleItemChance: 0.04,
+  guildOnlyKinds: ['noble', 'faction'],
+  guildOnlyLevel: 2,
+  assaultEncounters: [3, 5],
+  assaultDifficultyWeights: [
+    { difficulty: 'easy', weight: 2 },
+    { difficulty: 'intermediate', weight: 4 },
+    { difficulty: 'hard', weight: 2 },
+  ],
+  bountyPerLevel: 150,
+  bossLootLevelBonus: 2,
+  bossGuardCount: 1,
+});
+
+export const MIN_ENCOUNTERS = DEFAULT_QUEST_CONFIG.encounterCounts[0]!.count;
+export const MAX_ENCOUNTERS = DEFAULT_QUEST_CONFIG.encounterCounts[DEFAULT_QUEST_CONFIG.encounterCounts.length - 1]!.count;
+
+export interface QuestGeneration {
+  quests?: QuestConfig;
+  encounters?: EncounterConfig;
+  intel?: JobIntelConfig;
+  items?: ItemConfig;
+}
+
+/** Short jobs are common, long ones rare. */
+export function rollEncounterCount(rng: Rng, quests: QuestConfig = DEFAULT_QUEST_CONFIG): number {
+  return rng.weighted(quests.encounterCounts.map((entry) => ({ item: entry.count, weight: entry.weight })));
+}
+
+export function rollDifficulties(rng: Rng, count: number, quests: QuestConfig = DEFAULT_QUEST_CONFIG): Difficulty[] {
+  const weights = quests.difficultyWeights.map((entry) => ({ item: entry.difficulty, weight: entry.weight }));
+  return Array.from({ length: count }, () => rng.weighted(weights));
 }
 
 export interface QuestTerms {
@@ -89,23 +145,27 @@ export interface QuestTerms {
  * dangerous the job is, how generous the employer is, and how desperate (a
  * ravaged asset pays more). Capped by what the employer can actually pay.
  */
-export function generateQuest(rng: Rng, terms: QuestTerms): Quest {
+export function generateQuest(rng: Rng, terms: QuestTerms, generation: QuestGeneration = {}): Quest {
+  const quests = generation.quests ?? DEFAULT_QUEST_CONFIG;
+  const encountersRules = generation.encounters ?? DEFAULT_ENCOUNTER_CONFIG;
+  const intel = generation.intel ?? DEFAULT_JOB_INTEL_CONFIG;
+  const items = generation.items ?? DEFAULT_ITEM_CONFIG;
   const { employer, asset, theme, level, partySize, tick } = terms;
   const def = ASSET_KINDS[asset.kind];
   const threatLabel = terms.lair ? `${THEMES[theme].label} of ${terms.lair.name}` : THEMES[theme].label;
   const title = rng.pick(def.titles).replace('{place}', asset.name).replace('{threat}', threatLabel);
-  const difficulties = rollDifficulties(rng, rollEncounterCount(rng));
-  const encounters = difficulties.map((d) => buildEncounter(rng, theme, partySize, level, d, terms.difficultyScale ?? 1));
-  const payFactor = difficulties.reduce((s, d) => s + DIFFICULTY_PAY[d], 0);
-  const desperation = asset.status === 'ravaged' ? 1.5 : 1;
-  const base = asset.incomePerDay * 2 + level * level * 10;
-  const wanted = Math.round(base * payFactor * employer.generosity * desperation * 0.6);
-  const reward = Math.max(20, Math.min(wanted, Math.floor(employer.treasury * 0.8)));
+  const difficulties = rollDifficulties(rng, rollEncounterCount(rng, quests), quests);
+  const encounters = difficulties.map((d) => buildEncounter(rng, theme, partySize, level, d, terms.difficultyScale ?? 1, encountersRules));
+  const payFactor = difficulties.reduce((s, d) => s + quests.difficultyPay[d], 0);
+  const desperation = asset.status === 'ravaged' ? quests.ravagedPayFactor : 1;
+  const base = asset.incomePerDay * quests.incomeDays + level * level * quests.levelPayFactor;
+  const wanted = Math.round(base * payFactor * employer.generosity * desperation * quests.rewardScale);
+  const reward = Math.max(quests.minimumReward, Math.min(wanted, Math.floor(employer.treasury * quests.treasuryShare)));
   // Relics turn up in old places, and rich employers sometimes pay in kind.
-  const itemChance = (['archive', 'catacombs', 'shrine', 'cemetery'].includes(asset.kind) ? 0.12 : 0.04) + (employer.kind === 'noble' ? 0.04 : 0);
-  const itemReward = rng.chance(itemChance) ? rollLootItem(rng, level) : null;
+  const itemChance = (quests.relicHoldings.includes(asset.kind) ? quests.relicItemChance : quests.ordinaryItemChance) + (employer.kind === 'noble' ? quests.nobleItemChance : 0);
+  const itemReward = rng.chance(itemChance) ? rollLootItem(rng, level, items) : null;
   // Noble houses and factions deal through the guild, but even they post the small jobs in public.
-  const guildOnly = (employer.kind === 'noble' || employer.kind === 'faction') && level >= 2;
+  const guildOnly = quests.guildOnlyKinds.includes(employer.kind) && level >= quests.guildOnlyLevel;
   return {
     id: rng.id('quest'),
     kind: 'contract',
@@ -117,7 +177,7 @@ export function generateQuest(rng: Rng, terms: QuestTerms): Quest {
     theme,
     level,
     encounters,
-    ...knowledgeAtPosting('contract'),
+    ...knowledgeAtPosting('contract', intel),
     reward,
     itemReward,
     guildOnly,
@@ -133,18 +193,17 @@ const ASSAULT_TITLES = ['Break {lair}', 'End the reign of {boss}', 'Storm {place
  * The standing contract to clear a lair: long, mostly hard, and the boss with
  * its guard at the end. The lair's own hoard is the prize, plus the guild's bounty.
  */
-export function generateAssault(rng: Rng, lair: Lair, guild: Employer, partySize: number, tick: number, difficultyScale = 1): Quest {
-  const count = rng.int(3, 5);
-  const difficulties: Difficulty[] = Array.from({ length: count - 1 }, () =>
-    rng.weighted([
-      { item: 'easy' as Difficulty, weight: 2 },
-      { item: 'intermediate' as Difficulty, weight: 4 },
-      { item: 'hard' as Difficulty, weight: 2 },
-    ]),
-  );
-  const encounters = difficulties.map((d) => buildEncounter(rng, lair.theme, partySize, lair.level, d, difficultyScale));
-  encounters.push(buildBossEncounter(rng, lair, partySize, difficultyScale));
-  const bounty = Math.min(guild.treasury, 150 * lair.level);
+export function generateAssault(rng: Rng, lair: Lair, guild: Employer, partySize: number, tick: number, difficultyScale = 1, generation: QuestGeneration = {}): Quest {
+  const quests = generation.quests ?? DEFAULT_QUEST_CONFIG;
+  const encountersRules = generation.encounters ?? DEFAULT_ENCOUNTER_CONFIG;
+  const intel = generation.intel ?? DEFAULT_JOB_INTEL_CONFIG;
+  const items = generation.items ?? DEFAULT_ITEM_CONFIG;
+  const count = rng.int(...quests.assaultEncounters);
+  const assaultWeights = quests.assaultDifficultyWeights.map((entry) => ({ item: entry.difficulty, weight: entry.weight }));
+  const difficulties: Difficulty[] = Array.from({ length: count - 1 }, () => rng.weighted(assaultWeights));
+  const encounters = difficulties.map((d) => buildEncounter(rng, lair.theme, partySize, lair.level, d, difficultyScale, encountersRules));
+  encounters.push(buildBossEncounter(rng, lair, partySize, difficultyScale, quests, encountersRules));
+  const bounty = Math.min(guild.treasury, quests.bountyPerLevel * lair.level);
   const title = rng.pick(ASSAULT_TITLES).replace('{lair}', lair.name).replace('{boss}', lair.boss).replace('{place}', lair.place);
   return {
     id: rng.id('quest'),
@@ -157,9 +216,9 @@ export function generateAssault(rng: Rng, lair: Lair, guild: Employer, partySize
     theme: lair.theme,
     level: lair.level,
     encounters,
-    ...knowledgeAtPosting('assault'),
+    ...knowledgeAtPosting('assault', intel),
     reward: bounty,
-    itemReward: rollLootItem(rng, lair.level + 2),
+    itemReward: rollLootItem(rng, lair.level + quests.bossLootLevelBonus, items),
     // The guild wants the lair gone more than it wants dues: anyone may take the bounty.
     guildOnly: false,
     status: 'open',
@@ -169,12 +228,12 @@ export function generateAssault(rng: Rng, lair: Lair, guild: Employer, partySize
 }
 
 /** The boss and whatever guard fills a "high" budget around it. */
-function buildBossEncounter(rng: Rng, lair: Lair, partySize: number, scale: number): EncounterSpec {
-  const spec = buildEncounter(rng, lair.theme, partySize, lair.level, 'hard', scale);
+function buildBossEncounter(rng: Rng, lair: Lair, partySize: number, scale: number, quests: QuestConfig, encounters: EncounterConfig): EncounterSpec {
+  const spec = buildEncounter(rng, lair.theme, partySize, lair.level, 'hard', scale, encounters);
   const boss = themeMonsters(lair.theme).find((m) => m.name === lair.boss);
   if (!boss) return spec;
   const guard = spec.monsters.filter((g) => g.name !== boss.name);
-  const monsters = [{ name: boss.name, count: 1, xpEach: boss.xp }, ...guard.slice(0, 1)];
+  const monsters = [{ name: boss.name, count: 1, xpEach: boss.xp }, ...guard.slice(0, quests.bossGuardCount)];
   const totalXp = monsters.reduce((s, g) => s + g.count * g.xpEach, 0);
   return { ...spec, monsters, totalXp };
 }

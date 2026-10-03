@@ -12,7 +12,8 @@
  */
 
 import { aliveMembers, partyLevel, type JobInquiry, type Party } from '../adventurers/party';
-import { resurrectionCost, rollSkill } from '../adventurers/hero';
+import { resurrectionCost, rollSkill, DEFAULT_HERO_ECONOMY, type HeroEconomyConfig } from '../adventurers/hero';
+import { freeze } from '../core/freeze';
 import type { DeepReadonly } from '../core/readonly';
 import type { Rng } from '../core/rng';
 import { coinReasons, purse, transfer, treasury, type GoldStatistics } from '../town/coin';
@@ -55,16 +56,22 @@ export interface JobIntelConfig {
   roundReserveFactor: number;
   /** Paid rounds one company may buy about one job. */
   maxRounds: number;
+  /** Encounters revealed when a job is posted. */
+  revealedAtPosting: number;
+  /** A bounty shows its encounter count as soon as it is posted. */
+  assaultRevealsCount: boolean;
 }
 
-export const DEFAULT_JOB_INTEL_CONFIG: JobIntelConfig = {
+export const DEFAULT_JOB_INTEL_CONFIG: JobIntelConfig = freeze({
   skillDc: 15,
   divinationCostPerLevel: 60,
   roundCostPerLevel: 15,
   divinationReserveFactor: 2,
   roundReserveFactor: 1,
   maxRounds: 2,
-};
+  revealedAtPosting: 1,
+  assaultRevealsCount: true,
+});
 
 export interface IntelWork {
   readonly id: string;
@@ -87,6 +94,8 @@ export interface JobIntelContext {
   rng: Rng;
   statistics: GoldStatistics;
   config: JobIntelConfig;
+  /** Resurrection price. Omitted calls use the hero module's default. */
+  heroes?: HeroEconomyConfig;
   report: (event: JobIntelEvent) => void;
 }
 
@@ -138,8 +147,8 @@ export function difficultyCode(work: {
 }
 
 /** How much is public when a job is posted. A bounty already shows its length. */
-export function knowledgeAtPosting(kind: 'contract' | 'assault'): { revealed: number; countRevealed: boolean } {
-  return { revealed: 1, countRevealed: kind === 'assault' };
+export function knowledgeAtPosting(kind: 'contract' | 'assault', config: JobIntelConfig = DEFAULT_JOB_INTEL_CONFIG): { revealed: number; countRevealed: boolean } {
+  return { revealed: config.revealedAtPosting, countRevealed: kind === 'assault' && config.assaultRevealsCount };
 }
 
 /** A handle for a job this module may reveal. Knowledge only grows. */
@@ -196,7 +205,7 @@ export function divination(company: Party, context: JobIntelContext): boolean {
   if (temple.ruined) return false;
   const level = partyLevel(company);
   const cost = context.config.divinationCostPerLevel * level;
-  const reserve = resurrectionCost(level) * context.config.divinationReserveFactor;
+  const reserve = resurrectionCost(level, context.heroes ?? DEFAULT_HERO_ECONOMY) * context.config.divinationReserveFactor;
   if (company.gold - cost < reserve) return false;
   transfer(purse(company), treasury(temple), cost, 'intel', context.statistics, coinReasons);
   context.knowledge.revealAll();
@@ -214,7 +223,7 @@ export function paidRound(company: Party, context: JobIntelContext): boolean {
   const tavern = serviceOf(context.town, 'tavern');
   const level = partyLevel(company);
   const cost = context.config.roundCostPerLevel * level;
-  const reserve = resurrectionCost(level) * context.config.roundReserveFactor;
+  const reserve = resurrectionCost(level, context.heroes ?? DEFAULT_HERO_ECONOMY) * context.config.roundReserveFactor;
   if (tavern.ruined || company.gold - cost < reserve) return false;
   transfer(purse(company), treasury(tavern), cost, 'intel', context.statistics, coinReasons);
   ensureInquiry(company, context.work.id).roundsBought = done + 1;

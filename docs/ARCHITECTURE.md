@@ -84,9 +84,9 @@ RNG argument. Interleaving two worlds cannot change either world's IDs.
 - **`party.ts`** — a `Party` is members, shared gold, potions, stash, renown,
   guild membership and a `PartyStatus`. Four to six strong. `rollClasses` fills
   the four classic roles (front line, support, skirmisher, arcane).
-  Pure queries also accept deeply read-only companies. It defines the shared
-  `PARTY_SIZE` and `MAX_PARTY_SIZE` defaults once and imports no roster code.
-  Readiness and room rules belong to the configured roster.
+  Pure queries also accept deeply read-only companies. Company size and the
+  renown cap live on the roster configuration; this module imports no roster
+  code. Readiness and room rules belong to the configured roster.
 - **`company-roster.ts`** — the Company roster owns the company list, arrival
   schedule, strangers, temple recruitment, merging, absorption, disbanding and
   retirement. It exposes deeply read-only `all`, `active` and `byId` queries
@@ -102,10 +102,9 @@ RNG argument. Interleaving two worlds cannot change either world's IDs.
   Expedition calls its supplied `disband` operation on a wipe; Game connects
   that operation to the roster. Scenario
   setup alone uses `recordsForScenario` and `replaceForScenario`.
-  `CompanyRosterConfig` and `DEFAULT_COMPANY_ROSTER_CONFIG` hold plain data;
-  Game maps its existing `maxParties` to `maxCompanies` and converts the new
-  `disbandDays` to `disbandTicks`. Sizes and retirement defaults come from the
-  shared constants. Context is last and supplies only the operation’s required
+  `CompanyRosterConfig` and `DEFAULT_COMPANY_ROSTER_CONFIG` hold plain data.
+  Game's `roster` section is that object. Company size and the renown cap are
+  defined here; the Board and Expedition receive them. Context is last and supplies only the operation’s required
   town, Board query, RNG, tick, ledger, coin statistics and synchronous report.
   `retirementStep` contributes a service function for the caller’s ordered list.
 
@@ -214,12 +213,25 @@ Game code above this line never sees a `Creature`, a `BattleLog` or a
 
 `Game` (`game.ts`) owns the town, the lairs, the stats and the
 event log, and exposes one method that matters: `step()`, one in-game hour.
+Its configuration is one plain object, `GameConfig`, composed in
+`src/sim/config.ts` from each module's own frozen default. `seed` and
+`ticksPerDay` sit at the top; every other value is a section
+(`board`, `roster`, `intel`, `expedition`, `services`, `lairs`, `quests`,
+`encounters`, `heroes`, `town`, `holdings`, `items`, `combat`, `world`).
+`new Game(partial)` and `Game.forTesting` deep-merge that partial onto the
+defaults, replacing arrays and `[min, max]` pairs whole, then reject a result
+that is missing a section, has the wrong type, a negative price, or a range
+whose minimum exceeds its maximum. Nothing in the object is a function, a
+class instance or `undefined`, so the same document can later be loaded from
+YAML. The field list is [Configuration](CONFIGURATION.md).
+
 The **Board** (`board.ts`) owns the contracts and bounties. It is the only
 code that posts them, accepts them, ends them, or writes the links between a
 holding, a lair, a company and that work. Its `BoardConfig` is plain numerical
-configuration (including inclusive cooldown ranges), built by Game from
-`GameConfig`; `contractDays` is converted to `contractOpenTicks`. The exported
-`DEFAULT_BOARD_CONFIG` preserves the existing tuning. The `WORK_KINDS` table
+configuration (including inclusive cooldown ranges). Game's `board` section is
+that object: `contractOpenTicks` stays in ticks, and `travelTicks` and
+`difficultyScale` are not restated anywhere else. The exported
+`DEFAULT_BOARD_CONFIG` is the one definition of those defaults. The `WORK_KINDS` table
 selects small, named Contract and Bounty behaviors for creation, posting,
 acceptance wording, success, failure, expiry and withdrawal after a lair falls.
 An injected table can add a kind through `Board.post` without changing Board
@@ -228,10 +240,10 @@ windfall, a Bounty's payment, an expiry loss and a hoard's payout are coin
 movements with reasons. Creators receive the kind, and posting rules receive the original
 posting terms. Entries apply consequences; Board operations write terminal
 status and release references. Expiry prepares and validates its consequences
-before the Board closes work, then applies them after closure. The three
-shared defaults for renown cap, encounter company size and lair strength cap
-come from `MAX_RENOWN`, `PARTY_SIZE` and `MAX_STRENGTH`; other users read those
-same constants. Query results are deeply read-only TypeScript views, including
+before the Board closes work, then applies them after closure. Company size
+and the renown cap arrive on the context from the roster; the lair strength
+cap arrives from the lair module. Overriding any of those changes every module
+that uses it. Query results are deeply read-only TypeScript views, including
 encounters and rewards. `knowledge` hands back learn-next and reveal-all;
 those operations live in job intelligence, and knowledge only grows. Only scenario setup uses `recordsForScenario` and
 `replaceForScenario`; regression serialization uses `all()`.
@@ -402,6 +414,8 @@ touching `difficultyScale` or the XP bands.
 - **A scenario test** — build the world in a `Game.forTesting(config, setup)`
   callback. The mutable scenario expires before `step()` can run; assert the
   outcome through `view()` or a purpose-built query.
-- **Tuning difficulty** — `difficultyScale` in `GameConfig` (or `?difficulty=`)
-  multiplies every encounter's XP budget. Measure with `scripts/tune.ts` before
-  and after.
+- **Tuning difficulty** — `board.difficultyScale` in the game configuration
+  (or `?difficulty=`) multiplies every encounter's XP budget. Measure with
+  `scripts/tune.ts` before and after. Every other tunable lives in a section
+  of the same configuration; the fields and their defaults are listed in
+  [Configuration](CONFIGURATION.md).

@@ -1,7 +1,7 @@
-import { CompanyRoster } from '../src/adventurers/company-roster';
+import { CompanyRoster, DEFAULT_COMPANY_ROSTER_CONFIG } from '../src/adventurers/company-roster';
 import { describe, expect, it, vi } from 'vitest';
 import { fixedHp, killHero, resurrectionCost } from '../src/adventurers/hero';
-import { aliveMembers, createParty, MAX_RENOWN, partyLevel, type Party } from '../src/adventurers/party';
+import { aliveMembers, createParty, partyLevel, type Party } from '../src/adventurers/party';
 import type { CombatOutcome } from '../src/combat/battlecast';
 import { listNames } from '../src/core/names';
 import { Rng } from '../src/core/rng';
@@ -10,6 +10,7 @@ import { jobInquiry, jobKnowledge } from '../src/quests/job-intel';
 import type { Quest } from '../src/quests/quest';
 import { advanceExpedition, type CombatResolver, type ExpeditionContext, type ExpeditionEvent } from '../src/sim/expedition';
 import { generateTown, serviceOf } from '../src/town/town';
+import { expeditionRules } from './helpers/expedition-rules';
 
 const encounter: EncounterSpec = {
   difficulty: 'easy',
@@ -54,7 +55,7 @@ function setup(level = 1) {
   const roster = new CompanyRoster();
   roster.replaceForScenario([party]);
   const context: ExpeditionContext = {
-    quest, town, rng, ledger, statistics, travelTicks: 2, restTicks: 2, shortRestHealFraction: 0.5, skillDc: 15,
+    quest, town, rng, ledger, statistics, ...expeditionRules({ travelTicks: 2, restTicks: 2, skillDc: 15 }),
     combat,
     disband: (company) => roster.disband(company),
     report: (event) => { events.push(event); calls.push(`event:${event.kind}`); },
@@ -215,7 +216,7 @@ describe('an expedition hour', () => {
 
   it('settles before charging for rooms, then rests back to idle', () => {
     const { party, quest, context, town, statistics, calls, events } = homecoming();
-    party.renown = MAX_RENOWN;
+    party.renown = DEFAULT_COMPANY_ROSTER_CONFIG.renownCap;
     party.members[0]!.hp = 1;
     const tavern = serviceOf(town, 'tavern');
     const startingTreasury = tavern.treasury;
@@ -390,7 +391,7 @@ describe('expedition potions and short rests', () => {
     const { party, context, events } = setup();
     for (const hero of party.members) hero.maxHp = 100;
     party.potions = potions;
-    context.shortRestHealFraction = 0.25;
+    context.config = { ...context.config, shortRestHealFraction: 0.25 };
     context.combat = () => {
       const result = outcome(party, 'party');
       result.xpEarned = 0;
@@ -519,7 +520,7 @@ describe('homecoming', () => {
   it.each(['dead member', 'maximum renown', 'resurrection reserve'])('does not carouse because of a %s', (reason) => {
     const { party, context, town, statistics, events } = homecoming();
     if (reason === 'dead member') killHero(party.members[0]!);
-    if (reason === 'maximum renown') party.renown = MAX_RENOWN;
+    if (reason === 'maximum renown') party.renown = DEFAULT_COMPANY_ROSTER_CONFIG.renownCap;
     const fee = 3 * partyLevel(party) * aliveMembers(party).length;
     if (reason === 'resurrection reserve') party.gold = fee + resurrectionCost(partyLevel(party)) + 9;
     const gold = party.gold;
@@ -563,7 +564,7 @@ describe('reading the road', () => {
     party.ticksLeft = 3;
     quest.encounters.push(encounter);
     quest.countRevealed = piece === 'encounter';
-    context.skillDc = 0;
+    context.intel = { ...context.intel, skillDc: 0 };
 
     advanceExpedition(party, context);
 
@@ -586,7 +587,7 @@ describe('reading the road', () => {
     const { party, quest, context, events } = setup();
     party.status = 'traveling';
     party.ticksLeft = 3;
-    context.skillDc = 100;
+    context.intel = { ...context.intel, skillDc: 100 };
 
     advanceExpedition(party, context);
 
@@ -608,7 +609,7 @@ describe('reading the road', () => {
     const { party, quest, context, events } = setup();
     party.status = 'traveling';
     party.ticksLeft = 3;
-    context.skillDc = 100;
+    context.intel = { ...context.intel, skillDc: 100 };
     advanceExpedition(party, context);
     expect(events).toHaveLength(1);
     expect(events[0]!.kind).toBe('party');
@@ -619,7 +620,7 @@ describe('reading the road', () => {
     party.ticksLeft = 3;
     context.quest = nextQuest;
     context.knowledge = () => jobKnowledge(nextQuest);
-    context.skillDc = 0;
+    context.intel = { ...context.intel, skillDc: 0 };
     advanceExpedition(party, context);
 
     expect(events).toHaveLength(2);

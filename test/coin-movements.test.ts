@@ -1,4 +1,4 @@
-import { CompanyRoster } from '../src/adventurers/company-roster';
+import { CompanyRoster, DEFAULT_COMPANY_ROSTER_CONFIG } from '../src/adventurers/company-roster';
 import assert from 'node:assert/strict';
 import { describe, expect, it } from 'vitest';
 import { createHero, killHero } from '../src/adventurers/hero';
@@ -8,11 +8,12 @@ import { instantiate, ITEM_CATALOGUE } from '../src/items/items';
 import { jobKnowledge } from '../src/quests/job-intel';
 import type { Quest } from '../src/quests/quest';
 import { advanceExpedition, type ExpeditionContext } from '../src/sim/expedition';
-import { DEFAULT_CONFIG, Game, TICKS_PER_DAY, type GameConfig, type GameScenario, type GameStats } from '../src/sim/game';
+import { Game, mergeConfig, resolveGameConfig, TICKS_PER_DAY, type DeepPartial, type GameConfig, type GameScenario, type GameStats } from '../src/sim/game';
 import { createAsset } from '../src/town/assets';
 import { createLair, type Lair } from '../src/town/lairs';
 import { defaultTownServiceSteps, visitTownServices } from '../src/town/services';
-import { generateTown, RETIREMENT_PRICE, serviceOf, type Town } from '../src/town/town';
+import { generateTown, serviceOf, type Town } from '../src/town/town';
+import { expeditionRules } from './helpers/expedition-rules';
 import { LONG_SIMULATION_TIMEOUT_MS, readSimulationState } from './helpers/simulation';
 
 interface World {
@@ -68,8 +69,10 @@ function indexWorld(world: World) {
 
 /** Observe domain state at public events, including arrivals before their first
  * purchase/merge. No event text, private access, or RNG position is used. */
-function watchBooks(game: Game, config: Partial<GameConfig> = {}) {
-  const rules = { ...DEFAULT_CONFIG, ...config };
+function watchBooks(game: Game, config: DeepPartial<GameConfig> = {}) {
+  const resolved = resolveGameConfig(config);
+  if (!resolved.ok) throw new Error(resolved.errors.join('\n'));
+  const rules = resolved.config;
   let previous = readSimulationState(game);
   let previousIndex = indexWorld(previous);
   const starting = openings(previous);
@@ -96,15 +99,15 @@ function watchBooks(game: Game, config: Partial<GameConfig> = {}) {
     }
     for (const l of current.lairs) {
       if (!previousIndex.lairs.has(l.id)) {
-        sources += createLair(new Rng(0), l.theme, l.level, l.spawnedAt).hoard.gold; // C03
+        sources += createLair(new Rng(0), l.theme, l.level, l.spawnedAt, DEFAULT_COMPANY_ROSTER_CONFIG.companySize).hoard.gold; // C03
       }
     }
-    sinks += RETIREMENT_PRICE * (current.stats.retirements - previous.stats.retirements) - retirementCapital; // G03
+    sinks += rules.roster.retirementPrice * (current.stats.retirements - previous.stats.retirements) - retirementCapital; // G03
     for (const work of current.quests) {
       const old = previousIndex.quests.get(work.id);
       if (old?.status === 'taken' && work.status === 'done' && work.kind === 'contract') {
         const holding = currentIndex.holdings.get(work.assetId ?? '');
-        sources += (holding?.incomePerDay ?? 0) * rules.windfallDays; // B02, independent of treasury delta.
+        sources += (holding?.incomePerDay ?? 0) * rules.board.windfallDays; // B02, independent of treasury delta.
       }
       if (old?.status === 'open' && work.status === 'failed'
         && current.stats.questsExpired > previous.stats.questsExpired) {
@@ -112,7 +115,7 @@ function watchBooks(game: Game, config: Partial<GameConfig> = {}) {
         if (origin?.status !== 'active') {
           const payer = previousIndex.employers.get(work.giverId)!;
           const holding = payer.assets.find((a) => a.id === work.assetId)!;
-          sinks += Math.max(0, Math.min(payer.treasury, holding.incomePerDay * rules.lootingDays)); // B06
+          sinks += Math.max(0, Math.min(payer.treasury, holding.incomePerDay * rules.board.lootingDays)); // B06
         }
       }
     }
@@ -149,8 +152,8 @@ function provisioned(rng: Rng, level = 1, gold = 1000): Party {
   for (const hero of p.members) hero.armorTier = 3;
   return p;
 }
-function scene(configure: (s: GameScenario, rng: Rng) => void, config: Partial<GameConfig> = {}): Game {
-  return Game.forTesting({ seed: 42, maxParties: 0, maxOpenQuests: 0, ...config }, (s) => {
+function scene(configure: (s: GameScenario, rng: Rng) => void, config: DeepPartial<GameConfig> = {}): Game {
+  return Game.forTesting(mergeConfig({ seed: 42, roster: { maxCompanies: 0 }, world: { maxOpenQuests: 0 } }, config) as DeepPartial<GameConfig>, (s) => {
     s.lairs = [];
     s.quests = [];
     for (const e of s.town.employers) {
@@ -355,7 +358,7 @@ describe('homecoming payments', () => {
     const roster = new CompanyRoster();
     roster.replaceForScenario([p]);
     const context: ExpeditionContext = {
-      town, quest: q, rng, ledger, statistics, travelTicks: 2, restTicks: 8, shortRestHealFraction: 0.5, skillDc: 15,
+      town, quest: q, rng, ledger, statistics, ...expeditionRules({ travelTicks: 2, restTicks: 8, skillDc: 15 }),
       combat: () => { throw new Error('Homecoming does not fight'); }, report: (event) => { reports.push(event.text); },
       disband: (company) => roster.disband(company),
       knowledge: () => jobKnowledge(q), leaveLoot: () => {},
@@ -410,7 +413,7 @@ describe('daily income and upkeep', () => {
 
 describe('expiry looting', () => {
   it('checks the looting sink with a configured three-day loss', () => {
-    const config = { lootingDays: 3 };
+    const config = { board: { lootingDays: 3 } };
     const game = scene((s, rng) => {
       s.tick = 100;
       const e = s.town.employers[0]!;
@@ -432,7 +435,7 @@ describe('expiry looting', () => {
       const a = createAsset(rng, 'watchtower', e.id);
       Object.assign(a, { incomePerDay: 10, status: 'threatened', questId: 'work' });
       e.assets = [a];
-      const l = createLair(rng, 'goblins', 5, 0);
+      const l = createLair(rng, 'goblins', 5, 0, DEFAULT_COMPANY_ROSTER_CONFIG.companySize);
       Object.assign(l, { raidCooldown: 10000 });
       l.hoard.gold = 100;
       s.lairs = [l];
@@ -447,7 +450,7 @@ describe('expiry looting', () => {
 
 describe('configured Contract windfall', () => {
   it('checks the gold source with a configured seven-day windfall', () => {
-    const config = { windfallDays: 7 };
+    const config = { board: { windfallDays: 7 } };
     const game = scene((s, rng) => {
       const p = provisioned(rng, 1, 0);
       const e = s.town.employers[0]!;
@@ -496,7 +499,7 @@ describe('company purse transfers', () => {
       const a = createAsset(rng, 'watchtower', e.id);
       e.assets = [a];
       a.loot.gold = 11;
-      const l = createLair(rng, 'goblins', 5, 0);
+      const l = createLair(rng, 'goblins', 5, 0, DEFAULT_COMPANY_ROSTER_CONFIG.companySize);
       l.hoard.gold = 100;
       l.raidCooldown = 10000;
       const q = work(s.town, p, {
@@ -551,7 +554,7 @@ describe('opening gold sources', () => {
     assertConservation(0, totalGold({ ...world, town: { ...world.town, employers: [] } }), 2100);
   });
   it('brings a new company’s 20 gp starting purse into the world', () => {
-    const game = Game.forTesting({ seed: 42, maxParties: 1, maxOpenQuests: 0 }, (s) => { s.lairs = []; });
+    const game = Game.forTesting({ seed: 42, roster: { maxCompanies: 1 }, world: { maxOpenQuests: 0 } }, (s) => { s.lairs = []; });
     watchBooks(game).step();
     expect(readWorld(game).parties[0]).toMatchObject({ gold: 20, earned: 0, spent: 0 });
     expect(game.view().stats).toMatchObject({ partiesArrived: 1, goldPaid: 0, goldSpentByHeroes: 0 });
@@ -568,7 +571,7 @@ describe('fallen equipment and the surviving purse', () => {
       const a = createAsset(rng, 'watchtower', e.id);
       a.loot.gold = 11;
       e.assets = [a];
-      const l = createLair(rng, 'goblins', 5, 0);
+      const l = createLair(rng, 'goblins', 5, 0, DEFAULT_COMPANY_ROSTER_CONFIG.companySize);
       l.raidCooldown = 10000;
       l.hoard.gold = 100;
       const q = work(s.town, p, { status: 'taken', assetId: a.id, lairId: destination === 'Lair' ? l.id : null,

@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest';
+import { DEFAULT_COMPANY_ROSTER_CONFIG } from '../src/adventurers/company-roster';
 import { Game } from '../src/sim/game';
 import { createParty } from '../src/adventurers/party';
 import { armorUpgradeCost, createHero, MAX_ARMOR_TIER, potionCost, resurrectionCost } from '../src/adventurers/hero';
 import { Rng } from '../src/core/rng';
 import { instantiate, ITEM_CATALOGUE } from '../src/items/items';
-import { MAX_STOCK, RETIREMENT_PRICE, type Employer } from '../src/town/town';
+import { DEFAULT_TOWN_CONFIG, type Employer } from '../src/town/town';
 
 // Exercise the public hourly tick, with unrelated arrivals, raids and restocking disabled.
 function setup(level = 1, tick = 0) {
@@ -17,7 +18,7 @@ function setup(level = 1, tick = 0) {
   party.duesPaidDay = 1;
   for (const hero of party.members) hero.armorTier = MAX_ARMOR_TIER;
   const shops = new Map<NonNullable<Employer['service']>, Employer>();
-  const game = Game.forTesting({ seed: 42, maxParties: 1, maxOpenQuests: 0 }, (scenario) => {
+  const game = Game.forTesting({ seed: 42, roster: { maxCompanies: 1 }, world: { maxOpenQuests: 0 } }, (scenario) => {
     scenario.tick = tick;
     scenario.lairs = [];
     scenario.parties = [party];
@@ -115,7 +116,7 @@ describe('town services through an hourly tick', () => {
     const enchanter = shop('enchanter');
     if (reason === 'ruined') enchanter.ruined = true;
     if (reason === 'poor') enchanter.treasury = 0;
-    if (reason === 'full') enchanter.stock = Array.from({ length: MAX_STOCK }, () => item('Longsword +1'));
+    if (reason === 'full') enchanter.stock = Array.from({ length: DEFAULT_TOWN_CONFIG.maxStock }, () => item('Longsword +1'));
     game.step();
     expect(party.stash).toEqual([unwanted]);
     expect(game.view().stats.itemsSold).toBe(0);
@@ -219,13 +220,13 @@ describe('town services through an hourly tick', () => {
     const { game, party, reserve } = setup(8);
     for (const hero of party.members) hero.armorTier = 0;
     const veteran = party.members[0]!;
-    party.gold = RETIREMENT_PRICE + reserve;
+    party.gold = DEFAULT_COMPANY_ROSTER_CONFIG.retirementPrice + reserve;
     const employers = game.view().town.employers.length;
     game.step();
     expect(party.members).not.toContain(veteran);
     expect(party.members.map((h) => h.armorTier)).toEqual([0, 0, 0]);
     expect(party.gold).toBe(reserve);
-    expect(party.spent).toBe(RETIREMENT_PRICE);
+    expect(party.spent).toBe(DEFAULT_COMPANY_ROSTER_CONFIG.retirementPrice);
     expect(veteran.goldSpent).toBe(0);
     expect(game.view().stats.retirements).toBe(1);
     expect(game.view().town.employers).toHaveLength(employers + 1);

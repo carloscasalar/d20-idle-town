@@ -1,12 +1,15 @@
-import { MAX_RENOWN, PARTY_SIZE, type Party } from '../adventurers/party';
+import type { Party } from '../adventurers/party';
+import { freeze } from '../core/freeze';
 import type { DeepReadonly } from '../core/readonly';
 import type { Rng } from '../core/rng';
 import { coinReasons, hoard, loot, purse, sink, source, transfer, treasury, type GoldStatistics } from '../town/coin';
-import { jobKnowledge, type JobKnowledge } from '../quests/job-intel';
-import { difficultyCode, generateAssault, generateQuest, type Quest, type QuestKind, type ReadonlyQuest } from '../quests/quest';
+import { jobKnowledge, type JobIntelConfig, type JobKnowledge } from '../quests/job-intel';
+import { difficultyCode, generateAssault, generateQuest, type Quest, type QuestConfig, type QuestGeneration, type QuestKind, type ReadonlyQuest } from '../quests/quest';
 import { THEMES, type ThemeId } from '../quests/themes';
 import { ASSET_KINDS, type Asset } from '../town/assets';
-import { MAX_STRENGTH, type Lair } from '../town/lairs';
+import type { Lair } from '../town/lairs';
+import type { EncounterConfig } from '../quests/encounters';
+import type { ItemConfig } from '../items/items';
 import { assetById, serviceOf, type Employer, type Town } from '../town/town';
 
 /** Plain data: ticks for durations, days for income, inclusive cooldown ranges. */
@@ -16,8 +19,6 @@ export interface BoardConfig {
   bountyRenown: number;
   contractRenown: number;
   failureRenownLoss: number;
-  /** Defaults to MAX_RENOWN; other modules use that shared constant. */
-  renownCap: number;
   reputationGain: number;
   expiryCooldown: [number, number];
   failureCooldown: [number, number];
@@ -25,20 +26,15 @@ export interface BoardConfig {
   contractOpenTicks: number;
   travelTicks: number;
   difficultyScale: number;
-  /** Defaults to PARTY_SIZE; other modules use that shared constant. */
-  encounterPartySize: number;
   lairStrengthGain: number;
-  /** Defaults to MAX_STRENGTH; other modules use that shared constant. */
-  lairStrengthCap: number;
 }
 
-export const DEFAULT_BOARD_CONFIG: BoardConfig = {
+export const DEFAULT_BOARD_CONFIG: BoardConfig = freeze({
   windfallDays: 4,
   lootingDays: 2,
   bountyRenown: 3,
   contractRenown: 1,
   failureRenownLoss: 1,
-  renownCap: MAX_RENOWN,
   reputationGain: 1,
   expiryCooldown: [4, 10],
   failureCooldown: [2, 8],
@@ -46,10 +42,8 @@ export const DEFAULT_BOARD_CONFIG: BoardConfig = {
   contractOpenTicks: 72,
   travelTicks: 2,
   difficultyScale: 1.15,
-  encounterPartySize: PARTY_SIZE,
   lairStrengthGain: 1,
-  lairStrengthCap: MAX_STRENGTH,
-};
+});
 
 export interface WorkPosting {
   employer: Employer;
@@ -234,7 +228,7 @@ export class Board {
     lair.clearedAt = context.tick;
     context.ledger.lairsCleared += 1;
     const found = context.payHoard(lair, company);
-    company.renown = Math.min(this.config.renownCap, company.renown + this.config.bountyRenown);
+    company.renown = Math.min(context.renownCap, company.renown + this.config.bountyRenown);
     for (const candidate of this.work) {
       if (candidate.lairId !== lair.id || candidate.status !== 'open') continue;
       const consequences = this.behavior(candidate.kind).withdrawOnLairBreak;
@@ -273,6 +267,16 @@ export interface BoardContext {
   report: (event: BoardEvent) => void;
   /** Move a broken lair's hoard onto the company. Returns what was found, for the chronicle. */
   payHoard: (lair: Lair, company: Party) => string;
+  /** Received from the company roster. Encounters are built for a company of this size. */
+  companySize: number;
+  /** Received from the company roster. */
+  renownCap: number;
+  /** Received from the lair module. */
+  lairStrengthCap: number;
+  quests: QuestConfig;
+  encounters: EncounterConfig;
+  intel: JobIntelConfig;
+  items: ItemConfig;
 }
 
 function createContract(kind: QuestKind, terms: WorkPosting, context: WorkContext): Quest {
@@ -287,11 +291,11 @@ function createContract(kind: QuestKind, terms: WorkPosting, context: WorkContex
     asset: holding,
     theme,
     level,
-    partySize: context.config.encounterPartySize,
+    partySize: context.companySize,
     tick: context.tick,
     difficultyScale: context.config.difficultyScale,
     lair,
-  });
+  }, generationOf(context));
   return { ...work, kind };
 }
 
@@ -318,7 +322,7 @@ function postContract(quest: ReadonlyQuest, { employer, holding, lair: origin }:
 function createBounty(kind: QuestKind, { employer, lair }: WorkPosting, context: WorkContext): Quest {
   if (!lair) throw new Error('A Bounty needs a lair.');
   if (lair.questId !== null) throw new Error(`Cannot post a bounty on ${lair.name}: it already has one.`);
-  const work = generateAssault(context.rng, lair, employer, context.config.encounterPartySize, context.tick, context.config.difficultyScale);
+  const work = generateAssault(context.rng, lair, employer, context.companySize, context.tick, context.config.difficultyScale, generationOf(context));
   return { ...work, kind };
 }
 
@@ -371,7 +375,7 @@ function payContract(work: Readonly<Quest>, company: Party, employer: Employer, 
   employer.questsCompleted += 1;
   employer.reputation += context.config.reputationGain;
   company.questsDone += 1;
-  company.renown = Math.min(context.config.renownCap, company.renown + context.config.contractRenown);
+  company.renown = Math.min(context.renownCap, company.renown + context.config.contractRenown);
   context.ledger.questsCompleted += 1;
   let inKind = '';
   if (work.itemReward) {
@@ -423,7 +427,7 @@ function payBounty(work: Readonly<Quest>, company: Party, guild: Employer, _hold
 
 function failBounty(work: Readonly<Quest>, company: Party, guild: Employer, _holding: Asset | undefined, context: WorkContext): void {
   const lair = bountyLair(work, context);
-  lair.strength = Math.min(context.config.lairStrengthCap, lair.strength + context.config.lairStrengthGain);
+  lair.strength = Math.min(context.lairStrengthCap, lair.strength + context.config.lairStrengthGain);
   guild.questsFailed += 1;
   company.questsFailed += 1;
   company.renown = Math.max(0, company.renown - context.config.failureRenownLoss);
@@ -465,7 +469,11 @@ function lairById(lairs: readonly Lair[], id: string | null): Lair | undefined {
 function unansweredRaid(lair: Lair, context: WorkContext): void {
   if (lair.status !== 'active') return;
   lair.raidsWon += 1;
-  lair.strength = Math.min(context.config.lairStrengthCap, lair.strength + context.config.lairStrengthGain);
+  lair.strength = Math.min(context.lairStrengthCap, lair.strength + context.config.lairStrengthGain);
+}
+
+function generationOf(context: BoardContext): QuestGeneration {
+  return { quests: context.quests, encounters: context.encounters, intel: context.intel, items: context.items };
 }
 
 function report(context: BoardContext, kind: BoardEvent['kind'], text: string, chronicle = false): void {

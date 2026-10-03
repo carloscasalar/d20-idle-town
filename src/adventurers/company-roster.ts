@@ -1,5 +1,6 @@
-import { describeHero, resurrectHero, resurrectionCost, type Hero } from './hero';
-import { aliveMembers, createParty, deadMembers, describeParty, partyLevel, PARTY_SIZE, MAX_PARTY_SIZE, type Party, type ReadonlyParty } from './party';
+import { freeze } from '../core/freeze';
+import { describeHero, resurrectHero, resurrectionCost, DEFAULT_HERO_ECONOMY, type Hero, type HeroEconomyConfig } from './hero';
+import { aliveMembers, createParty, deadMembers, describeParty, partyLevel, type Party, type ReadonlyParty } from './party';
 import { listNames } from '../core/names';
 import type { DeepReadonly } from '../core/readonly';
 import type { Rng } from '../core/rng';
@@ -9,7 +10,8 @@ import { coinReasons, purse, sink, transfer, treasury, type GoldStatistics } fro
 import { visitTownServices, type TownServiceStep, type TownServiceContext } from '../town/services';
 import { advanceExpedition, startExpedition, type ExpeditionContext } from '../sim/expedition';
 import type { Board, BoardContext, TakenWork } from '../sim/board';
-import { RETIREMENT_LEVEL, RETIREMENT_PRICE, retiredEmployer, serviceOf, type Town } from '../town/town';
+import { DEFAULT_HOLDING_CONFIG, type HoldingConfig } from '../town/assets';
+import { retiredEmployer, serviceOf, type Town, type TownConfig, DEFAULT_TOWN_CONFIG } from '../town/town';
 
 /** Plain data; all durations are in ticks. Shared defaults retain their one definition. */
 export interface CompanyRosterConfig {
@@ -19,6 +21,8 @@ export interface CompanyRosterConfig {
   disbandTicks: number;
   companySize: number;
   maxCompanySize: number;
+  /** Cap on company renown. The Board and Expedition receive this value. */
+  renownCap: number;
   retirementLevel: number;
   retirementPrice: number;
   retirementCapitalShare: number;
@@ -28,21 +32,22 @@ export interface CompanyRosterConfig {
   recruitLevelTolerance: number;
 }
 
-export const DEFAULT_COMPANY_ROSTER_CONFIG: CompanyRosterConfig = {
+export const DEFAULT_COMPANY_ROSTER_CONFIG: CompanyRosterConfig = freeze({
   maxCompanies: 8,
   arrivalInterval: 10,
   patienceTicks: 12,
   disbandTicks: 72,
-  companySize: PARTY_SIZE,
-  maxCompanySize: MAX_PARTY_SIZE,
-  retirementLevel: RETIREMENT_LEVEL,
-  retirementPrice: RETIREMENT_PRICE,
+  companySize: 4,
+  maxCompanySize: 6,
+  renownCap: 10,
+  retirementLevel: 8,
+  retirementPrice: 25000,
   retirementCapitalShare: 0.2,
   firstArrivalTick: 1,
   arrivalQuestLevelChance: 0.3,
   strangerExtraMembers: 1,
   recruitLevelTolerance: 1,
-};
+});
 
 export interface RosterEvent {
   kind: 'party' | 'death' | 'temple' | 'town';
@@ -93,7 +98,12 @@ export class CompanyRoster {
   private companies: Party[] = [];
   private nextArrival: number;
 
-  constructor(private readonly config: DeepReadonly<CompanyRosterConfig> = DEFAULT_COMPANY_ROSTER_CONFIG) {
+  constructor(
+    private readonly config: DeepReadonly<CompanyRosterConfig> = DEFAULT_COMPANY_ROSTER_CONFIG,
+    private readonly heroes: HeroEconomyConfig = DEFAULT_HERO_ECONOMY,
+    private readonly townRules: TownConfig = DEFAULT_TOWN_CONFIG,
+    private readonly holdings: HoldingConfig = DEFAULT_HOLDING_CONFIG,
+  ) {
     this.nextArrival = config.firstArrivalTick;
   }
 
@@ -176,7 +186,7 @@ export class CompanyRoster {
     const stranded = this.activeCompanies.find((p) => p.status === 'idle' && !this.isReady(p) && p.idleTicks >= this.config.patienceTicks);
     if (stranded) {
       const missing = this.config.companySize - aliveMembers(stranded).length;
-      const band = createParty(context.rng, partyLevel(stranded), context.rng.int(Math.max(1, missing), Math.max(1, missing) + this.config.strangerExtraMembers), context.tick);
+      const band = createParty(context.rng, partyLevel(stranded), context.rng.int(Math.max(1, missing), Math.max(1, missing) + this.config.strangerExtraMembers), context.tick, this.heroes.startingGoldPerLevel);
       this.companies.push(band);
       context.ledger.partiesArrived += 1;
       log(context, 'party', `${describeParty(band, this.config.companySize)} arrive at ${context.town.tavernName}: survivors of another company, looking for work.`);
@@ -185,7 +195,7 @@ export class CompanyRoster {
 
     let level = 1;
     if (context.board.open().length > 0 && context.rng.chance(this.config.arrivalQuestLevelChance)) level = context.rng.pick(context.board.open()).level;
-    const party = createParty(context.rng, level, this.config.companySize, context.tick);
+    const party = createParty(context.rng, level, this.config.companySize, context.tick, this.heroes.startingGoldPerLevel);
     this.companies.push(party);
     context.ledger.partiesArrived += 1;
     log(context, 'party', `${describeParty(party, this.config.companySize)} arrive at ${context.town.tavernName}: ${party.members.map(describeHero).join(', ')}.`);
@@ -197,12 +207,12 @@ export class CompanyRoster {
     const veteran = aliveMembers(p)
       .filter((h) => h.level >= this.config.retirementLevel)
       .sort((a, b) => b.level - a.level || b.xp - a.xp)[0];
-    if (!veteran || p.gold < this.config.retirementPrice + resurrectionCost(partyLevel(p))) return false;
+    if (!veteran || p.gold < this.config.retirementPrice + resurrectionCost(partyLevel(p), this.heroes)) return false;
     p.members = p.members.filter((h) => h !== veteran);
     for (const item of veteran.items) p.stash.push(item);
     veteran.items = [];
     const capital = Math.floor(this.config.retirementPrice * this.config.retirementCapitalShare);
-    const employer = retiredEmployer(context.rng, veteran.name, p.id);
+    const employer = retiredEmployer(context.rng, veteran.name, p.id, this.townRules, this.holdings);
     // By default 20,000 leaves the world and 5,000 opens the treasury. No event between them.
     sink(purse(p), this.config.retirementPrice - capital, 'retirement', context.statistics, coinReasons);
     transfer(purse(p), treasury(employer), capital, 'retirement', context.statistics, coinReasons);
@@ -223,10 +233,10 @@ export class CompanyRoster {
     let bill = 0;
     if (!temple.ruined) {
       for (const dead of deadMembers(p)) {
-        const cost = resurrectionCost(dead.level);
+        const cost = resurrectionCost(dead.level, this.heroes);
         if (p.gold < cost) continue;
         transfer(purse(p), treasury(temple), cost, 'service', context.statistics, coinReasons, dead);
-        resurrectHero(dead);
+        resurrectHero(dead, this.heroes);
         context.ledger.resurrections += 1;
         raised.push(dead);
         bill += cost;

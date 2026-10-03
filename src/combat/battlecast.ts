@@ -1,7 +1,8 @@
 import { buildHero, Encounter, EncounterError, getFootprintSize, getMonsterByName, type BattleLog, type Creature, type HeroClassName, type MonsterData } from 'battlecast-engine';
 import type { DeepReadonly } from '../core/readonly';
 import { Rng } from '../core/rng';
-import { combinedEffect, heroAc, isBloodied, potionHeal, skillBonus, WEAPON_CLASSES, type Hero } from '../adventurers/hero';
+import { combinedEffect, heroAc, isBloodied, potionHeal, skillBonus, WEAPON_CLASSES, DEFAULT_HERO_ECONOMY, type Hero, type HeroEconomyConfig } from '../adventurers/hero';
+import { freeze } from '../core/freeze';
 import type { EncounterSpec } from '../quests/encounters';
 
 export type CombatWinner = 'party' | 'monsters' | 'retreat' | 'stalemate';
@@ -34,7 +35,35 @@ export interface CombatOutcome {
   potionsDrunk: number;
 }
 
-const MAX_ROUNDS = 30;
+/** House rules layered on the engine: round cap, surprise, and who spots whom. */
+export interface CombatConfig {
+  maxRounds: number;
+  surpriseInitiativePenalty: number;
+  ambushTacticChance: number;
+  monstersFirstChance: number;
+  lairDepthWatchfulness: number;
+  partyAmbushFactor: number;
+  /** Flee once fewer than this fraction of the company is standing. 2 means half. */
+  fleeCompanyDivisor: number;
+  fleeMonsterHpFraction: number;
+  /** A side sneaks when at least this fraction of them beat passive Perception. 2 means half. */
+  stealthGroupDivisor: number;
+  /** Hit points a dying winner is stabilised at. */
+  stabilisedHp: number;
+}
+
+export const DEFAULT_COMBAT_CONFIG: CombatConfig = freeze({
+  maxRounds: 30,
+  surpriseInitiativePenalty: 5,
+  ambushTacticChance: 0.5,
+  monstersFirstChance: 0.3,
+  lairDepthWatchfulness: 0.5,
+  partyAmbushFactor: 0.43,
+  fleeCompanyDivisor: 2,
+  fleeMonsterHpFraction: 0.5,
+  stealthGroupDivisor: 2,
+  stabilisedHp: 1,
+});
 
 /**
  * Runs one encounter through battlecast-engine and maps the result back onto
@@ -50,6 +79,8 @@ export interface CombatOptions {
   noRetreat?: boolean;
   /** Deep in a lair the defenders are ever more likely to see the company coming: fight index and total. */
   lairDepth?: { index: number; total: number };
+  rules?: CombatConfig;
+  heroes?: HeroEconomyConfig;
 }
 
 /**
@@ -95,6 +126,8 @@ function fmtBonus(n: number): string {
 }
 
 export function runCombat(heroes: Hero[], spec: DeepReadonly<EncounterSpec>, seed: number, opts: CombatOptions = {}): CombatOutcome {
+  const rules = opts.rules ?? DEFAULT_COMBAT_CONFIG;
+  const economy = opts.heroes ?? DEFAULT_HERO_ECONOMY;
   const fighters = heroes.filter((h) => h.alive);
   const rng = new Rng(seed);
   const enc = new Encounter({ gridSize: GRID, seed });
@@ -106,7 +139,7 @@ export function runCombat(heroes: Hero[], spec: DeepReadonly<EncounterSpec>, see
     const data = getMonsterByName(group.name);
     if (data) for (let i = 0; i < group.count; i++) monsters.push(data);
   }
-  const { ambush, tactic, opening } = resolveOpening(rng, fighters, monsters, opts);
+  const { ambush, tactic, opening } = resolveOpening(rng, fighters, monsters, opts, rules);
   const layout = deploy(rng, fighters, monsters, ambush, tactic);
 
   const taken = new Set<string>();
@@ -178,8 +211,8 @@ export function runCombat(heroes: Hero[], spec: DeepReadonly<EncounterSpec>, see
     if (carried > 0) enc.damage(idByHero.get(h.id)!, carried);
   }
   // Surprise, 2024 rules: the surprised side rolls initiative at a disadvantage; here a flat -5.
-  if (ambush === 'monsters') penaliseInitiative(enc, fighters.map((h) => idByHero.get(h.id)!));
-  if (ambush === 'party') penaliseInitiative(enc, monsterIds);
+  if (ambush === 'monsters') penaliseInitiative(enc, fighters.map((h) => idByHero.get(h.id)!), rules);
+  if (ambush === 'party') penaliseInitiative(enc, monsterIds, rules);
 
   const lines: string[] = [];
   const kills = new Map<string, number>();
@@ -188,7 +221,7 @@ export function runCombat(heroes: Hero[], spec: DeepReadonly<EncounterSpec>, see
   let winner: 'red' | 'blue' | 'draw' | null = null;
   let retreated = false;
   let potionsDrunk = 0;
-  for (let i = 0; i < MAX_ROUNDS; i++) {
+  for (let i = 0; i < rules.maxRounds; i++) {
     const r = enc.runRound();
     rounds = r.round;
     for (const log of r.logs) {
@@ -213,13 +246,13 @@ export function runCombat(heroes: Hero[], spec: DeepReadonly<EncounterSpec>, see
       if (!c?.isAlive || !isBloodied({ hp: c.currentHp, maxHp: c.maxHp })) continue;
       if (c.currentHp > 0 && c.conditions.includes('unconscious')) continue;
       const fallen = c.currentHp <= 0;
-      enc.heal(c.id, potionHeal(h));
+      enc.heal(c.id, potionHeal(h, economy));
       potionsDrunk += 1;
       lines.push(fallen
         ? `${companion.name} gives ${h.name} a healing potion.`
         : `${h.name} drinks a healing potion.`);
     }
-    if (!opts.noRetreat && shouldFlee(enc.creatures, fighters.length)) {
+    if (!opts.noRetreat && shouldFlee(enc.creatures, fighters.length, rules)) {
       retreated = true;
       break;
     }
@@ -234,11 +267,11 @@ export function runCombat(heroes: Hero[], spec: DeepReadonly<EncounterSpec>, see
     let alive = c.isAlive;
     if (alive && hp <= 0) {
       // Dying but not dead. Winners stabilise their friends; anyone left on the field is finished off.
-      if (partyWon) hp = 1;
+      if (partyWon) hp = rules.stabilisedHp;
       else alive = false;
     }
     // Bonus hit points (items, blessings) are a buffer on top; what the hero keeps is capped at their own maximum.
-    results.push({ heroId: h.id, hp: alive ? Math.max(1, Math.min(h.maxHp, hp)) : 0, alive, kills: kills.get(h.name) ?? 0 });
+    results.push({ heroId: h.id, hp: alive ? Math.max(rules.stabilisedHp, Math.min(h.maxHp, hp)) : 0, alive, kills: kills.get(h.name) ?? 0 });
   }
 
   const outcome: CombatWinner = partyWon ? 'party' : retreated ? 'retreat' : winner === 'red' ? 'monsters' : 'stalemate';
@@ -256,14 +289,12 @@ export function runCombat(heroes: Hero[], spec: DeepReadonly<EncounterSpec>, see
 
 const GRID = 16;
 const CENTER = { x: 7.5, y: 7.5 };
-const SURPRISE_INITIATIVE_PENALTY = 5;
-
 /** Knock the surprised creatures down the initiative order before the first turn is taken. */
-function penaliseInitiative(enc: Encounter, ids: string[]): void {
+function penaliseInitiative(enc: Encounter, ids: string[], rules: CombatConfig): void {
   const state = enc.state;
   if (!state) return;
   const surprised = new Set(ids);
-  for (const c of state.creatures) if (surprised.has(c.id)) c.initiative -= SURPRISE_INITIATIVE_PENALTY;
+  for (const c of state.creatures) if (surprised.has(c.id)) c.initiative -= rules.surpriseInitiativePenalty;
   const byId = new Map(state.creatures.map((c) => [c.id, c]));
   const before = new Map(state.initiativeOrder.map((id, i) => [id, i]));
   state.initiativeOrder.sort((a, b) => (byId.get(b)?.initiative ?? 0) - (byId.get(a)?.initiative ?? 0) || (before.get(a) ?? 0) - (before.get(b) ?? 0));
@@ -292,9 +323,9 @@ function heroPassivePerception(h: Hero): number {
 }
 
 /** A group sneaks if at least half of them beat the other side's sharpest passive Perception. */
-function groupStealth(rng: Rng, bonuses: number[], passive: number): { passed: number; needed: number; success: boolean } {
+function groupStealth(rng: Rng, bonuses: number[], passive: number, rules: CombatConfig): { passed: number; needed: number; success: boolean } {
   const passed = bonuses.filter((b) => rng.int(1, 20) + b >= passive).length;
-  const needed = Math.ceil(bonuses.length / 2);
+  const needed = Math.ceil(bonuses.length / rules.stealthGroupDivisor);
   return { passed, needed, success: passed >= needed };
 }
 
@@ -307,18 +338,19 @@ function resolveOpening(
   fighters: Hero[],
   monsters: MonsterData[],
   opts: CombatOptions,
+  rules: CombatConfig,
 ): { ambush: Ambush; tactic: AmbushTactic; opening: string } {
-  const tactic: AmbushTactic = rng.chance(0.5) ? 'surround' : 'rear';
+  const tactic: AmbushTactic = rng.chance(rules.ambushTacticChance) ? 'surround' : 'rear';
   const how = tactic === 'surround' ? 'closing in from every side' : 'coming up behind the back line';
   if (fighters.length === 0 || monsters.length === 0) return { ambush: null, tactic, opening: 'The field is empty.' };
-  let monstersFirst = 0.3;
-  if (opts.lairDepth) monstersFirst = 0.3 + 0.5 * (opts.lairDepth.index / Math.max(1, opts.lairDepth.total - 1));
-  const partyFirst = (1 - monstersFirst) * 0.43;
+  let monstersFirst = rules.monstersFirstChance;
+  if (opts.lairDepth) monstersFirst = rules.monstersFirstChance + rules.lairDepthWatchfulness * (opts.lairDepth.index / Math.max(1, opts.lairDepth.total - 1));
+  const partyFirst = (1 - monstersFirst) * rules.partyAmbushFactor;
   const roll = rng.next();
   const foe = describeMonsters(monsters);
   if (roll < monstersFirst) {
     const passive = Math.max(...fighters.map(heroPassivePerception));
-    const check = groupStealth(rng, monsters.map((m) => monsterSkill(m, 'Stealth')), passive);
+    const check = groupStealth(rng, monsters.map((m) => monsterSkill(m, 'Stealth')), passive, rules);
     const dice = `Stealth ${check.passed}/${monsters.length} vs passive Perception ${passive}`;
     return check.success
       ? { ambush: 'monsters', tactic, opening: `Ambush! ${capitalizeFirst(foe)} catch the company unawares, ${how} (${dice}).` }
@@ -326,7 +358,7 @@ function resolveOpening(
   }
   if (roll < monstersFirst + partyFirst) {
     const passive = Math.max(...monsters.map(monsterPassivePerception));
-    const check = groupStealth(rng, fighters.map((h) => skillBonus(h, 'Stealth')), passive);
+    const check = groupStealth(rng, fighters.map((h) => skillBonus(h, 'Stealth')), passive, rules);
     const dice = `Stealth ${check.passed}/${fighters.length} vs passive Perception ${passive}`;
     return check.success
       ? { ambush: 'party', tactic, opening: `The company gets the drop on ${foe}, ${how} (${dice}).` }
@@ -480,13 +512,13 @@ function candidates(rng: Rng, wanted: { x: number; y: number }): { x: number; y:
  * Adventurers are not the engine's fight-to-the-death AI. Once half the company is
  * down and the enemy still has most of its hit points, whoever can still run does.
  */
-function shouldFlee(creatures: Creature[], startedWith: number): boolean {
+function shouldFlee(creatures: Creature[], startedWith: number, rules: CombatConfig): boolean {
   const standing = creatures.filter((c) => c.team === 'blue' && c.isAlive && c.currentHp > 0).length;
-  if (standing === 0 || standing > startedWith / 2) return false;
+  if (standing === 0 || standing > startedWith / rules.fleeCompanyDivisor) return false;
   const monsters = creatures.filter((c) => c.team === 'red');
   const maxHp = monsters.reduce((s, m) => s + m.maxHp, 0);
   const curHp = monsters.reduce((s, m) => s + Math.max(0, m.currentHp), 0);
-  return maxHp > 0 && curHp / maxHp > 0.5;
+  return maxHp > 0 && curHp / maxHp > rules.fleeMonsterHpFraction;
 }
 
 /**

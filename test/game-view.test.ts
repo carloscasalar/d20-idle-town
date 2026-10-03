@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { DEFAULT_COMPANY_ROSTER_CONFIG } from '../src/adventurers/company-roster';
 import { createParty } from '../src/adventurers/party';
 import { Rng } from '../src/core/rng';
 import { instantiate, ITEM_CATALOGUE } from '../src/items/items';
@@ -9,7 +10,7 @@ import { createLair } from '../src/town/lairs';
 describe('Game.view', () => {
   it('gives a renderer an immutable snapshot of the clock and visible town settings', () => {
     let townName = '';
-    const game = Game.forTesting({ seed: 11, difficultyScale: 1.4 }, (scenario) => {
+    const game = Game.forTesting({ seed: 11, board: { difficultyScale: 1.4 } }, (scenario) => {
       townName = scenario.town.name;
     });
 
@@ -76,7 +77,7 @@ describe('Game.view', () => {
     const party = createParty(rng, 2, 4, 0);
     party.id = 'party-1';
     party.name = 'The Lanterns';
-    const lair = createLair(rng, 'goblins', 4, 0);
+    const lair = createLair(rng, 'goblins', 4, 0, DEFAULT_COMPANY_ROSTER_CONFIG.companySize);
     lair.id = 'lair-1';
     lair.name = 'Cragmaw warcamp';
     lair.strength = 3;
@@ -120,7 +121,7 @@ describe('Game.view', () => {
 
   it('summarises the town economy, holdings, lairs, counters and chronicle as immutable read data', () => {
     const rng = new Rng(14);
-    const lair = createLair(rng, 'goblins', 4, 0);
+    const lair = createLair(rng, 'goblins', 4, 0, DEFAULT_COMPANY_ROSTER_CONFIG.companySize);
     lair.name = 'The Broken Fang';
     lair.strength = 3;
     lair.raidCooldown = 47;
