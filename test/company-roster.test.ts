@@ -7,6 +7,7 @@ import {
   isFull,
   mergeParties,
   partyLevel,
+  ROLES,
   rollClasses,
   type Party,
 } from '../src/adventurers/party';
@@ -19,21 +20,13 @@ import { serviceOf, type Employer } from '../src/town/town';
 const TICK = 100;
 const DAY = Math.floor(TICK / 24) + 1;
 
-/** A class from each of the four roles a full company is built to cover. */
-const ROLES: string[][] = [
-  ['Fighter', 'Barbarian', 'Paladin', 'Monk'],
-  ['Cleric', 'Druid', 'Bard'],
-  ['Rogue', 'Ranger', 'Bard', 'Monk'],
-  ['Wizard', 'Sorcerer', 'Warlock', 'Druid'],
-];
-
 function coversFourRoles(classes: readonly string[]): boolean {
   const used = classes.map(() => false);
   const assign = (role: number): boolean => {
     if (role === ROLES.length) return true;
     for (let index = 0; index < classes.length; index++) {
       if (used[index]) continue;
-      if (!ROLES[role]!.includes(classes[index]!)) continue;
+      if (!ROLES[role]!.some((heroClass) => heroClass === classes[index])) continue;
       used[index] = true;
       if (assign(role + 1)) return true;
       used[index] = false;
@@ -248,6 +241,11 @@ describe('who arrives', () => {
     expect(party).toMatchObject({ status: 'idle', idleTicks: 0, questId: null, arrivedAt: 17, potions: 0, renown: 0 });
   });
 
+  it('a new company has paid no dues, is outside the guild and is unblessed', () => {
+    const party = createParty(new Rng(3), 2, 4, 17);
+    expect(party).toMatchObject({ duesPaidDay: -1, guildMember: false, blessed: false });
+  });
+
   it('with no Contract open, the company that arrives is four adventurers of level 1', () => {
     const game = scene((scenario) => { scenario.tick = 0; }, { maxParties: 4 });
     game.step();
@@ -433,6 +431,40 @@ describe('raising the dead', () => {
     expect(bills[0]!.text).toContain('Ada');
     expect(bills[0]!.text).toContain('Bev');
     expect(game.view().events.filter((event) => event.kind === 'temple')).toHaveLength(1);
+  });
+
+  it('reports a single raised adventurer drawing breath and their temple bill', () => {
+    let party!: Party;
+    let temple!: Employer;
+    const game = scene((scenario, rng) => {
+      temple = serviceOf(scenario.town, 'temple');
+      party = company(rng, 1, ['Bev', 'Cid', 'Dot'], ['Ada']);
+      party.gold = 190;
+      scenario.parties = [party];
+    });
+    game.step();
+    const bill = `${party.name} pay 190 gp at the ${temple.name}. Ada (Fighter 1) draws breath again.`;
+    expect(game.view().chronicle.filter((event) => event.kind === 'temple').map((event) => event.text)).toEqual([bill]);
+    expect(game.view().events.filter((event) => event.kind === 'temple').map((event) => event.text)).toEqual([bill]);
+  });
+
+  it('a company made full by the temple does not merge with an idle short company of the same level', () => {
+    let raised!: Party;
+    let short!: Party;
+    const game = scene((scenario, rng) => {
+      raised = company(rng, 1, ['Bev', 'Cid', 'Dot'], ['Ada']);
+      raised.gold = 190;
+      raised.renown = 5;
+      short = company(rng, 1, ['Eve', 'Fay']);
+      scenario.parties = [raised, short];
+    });
+    game.step();
+    expect(game.view().stats.resurrections).toBe(1);
+    expect(game.view().parties).toHaveLength(2);
+    expect(namesOf(game, raised.id)).toEqual(['Bev', 'Cid', 'Dot', 'Ada']);
+    expect(shown(game, raised.id).members.every((member) => member.alive)).toBe(true);
+    expect(namesOf(game, short.id)).toEqual(['Eve', 'Fay']);
+    expect(game.view().events.filter((event) => event.kind === 'party')).toEqual([]);
   });
 
   it('one gold short of a raising, the fallen stay dead', () => {
@@ -647,6 +679,23 @@ describe('survivors signing on', () => {
     expect(namesOf(game, away.id)).toEqual(['A1', 'A2', 'A3', 'A4']);
   });
 
+  it('the survivors pass a nearest host of six and join the host with room one level away', () => {
+    let broken!: Party;
+    let near!: Party;
+    let away!: Party;
+    const game = scene((scenario, rng) => {
+      broken = company(rng, 5, ['Ada', 'Bev']);
+      broken.idleTicks = 71;
+      near = company(rng, 5, ['N1', 'N2', 'N3', 'N4', 'N5', 'N6']);
+      away = company(rng, 6, ['A1', 'A2', 'A3', 'A4']);
+      scenario.parties = [broken, near, away];
+    });
+    game.step();
+    expect(namesOf(game, near.id)).toEqual(['N1', 'N2', 'N3', 'N4', 'N5', 'N6']);
+    expect(namesOf(game, away.id)).toEqual(['A1', 'A2', 'A3', 'A4', 'Ada', 'Bev']);
+    expect(game.view().parties.find((party) => party.id === broken.id)).toBeUndefined();
+  });
+
   it('among hosts of the same level, the survivors join the smallest', () => {
     let small!: Party;
     let large!: Party;
@@ -716,6 +765,9 @@ describe('survivors signing on', () => {
     expect(namesOf(game, host.id)).toEqual(['H1', 'H2', 'H3', 'H4', 'H5', 'Ada']);
     expect(namesOf(game, broken.id)).toEqual(['Bev']);
     expect(snapshot(game).parties.find((party) => party.id === broken.id)?.status).toBe('idle');
+    expect(game.view().events.filter((event) => event.kind === 'party').map((event) => event.text)).toEqual([
+      `${host.name} take on Ada from ${broken.name}; Bev stay behind waiting for another band.`,
+    ]);
   });
 
   it('when someone stays behind, the donor\'s dead are not buried', () => {
@@ -749,18 +801,26 @@ describe('survivors signing on', () => {
   });
 });
 
-describe('merging and burying', () => {
-  it('counts only the living, and is 1 when nobody is alive', () => {
+describe('company level and capacity', () => {
+  it('company level counts only the living', () => {
     const mixed = createParty(new Rng(1), 1, 3, 0);
     mixed.members[0]!.level = 1;
     mixed.members[1]!.level = 2;
     killHero(mixed.members[2]!);
     mixed.members[2]!.level = 9;
     expect(partyLevel(mixed)).toBe(2);
+  });
 
+  it('company level is 1 when nobody is alive', () => {
     const wiped = createParty(new Rng(2), 8, 2, 0);
     for (const hero of wiped.members) killHero(hero);
     expect(partyLevel(wiped)).toBe(1);
+  });
+
+  it('three level-1 adventurers and one level-2 adventurer make a level-1 company', () => {
+    const party = createParty(new Rng(1), 1, 4, 0);
+    party.members[3]!.level = 2;
+    expect(partyLevel(party)).toBe(1);
   });
 
   it('four living adventurers are a full company, and the dead do not count', () => {
@@ -785,39 +845,80 @@ describe('merging and burying', () => {
     expect(aliveCount(party)).toBe(5);
     expect(hasRoom(party)).toBe(true);
   });
+});
 
-  it('moves every survivor while the host has room for six, and brings the purse, potions, finds and renown', () => {
+describe('merging and burying', () => {
+  it('moves every survivor while the host has room for six', () => {
     const rng = new Rng(6);
     const host = createParty(rng, 2, 4, 0);
     const donor = createParty(rng, 2, 3, 0);
     const fallen = donor.members[2]!;
     killHero(fallen);
-    host.gold = 10;
-    donor.gold = 7;
-    host.potions = 1;
-    donor.potions = 3;
-    host.renown = 2;
-    donor.renown = 9;
-    host.stash = [];
-    donor.stash = [sword(rng)];
+    const survivors = donor.members.filter((hero) => hero.alive);
     const leftover = mergeParties(host, donor, { goldPaid: 0, goldSpentByHeroes: 0 });
     expect(leftover).toEqual([]);
     expect(aliveCount(host)).toBe(6);
-    expect(host.gold).toBe(17);
-    expect(donor.gold).toBe(0);
-    expect(host.potions).toBe(4);
-    expect(donor.potions).toBe(0);
-    expect(host.stash.map((item) => item.name)).toEqual(['Longsword +1']);
-    expect(donor.stash).toEqual([]);
-    expect(host.renown).toBe(9);
-    const established = createParty(rng, 2, 1, 0);
-    const newcomer = createParty(rng, 2, 1, 0);
-    established.renown = 9;
-    newcomer.renown = 2;
-    mergeParties(established, newcomer, { goldPaid: 0, goldSpentByHeroes: 0 });
-    expect(established.renown).toBe(9);
+    expect(host.members).toEqual(expect.arrayContaining(survivors));
+    expect(donor.members).toEqual([fallen]);
+  });
+
+  it('leaves the fallen with the donor', () => {
+    const rng = new Rng(6);
+    const host = createParty(rng, 2, 4, 0);
+    const donor = createParty(rng, 2, 3, 0);
+    const fallen = donor.members[2]!;
+    killHero(fallen);
+    mergeParties(host, donor, { goldPaid: 0, goldSpentByHeroes: 0 });
     expect(donor.members).toEqual([fallen]);
     expect(host.members).not.toContain(fallen);
+  });
+
+  it('brings the donor purse into the host purse', () => {
+    const rng = new Rng(6);
+    const host = createParty(rng, 2, 4, 0);
+    const donor = createParty(rng, 2, 2, 0);
+    host.gold = 10;
+    donor.gold = 7;
+    mergeParties(host, donor, { goldPaid: 0, goldSpentByHeroes: 0 });
+    expect(host.gold).toBe(17);
+    expect(donor.gold).toBe(0);
+  });
+
+  it('brings the donor potions into the host pack', () => {
+    const rng = new Rng(6);
+    const host = createParty(rng, 2, 4, 0);
+    const donor = createParty(rng, 2, 2, 0);
+    host.potions = 1;
+    donor.potions = 3;
+    mergeParties(host, donor, { goldPaid: 0, goldSpentByHeroes: 0 });
+    expect(host.potions).toBe(4);
+    expect(donor.potions).toBe(0);
+  });
+
+  it('brings the donor finds into the host stash', () => {
+    const rng = new Rng(6);
+    const host = createParty(rng, 2, 4, 0);
+    const donor = createParty(rng, 2, 2, 0);
+    const hostFind = sword(rng);
+    const donorFind = sword(rng);
+    host.stash = [hostFind];
+    donor.stash = [donorFind];
+    mergeParties(host, donor, { goldPaid: 0, goldSpentByHeroes: 0 });
+    expect(host.stash).toEqual([hostFind, donorFind]);
+    expect(donor.stash).toEqual([]);
+  });
+
+  it.each([
+    { hostRenown: 2, donorRenown: 9 },
+    { hostRenown: 9, donorRenown: 2 },
+  ])('keeps the greater renown when the host has $hostRenown and the donor has $donorRenown', ({ hostRenown, donorRenown }) => {
+    const rng = new Rng(6);
+    const host = createParty(rng, 2, 4, 0);
+    const donor = createParty(rng, 2, 2, 0);
+    host.renown = hostRenown;
+    donor.renown = donorRenown;
+    mergeParties(host, donor, { goldPaid: 0, goldSpentByHeroes: 0 });
+    expect(host.renown).toBe(9);
   });
 
   it('returns the living who do not fit, and not the dead', () => {
@@ -930,31 +1031,48 @@ describe('retirement', () => {
     let veterans!: Party;
     let others!: Party;
     const game = scene((scenario, rng) => {
-      veterans = company(rng, 8, ['Ada', 'Bev', 'Cid', 'Dot']);
+      veterans = company(rng, 8, ['Ada', 'Bev', 'Cid', 'Dot', 'Ian']);
       veterans.gold = 27_710;
       others = company(rng, 8, ['Eve', 'Fay', 'Gil', 'Hal']);
       others.gold = 0;
+      others.renown = 5;
       scenario.parties = [veterans, others];
     }, { maxParties: 2, maxOpenQuests: 4 });
     game.step();
     const founded = snapshot(game).town.employers.find((employer) => employer.title === 'Retired adventurer');
     expect(founded?.favoredPartyId).toBe(veterans.id);
     expect(founded?.assets).toHaveLength(1);
-    expect(game.view().town.employers.find((employer) => employer.title === 'Retired adventurer')!.assets).toHaveLength(1);
+    const employer = game.view().town.employers.find((candidate) => candidate.title === 'Retired adventurer')!;
+    expect(employer.assets).toHaveLength(1);
+    expect(employer.treasury).toBe(5_000);
+    expect(shown(game, veterans.id).gold).toBe(2_710);
+    expect(game.view().stats.retirements).toBe(1);
+    expect(game.view().chronicle.filter((event) => event.kind === 'town').map((event) => event.text)).toEqual([
+      `Ada (Fighter 8) retires from ${veterans.name}, buys ${employer.assets[0]!.name} for 25000 gp and settles in ${game.view().town.name}. Old friends will hear of any trouble first.`,
+    ]);
 
-    let posted = false;
-    for (let hour = 0; hour < 16 && !posted; hour++) {
+    let firstContract: string | undefined;
+    for (let hour = 0; hour < 16 && !firstContract; hour++) {
       game.step();
       const open = game.view().board.open;
       if (open.length === 0) continue;
-      posted = true;
+      firstContract = open[0]!.id;
       expect(open).toHaveLength(1);
       expect(open[0]).toMatchObject({ giverName: 'Ada', level: 8, guildOnly: false });
       expect(game.view().board.taken).toHaveLength(0);
       expect(shown(game, others.id).statusText).toBe('looking at the board');
-      expect(namesOf(game, veterans.id)).toEqual(['Bev', 'Cid', 'Dot']);
+      expect(namesOf(game, veterans.id)).toEqual(['Bev', 'Cid', 'Dot', 'Ian']);
     }
-    expect(posted).toBe(true);
+    expect(firstContract).toBeDefined();
+    for (let hour = 0; hour < 4 && game.view().board.taken.length === 0; hour++) {
+      game.step();
+      expect(shown(game, others.id).statusText).toBe('looking at the board');
+    }
+    expect(game.view().board.open).toHaveLength(0);
+    expect(game.view().board.taken).toHaveLength(1);
+    expect(game.view().board.taken[0]).toMatchObject({ id: firstContract, giverName: 'Ada', partyName: veterans.name });
+    expect(snapshot(game).parties.find((party) => party.id === veterans.id)?.status).toBe('traveling');
+    expect(shown(game, others.id).statusText).toBe('looking at the board');
   });
 });
 

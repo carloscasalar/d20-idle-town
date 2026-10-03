@@ -54,7 +54,7 @@ export interface Party {
 }
 
 /** A full company covers the classic roles; smaller bands are whoever survived. */
-const ROLES: HeroClassName[][] = [
+export const ROLES: HeroClassName[][] = [
   ['Fighter', 'Barbarian', 'Paladin', 'Monk'],
   ['Cleric', 'Druid', 'Bard'],
   ['Rogue', 'Ranger', 'Bard', 'Monk'],
