@@ -98,7 +98,7 @@ function world(config: Partial<BoardConfig> = {}, kinds: WorkKinds = WORK_KINDS)
   const lairs: Lair[] = [];
   const parties: Party[] = [];
   const ledger: BoardLedger = {
-    questsCompleted: 0, questsFailed: 0, questsExpired: 0, goldPaid: 0, itemsFound: 0, raids: 0, lairsCleared: 0,
+    questsCompleted: 0, questsFailed: 0, questsExpired: 0, itemsFound: 0, raids: 0, lairsCleared: 0,
   };
   const context: BoardContext = {
     town,
@@ -106,6 +106,7 @@ function world(config: Partial<BoardConfig> = {}, kinds: WorkKinds = WORK_KINDS)
     rng,
     tick: 0,
     ledger,
+    statistics: { goldPaid: 0, goldSpentByHeroes: 0 },
     report: () => {},
     payHoard: (lair, company) => {
       const gold = lair.hoard.gold;

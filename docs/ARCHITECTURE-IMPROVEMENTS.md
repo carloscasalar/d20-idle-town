@@ -157,9 +157,9 @@ was forgotten.
 or a gold counter, other than the factories that create a holder with its
 starting amount. Callers name a purse, treasury, hoard or loot and use one of
 three operations — transfer, source, sink — with an amount and a reason.
-`coinReasons` decides the counters and statistics. `ServiceLedger`,
-`ExpeditionLedger` and `BoardLedger` no longer carry a gold field those
-modules assign. `payForService` is gone. The Board's Contract reward,
+`coinReasons` decides the counters and statistics. Each context that moves
+gold carries a `GoldStatistics`. `ServiceLedger`, `ExpeditionLedger` and
+`BoardLedger` carry no gold field. `payForService` is gone. The Board's Contract reward,
 windfall, Bounty, expiry loss and hoard payout are movements. Retirement is
 a 20,000 gp sink and a 5,000 gp transfer onto the new employer's opening
 treasury, with no event between them. Contract settlement is a windfall

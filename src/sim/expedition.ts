@@ -6,7 +6,7 @@ import type { DeepReadonly } from '../core/readonly';
 import type { Rng } from '../core/rng';
 import { describeEncounter, scaleEncounter, type EncounterSpec } from '../quests/encounters';
 import { difficultyCode, isFullyKnown, type ReadonlyQuest } from '../quests/quest';
-import { coinReasons, goldStatistics, purse, transfer, treasury } from '../town/coin';
+import { coinReasons, purse, transfer, treasury, type GoldStatistics } from '../town/coin';
 import { BLESSING_HP_PER_LEVEL } from '../town/services';
 import { serviceOf, type Town } from '../town/town';
 
@@ -21,6 +21,7 @@ export interface ExpeditionEvent {
   chronicle?: boolean;
 }
 
+/** Expedition statistics. Gold statistics live on `ExpeditionContext.statistics`. */
 export interface ExpeditionLedger {
   heroesDied: number;
   partiesWiped: number;
@@ -32,6 +33,7 @@ export interface ExpeditionContext {
   town: Town;
   rng: Rng;
   ledger: ExpeditionLedger;
+  statistics: GoldStatistics;
   travelTicks: number;
   restTicks: number;
   shortRestHealFraction: number;
@@ -227,7 +229,7 @@ function headHome(p: Party, travelTicks: number): void {
 }
 
 function arriveHome(p: Party, q: ReadonlyQuest, context: ExpeditionContext): void {
-  const { town, ledger, restTicks, settleQuest } = context;
+  const { town, statistics, restTicks, settleQuest } = context;
   const success = p.progress >= q.encounters.length && aliveMembers(p).length > 0;
   p.progress = 0;
   settleQuest(q, p, success);
@@ -243,13 +245,12 @@ function arriveHome(p: Party, q: ReadonlyQuest, context: ExpeditionContext): voi
   const tavern = serviceOf(town, 'tavern');
   const fee = 3 * partyLevel(p) * aliveMembers(p).length;
   if (!tavern.ruined && p.gold >= fee) {
-    const books = goldStatistics(ledger);
-    transfer(purse(p), treasury(tavern), fee, 'service', books, coinReasons);
+    transfer(purse(p), treasury(tavern), fee, 'service', statistics, coinReasons);
     let line = `${p.name} take rooms at ${tavern.name} for ${fee} gp.`;
     if (success && dead.length === 0 && p.renown < MAX_RENOWN) {
       const spree = Math.max(10, Math.floor(p.gold * CAROUSING_SHARE));
       if (p.gold - spree >= resurrectionCost(partyLevel(p))) {
-        transfer(purse(p), treasury(tavern), spree, 'service', books, coinReasons);
+        transfer(purse(p), treasury(tavern), spree, 'service', statistics, coinReasons);
         p.renown = Math.min(MAX_RENOWN, p.renown + 1);
         line += ` They drink ${spree} gp away telling the tale (renown ${p.renown}).`;
       }

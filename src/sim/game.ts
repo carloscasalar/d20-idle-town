@@ -783,6 +783,7 @@ export class Game {
       town: this.town,
       rng: this.rng,
       ledger: this.stats,
+      statistics: this.stats,
       travelTicks: this.config.travelTicks,
       restTicks: this.config.restTicks,
       shortRestHealFraction: this.config.shortRestHealFraction,
@@ -900,6 +901,7 @@ export class Game {
       town: this.town,
       day: this.day,
       ledger: this.stats,
+      statistics: this.stats,
       report: ({ kind, text, chronicle }) => {
         if (chronicle) this.chronicleLog(kind, text);
         else this.log(kind, text);
@@ -1010,6 +1012,7 @@ export class Game {
       rng: this.rng,
       tick: this.tick,
       ledger: this.stats,
+      statistics: this.stats,
       report: ({ kind, text, chronicle }) => {
         if (chronicle) this.chronicleLog(kind, text);
         else this.log(kind, text);

@@ -2,7 +2,7 @@ import { armorUpgradeCost, equipItem, wantsItem, MAX_ARMOR_TIER, potionCost, res
 import { aliveMembers, partyLevel, type Party } from '../adventurers/party';
 import { listNames } from '../core/names';
 import { describeEffect, resalePrice, type MagicItem } from '../items/items';
-import { coinReasons, goldStatistics, purse, transfer, treasury } from './coin';
+import { coinReasons, purse, transfer, treasury, type GoldStatistics } from './coin';
 import { MAX_STOCK, serviceOf, type Employer, type Town } from './town';
 
 const GUILD_DUES_PER_LEVEL = 15;
@@ -10,7 +10,7 @@ const DUES_PERIOD_DAYS = 7;
 const BLESSING_COST_PER_LEVEL = 40;
 export const BLESSING_HP_PER_LEVEL = 3;
 
-/** Item statistics for a service visit. Gold statistics are written by the coin module. */
+/** Item statistics for a service visit. Gold statistics live on the context. */
 export interface ServiceLedger {
   itemsSold: number;
 }
@@ -25,6 +25,7 @@ export interface TownServiceContext {
   town: Town;
   day: number;
   ledger: ServiceLedger;
+  statistics: GoldStatistics;
   /** Publish immediately, so subscribers see state at the same point as the event. */
   report: (event: ServiceEvent) => void;
   /** Game owns retirement; it takes precedence over armour, after other services. */
@@ -39,10 +40,9 @@ export interface TownServiceContext {
  * blessings retain one and a half. No random draws are made here.
  */
 export function visitTownServices(p: Party, services: TownServiceContext): boolean {
-  const { town, day, ledger, report, tryRetire } = services;
-  const books = goldStatistics(ledger);
+  const { town, day, ledger, statistics, report, tryRetire } = services;
   const pay = (from: Party, to: Employer, amount: number, adventurer?: Hero) =>
-    transfer(purse(from), treasury(to), amount, 'service', books, coinReasons, adventurer);
+    transfer(purse(from), treasury(to), amount, 'service', statistics, coinReasons, adventurer);
   const log = (kind: ServiceEvent['kind'], text: string) => report({ kind, text });
   const chronicleLog = (kind: ServiceEvent['kind'], text: string) => report({ kind, text, chronicle: true });
 
@@ -117,7 +117,7 @@ export function visitTownServices(p: Party, services: TownServiceContext): boole
       p.stash.push(item);
       return false;
     }
-    transfer(treasury(enchanter), purse(p), price, 'resale', books, coinReasons);
+    transfer(treasury(enchanter), purse(p), price, 'resale', statistics, coinReasons);
     enchanter.stock.push(item);
     ledger.itemsSold += 1;
     log('shop', `${p.name} sell a ${item.name} to ${enchanter.name} for ${price} gp.`);

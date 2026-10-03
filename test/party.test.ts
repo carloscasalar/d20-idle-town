@@ -38,7 +38,7 @@ describe('party merging', () => {
     killHero(donor.members[0]!);
     host.gold = 10;
     donor.gold = 5;
-    const leftover = mergeParties(host, donor);
+    const leftover = mergeParties(host, donor, { goldPaid: 0, goldSpentByHeroes: 0 });
     expect(isFull(host)).toBe(true);
     expect(aliveMembers(host).length).toBe(5); // 2 + 3: room for six, so everyone comes along
     expect(leftover.length).toBe(0);

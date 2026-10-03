@@ -125,7 +125,7 @@ export function partyLevel(p: Party): number {
  * Moves survivors of `donor` into `host` while there is room (six at most).
  * Returns the survivors that did not fit (the donor keeps them).
  */
-export function mergeParties(host: Party, donor: Party, statistics?: GoldStatistics): Hero[] {
+export function mergeParties(host: Party, donor: Party, statistics: GoldStatistics): Hero[] {
   const moved: Hero[] = [];
   for (const h of aliveMembers(donor)) {
     if (!hasRoom(host)) break;

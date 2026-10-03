@@ -86,14 +86,6 @@ export function emptyGoldStatistics(): GoldStatistics {
   return { goldPaid: 0, goldSpentByHeroes: 0 };
 }
 
-/**
- * Statistics slices omit the gold fields, but the object Game passes — and the
- * ledgers tests already hold — still carry whichever of them the movement uses.
- */
-export function goldStatistics(ledger: object): GoldStatistics {
-  return ledger as unknown as GoldStatistics;
-}
-
 /** A company's purse: `gold`, with `earned` and `spent`. */
 export interface Purse {
   gold: number;
@@ -171,34 +163,13 @@ export function heldGold(holders: readonly Holder[]): number {
   return holders.reduce((sum, holder) => sum + balance(holder), 0);
 }
 
-/**
- * Move gold from one holder to another. The sum over holders is unchanged.
- * `merger` records no lifetime statistic, so a caller without a ledger may omit it.
- */
-export function transfer(
-  from: Holder,
-  to: Holder,
-  amount: number,
-  reason: 'merger',
-  statistics: GoldStatistics | undefined,
-  reasons: CoinTable<'merger'>,
-  adventurer?: AdventurerSpending,
-): void;
+/** Move gold from one holder to another. The sum over holders is unchanged. */
 export function transfer<Reason extends string>(
   from: Holder,
   to: Holder,
   amount: number,
   reason: Reason,
   statistics: GoldStatistics,
-  reasons: CoinTable<Reason>,
-  adventurer?: AdventurerSpending,
-): void;
-export function transfer<Reason extends string>(
-  from: Holder,
-  to: Holder,
-  amount: number,
-  reason: Reason,
-  statistics: GoldStatistics | undefined,
   reasons: CoinTable<Reason>,
   adventurer?: AdventurerSpending,
 ): void {
@@ -232,7 +203,7 @@ function move<Reason extends string>(
   reasons: CoinTable<Reason>,
   reason: Reason,
   amount: number,
-  statistics: GoldStatistics | undefined,
+  statistics: GoldStatistics,
   from?: Holder,
   to?: Holder,
   adventurer?: AdventurerSpending,
@@ -250,13 +221,8 @@ function move<Reason extends string>(
     setBalance(to, balance(to) + amount);
     if (reasonEffects.earned) addEarned(to, amount);
   }
-  if (reasonEffects.goldPaid || reasonEffects.goldSpentByHeroes) {
-    if (!statistics) {
-      throw new Error(`Coin reason "${reason}" records a lifetime statistic and needs a gold-statistics object.`);
-    }
-    if (reasonEffects.goldPaid) statistics.goldPaid += amount;
-    if (reasonEffects.goldSpentByHeroes) statistics.goldSpentByHeroes += amount;
-  }
+  if (reasonEffects.goldPaid) statistics.goldPaid += amount;
+  if (reasonEffects.goldSpentByHeroes) statistics.goldSpentByHeroes += amount;
   if (reasonEffects.adventurer && adventurer) adventurer.goldSpent += amount;
 }
 

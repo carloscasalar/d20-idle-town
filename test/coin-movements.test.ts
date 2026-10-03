@@ -230,13 +230,15 @@ describe('service purchase ledgers', () => {
     const world = { town, parties: [p], lairs: [] };
     const starting = openings(world);
     const before = totalGold(world);
-    const ledger = { goldSpentByHeroes: 7, itemsSold: 3 };
+    const ledger = { itemsSold: 3 };
+    const statistics = { goldPaid: 0, goldSpentByHeroes: 7 };
 
-    expect(visitTownServices(p, { town, day: 1, ledger, report: () => {}, tryRetire: () => false })).toBe(true);
+    expect(visitTownServices(p, { town, day: 1, ledger, statistics, report: () => {}, tryRetire: () => false })).toBe(true);
 
     expect(p).toMatchObject({ gold: left, earned: 30, spent });
     expect(shop).toMatchObject({ treasury, earned, spent: 5 });
-    expect(ledger).toEqual({ goldSpentByHeroes: totalSpent, itemsSold: 3 });
+    expect(ledger).toEqual({ itemsSold: 3 });
+    expect(statistics.goldSpentByHeroes).toBe(totalSpent);
     expect(p.members.map((h) => h.goldSpent)).toEqual(service === 'smith' || service === 'enchanter' ? [cost, 0, 0, 0] : [0, 0, 0, 0]);
     if (service === 'apothecary') expect(p.potions).toBe(4);
     if (service === 'guild') expect(p).toMatchObject({ guildMember: true, duesPaidDay: 1 });
@@ -326,10 +328,11 @@ describe('homecoming payments', () => {
     const world = { town, parties: [p], lairs: [] };
     const starting = openings(world);
     const before = totalGold(world);
-    const ledger = { heroesDied: 0, partiesWiped: 0, goldSpentByHeroes: 0 };
+    const ledger = { heroesDied: 0, partiesWiped: 0 };
+    const statistics = { goldPaid: 0, goldSpentByHeroes: 0 };
     const reports: string[] = [];
     const context: ExpeditionContext = {
-      town, quest: q, rng, ledger, travelTicks: 2, restTicks: 8, shortRestHealFraction: 0.5, skillDc: 15,
+      town, quest: q, rng, ledger, statistics, travelTicks: 2, restTicks: 8, shortRestHealFraction: 0.5, skillDc: 15,
       combat: () => { throw new Error('Homecoming does not fight'); }, report: (event) => { reports.push(event.text); },
       learnIntel: () => '', revealAll: () => {}, leaveLoot: () => {},
       settleQuest: (_q, company) => { company.questId = null; },
@@ -337,7 +340,8 @@ describe('homecoming payments', () => {
     advanceExpedition(p, context);
     expect(p).toMatchObject({ gold: left, spent, earned: 0, renown, status: 'resting' });
     expect(tavern).toMatchObject({ treasury, earned: spent, spent: 0 });
-    expect(ledger).toEqual({ heroesDied: 0, partiesWiped: 0, goldSpentByHeroes: spent });
+    expect(ledger).toEqual({ heroesDied: 0, partiesWiped: 0 });
+    expect(statistics.goldSpentByHeroes).toBe(spent);
     expect(reports.some((line) => line.includes('take rooms'))).toBe(gold !== 11);
     expect(reports.some((line) => line.includes('bed down in the stables'))).toBe(gold === 11);
     assertConservation(before, totalGold(world));

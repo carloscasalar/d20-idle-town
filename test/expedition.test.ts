@@ -42,14 +42,15 @@ function setup(level = 1) {
   };
   const town = generateTown(new Rng(2));
   const rng = new Rng(99);
-  const ledger = { heroesDied: 0, partiesWiped: 0, goldSpentByHeroes: 0 };
+  const ledger = { heroesDied: 0, partiesWiped: 0 };
+  const statistics = { goldPaid: 0, goldSpentByHeroes: 0 };
   const events: ExpeditionEvent[] = [];
   const calls: string[] = [];
   const combat = vi.fn<CombatResolver>(() => outcome(party, 'party'));
   const settleQuest = vi.fn<ExpeditionContext['settleQuest']>((_quest, _party, success) => { calls.push(`settle:${success}`); });
   const leaveLoot = vi.fn<ExpeditionContext['leaveLoot']>((_quest, _party, fallen) => { calls.push(`loot:${fallen.length}`); });
   const context: ExpeditionContext = {
-    quest, town, rng, ledger, travelTicks: 2, restTicks: 2, shortRestHealFraction: 0.5, skillDc: 15,
+    quest, town, rng, ledger, statistics, travelTicks: 2, restTicks: 2, shortRestHealFraction: 0.5, skillDc: 15,
     combat,
     report: (event) => { events.push(event); calls.push(`event:${event.kind}`); },
     learnIntel: () => learnQuestIntel(quest),
@@ -57,7 +58,7 @@ function setup(level = 1) {
     settleQuest,
     leaveLoot,
   };
-  return { party, quest, town, rng, ledger, events, calls, context, combat, settleQuest, leaveLoot };
+  return { party, quest, town, rng, ledger, statistics, events, calls, context, combat, settleQuest, leaveLoot };
 }
 
 function homecoming(success = true, level = 1) {
@@ -209,7 +210,7 @@ describe('an expedition hour', () => {
   });
 
   it('settles before charging for rooms, then rests back to idle', () => {
-    const { party, quest, context, town, ledger, calls, events } = homecoming();
+    const { party, quest, context, town, statistics, calls, events } = homecoming();
     party.renown = MAX_RENOWN;
     party.members[0]!.hp = 1;
     const tavern = serviceOf(town, 'tavern');
@@ -228,7 +229,7 @@ describe('an expedition hour', () => {
     expect(calls[0]).toBe('settle:true');
     expect(events.some((event) => event.kind === 'shop' && event.text.includes('take rooms'))).toBe(true);
     expect(party.status).toBe('resting');
-    expect(ledger.goldSpentByHeroes).toBe(fee);
+    expect(statistics.goldSpentByHeroes).toBe(fee);
     expect(party.gold).toBe(startingGold - fee);
     expect(tavern.treasury).toBe(startingTreasury + fee);
     expect(party.blessed).toBe(false);
@@ -436,7 +437,7 @@ describe('expedition potions and short rests', () => {
 
 describe('homecoming', () => {
   it('settles an incomplete contract as failed and does not carouse', () => {
-    const { party, quest, context, settleQuest, events, ledger } = homecoming(false);
+    const { party, quest, context, settleQuest, events, statistics } = homecoming(false);
     const gold = party.gold;
     const fee = 3 * partyLevel(party) * aliveMembers(party).length;
 
@@ -444,14 +445,14 @@ describe('homecoming', () => {
 
     expect(settleQuest).toHaveBeenCalledExactlyOnceWith(quest, party, false);
     expect(party.gold).toBe(gold - fee);
-    expect(ledger.goldSpentByHeroes).toBe(fee);
+    expect(statistics.goldSpentByHeroes).toBe(fee);
     expect(party.renown).toBe(0);
     expect(events.some((event) => event.text.includes('They drink'))).toBe(false);
     expect(party.blessed).toBe(false);
   });
 
   it('charges exactly three gold per company level and living member for rooms', () => {
-    const { party, context, town, ledger } = homecoming(false, 2);
+    const { party, context, town, statistics } = homecoming(false, 2);
     killHero(party.members[0]!);
     const tavern = serviceOf(town, 'tavern');
     const gold = party.gold;
@@ -466,12 +467,12 @@ describe('homecoming', () => {
     expect(party.spent).toBe(fee);
     expect(tavern.treasury).toBe(treasury + fee);
     expect(tavern.earned).toBe(earned + fee);
-    expect(ledger.goldSpentByHeroes).toBe(fee);
+    expect(statistics.goldSpentByHeroes).toBe(fee);
     expect(party.blessed).toBe(false);
   });
 
   it.each(['ruined tavern', 'insufficient gold'])('beds down in the stables with a %s and makes no payment', (reason) => {
-    const { party, context, town, ledger, events } = homecoming();
+    const { party, context, town, statistics, events } = homecoming();
     const tavern = serviceOf(town, 'tavern');
     if (reason === 'ruined tavern') tavern.ruined = true;
     else party.gold = 3 * partyLevel(party) * aliveMembers(party).length - 1;
@@ -483,7 +484,7 @@ describe('homecoming', () => {
     expect(party.gold).toBe(gold);
     expect(party.spent).toBe(0);
     expect(tavern.treasury).toBe(treasury);
-    expect(ledger.goldSpentByHeroes).toBe(0);
+    expect(statistics.goldSpentByHeroes).toBe(0);
     expect(events).toContainEqual({ kind: 'party', text: `${party.name} cannot afford rooms and bed down in the stables.` });
     expect(party.status).toBe('resting');
     expect(party.blessed).toBe(false);
@@ -493,7 +494,7 @@ describe('homecoming', () => {
     { afterRooms: 200, spree: 10 },
     { afterRooms: 1000, spree: 50 },
   ])('spends $spree gold on carousing from $afterRooms gold after rooms', ({ afterRooms, spree }) => {
-    const { party, context, town, ledger, events } = homecoming();
+    const { party, context, town, statistics, events } = homecoming();
     const tavern = serviceOf(town, 'tavern');
     const treasury = tavern.treasury;
     const fee = 3 * partyLevel(party) * aliveMembers(party).length;
@@ -505,14 +506,14 @@ describe('homecoming', () => {
     expect(party.gold).toBe(afterRooms - spree);
     expect(party.spent).toBe(fee + spree);
     expect(tavern.treasury).toBe(treasury + fee + spree);
-    expect(ledger.goldSpentByHeroes).toBe(fee + spree);
+    expect(statistics.goldSpentByHeroes).toBe(fee + spree);
     expect(party.renown).toBe(4);
     expect(events.some((event) => event.text.includes(`They drink ${spree} gp away telling the tale (renown 4).`))).toBe(true);
     expect(party.blessed).toBe(false);
   });
 
   it.each(['dead member', 'maximum renown', 'resurrection reserve'])('does not carouse because of a %s', (reason) => {
-    const { party, context, town, ledger, events } = homecoming();
+    const { party, context, town, statistics, events } = homecoming();
     if (reason === 'dead member') killHero(party.members[0]!);
     if (reason === 'maximum renown') party.renown = MAX_RENOWN;
     const fee = 3 * partyLevel(party) * aliveMembers(party).length;
@@ -525,7 +526,7 @@ describe('homecoming', () => {
     advanceExpedition(party, context);
 
     expect(party.gold).toBe(gold - fee);
-    expect(ledger.goldSpentByHeroes).toBe(fee);
+    expect(statistics.goldSpentByHeroes).toBe(fee);
     expect(tavern.treasury).toBe(treasury + fee);
     expect(party.renown).toBe(renown);
     expect(events.some((event) => event.text.includes('They drink'))).toBe(false);

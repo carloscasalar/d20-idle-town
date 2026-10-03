@@ -1,7 +1,7 @@
 import { MAX_RENOWN, PARTY_SIZE, type Party } from '../adventurers/party';
 import type { DeepReadonly } from '../core/readonly';
 import type { Rng } from '../core/rng';
-import { coinReasons, goldStatistics, hoard, loot, purse, sink, source, transfer, treasury, type GoldStatistics } from '../town/coin';
+import { coinReasons, hoard, loot, purse, sink, source, transfer, treasury, type GoldStatistics } from '../town/coin';
 import { difficultyCode, generateAssault, generateQuest, learnQuestIntel, revealAll, type Quest, type QuestKind, type ReadonlyQuest } from '../quests/quest';
 import { THEMES, type ThemeId } from '../quests/themes';
 import { ASSET_KINDS, type Asset } from '../town/assets';
@@ -248,7 +248,8 @@ export class Board {
   }
 }
 
-interface BoardCounters {
+/** Work statistics. Gold statistics live on `BoardContext.statistics`. */
+export interface BoardLedger {
   questsCompleted: number;
   questsFailed: number;
   questsExpired: number;
@@ -256,13 +257,6 @@ interface BoardCounters {
   raids: number;
   lairsCleared: number;
 }
-
-/**
- * Work statistics. Gold statistics are not written here. The second arm exists
- * so a statistics object that already names `goldPaid` — Game's ledger, and
- * existing Board fixtures — still typechecks. Board code cannot assign it.
- */
-export type BoardLedger = BoardCounters | (BoardCounters & Pick<GoldStatistics, 'goldPaid'>);
 
 export interface BoardEvent {
   kind: 'quest' | 'reward' | 'party' | 'economy';
@@ -276,6 +270,7 @@ export interface BoardContext {
   rng: Rng;
   tick: number;
   ledger: BoardLedger;
+  statistics: GoldStatistics;
   /** Publish immediately so observers see state at the moment of the event. */
   report: (event: BoardEvent) => void;
   /** Move a broken lair's hoard onto the company. Returns what was found, for the chronicle. */
@@ -371,7 +366,7 @@ function payContract(work: Readonly<Quest>, company: Party, employer: Employer, 
     windfall = holding.incomePerDay * context.config.windfallDays;
     holding.status = 'safe';
   }
-  const statistics = goldStatistics(context.ledger);
+  const statistics = context.statistics;
   // Windfall and reward used to be one treasury assignment. Both finish before the reward event.
   source(treasury(employer), windfall, 'windfall', statistics, coinReasons);
   transfer(treasury(employer), purse(company), work.reward, 'reward', statistics, coinReasons);
@@ -415,7 +410,7 @@ function failContract(work: Readonly<Quest>, company: Party, employer: Employer,
 
 function payBounty(work: Readonly<Quest>, company: Party, guild: Employer, _holding: Asset | undefined, context: WorkContext): void {
   const lair = bountyLair(work, context);
-  transfer(treasury(guild), purse(company), work.reward, 'reward', goldStatistics(context.ledger), coinReasons);
+  transfer(treasury(guild), purse(company), work.reward, 'reward', context.statistics, coinReasons);
   guild.questsCompleted += 1;
   guild.reputation += context.config.reputationGain;
   company.questsDone += 1;
@@ -446,7 +441,7 @@ function expireContract(contract: ReadonlyQuest, context: WorkContext): () => vo
   return () => {
     const loss = Math.max(0, Math.min(employer.treasury, holding.incomePerDay * context.config.lootingDays));
     const lair = lairById(context.lairs, contract.lairId);
-    const statistics = goldStatistics(context.ledger);
+    const statistics = context.statistics;
     if (lair?.status === 'active') transfer(treasury(employer), hoard(lair), loss, 'looting', statistics, coinReasons);
     else sink(treasury(employer), loss, 'forfeit', statistics, coinReasons);
     if (lair) unansweredRaid(lair, context);
