@@ -18,8 +18,8 @@ Status values: `todo`, `in-progress`, `done`, `blocked`.
 | 06c | A fight crashes when a Gargantuan monster does not fit (seed 75) | bug fix | done | b615320 (Cursor; reviewed by Sonnet, no corrections) |
 | 07 | Company roster: characterisation tests (arrivals, recruiting, merging, retirement) | tests | done | beb00ac (Cursor), 1e6902c (Codex correction; 13 targeted mutations caught, not re-reviewed) |
 | 07b | The long simulation tests time out on a slow machine | test fix | done | 1d5e6ef (Codex; per-tick checking cut from about 5 s to under 2 s a run) |
-| 07c | Roster bugs found by turn 07 (band of five arrives as four; ruined temple still raises the dead; retirement does not pick the most seasoned veteran) | bug fix | in-progress | Codex |
-| 08 | Company roster: deepen the module, remove the `tryRetire` callback | refactor | todo | |
+| 07c | Roster bugs found by turn 07 (band of five arrives as four; ruined temple still raises the dead; retirement does not pick the most seasoned veteran) | bug fix | done | 63a1b43 (Codex; snapshot unchanged; review folded into turn 08's) |
+| 08 | Company roster module; town services as an ordered list of steps (removes `tryRetire`) | refactor | in-progress | Codex |
 | 09 | Job intel: characterisation tests (investigation, divination, reading the road) | tests | todo | |
 | 10 | Job intel: deepen the module, remove the string-keyed `investigations`; take `learnIntel`/`revealAll` off the Board | refactor | todo | |
 | 11 | Configuration: `GameConfig` in sections per module, plain data, ready to load from YAML; remaining `'assault'` branches in `Game` and the expedition; a coin object built once with its statistics and reason table, named effect fields instead of five positional booleans | refactor | todo | |
