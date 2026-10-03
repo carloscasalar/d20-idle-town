@@ -5,7 +5,7 @@ import { ASSET_KINDS, type Asset } from '../town/assets';
 import type { Lair } from '../town/lairs';
 import type { Employer } from '../town/town';
 import { buildEncounter, type Difficulty, type EncounterSpec } from './encounters';
-import { learnOne, revealEveryFact, revealNextFact } from './job-intel';
+import { knowledgeAtPosting } from './job-intel';
 import { THEMES, themeMonsters, type ThemeId } from './themes';
 
 export { difficultyCode, isFullyKnown } from './job-intel';
@@ -55,14 +55,6 @@ const DIFFICULTY_PAY: Record<Difficulty, number> = { easy: 1, intermediate: 1.5,
 
 export const MIN_ENCOUNTERS = 2;
 export const MAX_ENCOUNTERS = 6;
-
-/**
- * Reveal the next piece of job intelligence and describe it.
- * A job that is already fully known throws: nothing remains to describe.
- */
-export function learnQuestIntel(quest: Quest): string {
-  return learnOne(quest, quest);
-}
 
 /** Short jobs are common, long ones rare. */
 export function rollEncounterCount(rng: Rng): number {
@@ -125,8 +117,7 @@ export function generateQuest(rng: Rng, terms: QuestTerms): Quest {
     theme,
     level,
     encounters,
-    revealed: 1,
-    countRevealed: false,
+    ...knowledgeAtPosting('contract'),
     reward,
     itemReward,
     guildOnly,
@@ -166,8 +157,7 @@ export function generateAssault(rng: Rng, lair: Lair, guild: Employer, partySize
     theme: lair.theme,
     level: lair.level,
     encounters,
-    revealed: 1,
-    countRevealed: true,
+    ...knowledgeAtPosting('assault'),
     reward: bounty,
     itemReward: rollLootItem(rng, lair.level + 2),
     // The guild wants the lair gone more than it wants dues: anyone may take the bounty.
@@ -193,11 +183,3 @@ export function questXp(q: ReadonlyQuest): number {
   return q.encounters.reduce((s, e) => s + e.totalXp, 0);
 }
 
-/** Learn the next thing about the job: first how long it is, then one more encounter each time. */
-export function revealNext(q: Quest): 'count' | 'encounter' | null {
-  return revealNextFact(q, q.encounters.length);
-}
-
-export function revealAll(q: Quest): void {
-  revealEveryFact(q, q.encounters.length);
-}

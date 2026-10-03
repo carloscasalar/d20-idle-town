@@ -5,6 +5,7 @@ import { createHero, killHero } from '../src/adventurers/hero';
 import { createParty, partyLevel, type Party } from '../src/adventurers/party';
 import { Rng } from '../src/core/rng';
 import { instantiate, ITEM_CATALOGUE } from '../src/items/items';
+import { jobKnowledge } from '../src/quests/job-intel';
 import type { Quest } from '../src/quests/quest';
 import { advanceExpedition, type ExpeditionContext } from '../src/sim/expedition';
 import { DEFAULT_CONFIG, Game, TICKS_PER_DAY, type GameConfig, type GameScenario, type GameStats } from '../src/sim/game';
@@ -357,7 +358,7 @@ describe('homecoming payments', () => {
       town, quest: q, rng, ledger, statistics, travelTicks: 2, restTicks: 8, shortRestHealFraction: 0.5, skillDc: 15,
       combat: () => { throw new Error('Homecoming does not fight'); }, report: (event) => { reports.push(event.text); },
       disband: (company) => roster.disband(company),
-      learnIntel: () => '', revealAll: () => {}, leaveLoot: () => {},
+      knowledge: () => jobKnowledge(q), leaveLoot: () => {},
       settleQuest: (_q, company) => { company.questId = null; },
     };
     advanceExpedition(p, context);

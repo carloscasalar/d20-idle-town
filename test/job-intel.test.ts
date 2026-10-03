@@ -3,8 +3,8 @@ import { createHero } from '../src/adventurers/hero';
 import { createParty, type Party } from '../src/adventurers/party';
 import { Rng } from '../src/core/rng';
 import type { EncounterSpec } from '../src/quests/encounters';
-import { learnOne, revealEveryFact } from '../src/quests/job-intel';
-import { difficultyCode, isFullyKnown, learnQuestIntel, revealAll, revealNext, type Quest } from '../src/quests/quest';
+import { jobKnowledge } from '../src/quests/job-intel';
+import { difficultyCode, isFullyKnown, type Quest } from '../src/quests/quest';
 import { Board, DEFAULT_BOARD_CONFIG } from '../src/sim/board';
 import { advanceExpedition, type ExpeditionContext, type ExpeditionEvent } from '../src/sim/expedition';
 import { Game, type GameConfig, type GameScenario } from '../src/sim/game';
@@ -114,8 +114,7 @@ function road(work = job(), skillDc = 15, seed = 1) {
     disband: () => { throw new Error('Travel does not disband'); },
     settleQuest: () => { throw new Error('Travel does not settle work'); },
     leaveLoot: () => { throw new Error('Travel does not leave loot'); },
-    learnIntel: (work) => learnOne(board.knowledge(work), work),
-    revealAll: (work) => revealEveryFact(board.knowledge(work), work.encounters.length),
+    knowledge: (work) => board.knowledge(work),
     report: (event) => { events.push(event); },
   };
   return { p, board, context, events };
@@ -171,7 +170,7 @@ describe('learning the next fact about a job', () => {
   it('learns the three-fight count before another encounter and reports its wording', () => {
     const work = job();
 
-    expect(learnQuestIntel(work)).toBe('it means 3 fights');
+    expect(jobKnowledge(work).learnNext()).toBe('it means 3 fights');
 
     expect(work.countRevealed).toBe(true);
     expect(work.revealed).toBe(1);
@@ -184,7 +183,7 @@ describe('learning the next fact about a job', () => {
   ])('learns encounter after $known known encounter(s) and reports its wording', ({ known, after, wording, code }) => {
     const work = job({ countRevealed: true, revealed: known });
 
-    expect(learnQuestIntel(work)).toBe(wording);
+    expect(jobKnowledge(work).learnNext()).toBe(wording);
 
     expect(work.revealed).toBe(after);
     expect(difficultyCode(work)).toBe(code);
@@ -193,8 +192,9 @@ describe('learning the next fact about a job', () => {
   it('has no next fact once all three encounters and their count are known', () => {
     const work = job({ countRevealed: true, revealed: 3 });
 
-    expect(revealNext(work)).toBeNull();
-    expect(revealNext(work)).toBeNull();
+    const knowledge = jobKnowledge(work);
+    expect(() => knowledge.learnNext()).toThrow(/already fully known/);
+    expect(() => knowledge.learnNext()).toThrow(/already fully known/);
 
     expect(work.revealed).toBe(3);
     expect(work.countRevealed).toBe(true);
@@ -212,7 +212,7 @@ describe('learning the next fact about a job', () => {
   it.each(['contract', 'assault'])('can reveal every fact about a %s at once', (kind) => {
     const work = job({ kind });
 
-    revealAll(work);
+    jobKnowledge(work).revealAll();
 
     expect(work.countRevealed).toBe(true);
     expect(work.revealed).toBe(3);
@@ -233,7 +233,7 @@ describe('learning the next fact about a job', () => {
     const board = new Board(DEFAULT_BOARD_CONFIG);
     board.replaceForScenario([job({ kind, countRevealed })]);
     const work = board.byId('tower')!;
-    const learned = reports.map(() => learnOne(board.knowledge(work), work));
+    const learned = reports.map(() => board.knowledge(work).learnNext());
 
     expect(learned).toEqual(reports);
 
@@ -347,7 +347,7 @@ describe('the free tavern attempt', () => {
   it('takes fully known work without a free attempt or payment', () => {
     const game = scene((scenario) => {
       scenario.parties[0]!.gold = 1000;
-      revealAll(scenario.quests[0]!);
+      jobKnowledge(scenario.quests[0]!).revealAll();
     });
 
     const events = hour(game);
@@ -595,7 +595,7 @@ describe('reading the road with a ranger', () => {
 
   it('does not read the road when the job is already fully known', () => {
     const work = job();
-    revealAll(work);
+    jobKnowledge(work).revealAll();
     const { p, context, events } = road(work);
 
     advanceExpedition(p, context);
@@ -621,7 +621,7 @@ describe('intelligence on arrival', () => {
 
   it('reports a familiar destination without a surprise inventory', () => {
     const work = job();
-    revealAll(work);
+    jobKnowledge(work).revealAll();
     const { p, context, events } = road(work);
     p.ticksLeft = 1;
 

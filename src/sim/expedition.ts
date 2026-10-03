@@ -5,7 +5,7 @@ import { listNames } from '../core/names';
 import type { DeepReadonly } from '../core/readonly';
 import type { Rng } from '../core/rng';
 import { describeEncounter, scaleEncounter, type EncounterSpec } from '../quests/encounters';
-import { learnOnArrival, readTheRoad } from '../quests/job-intel';
+import { learnOnArrival, readTheRoad, type JobKnowledge } from '../quests/job-intel';
 import { difficultyCode, type ReadonlyQuest } from '../quests/quest';
 import { coinReasons, purse, transfer, treasury, type GoldStatistics } from '../town/coin';
 import { BLESSING_HP_PER_LEVEL } from '../town/services';
@@ -44,8 +44,8 @@ export interface ExpeditionContext {
   disband: (company: Party) => void;
   /** Publish immediately so observers see state at the point of the event. */
   report: (event: ExpeditionEvent) => void;
-  learnIntel: (quest: ReadonlyQuest) => string;
-  revealAll: (quest: ReadonlyQuest) => void;
+  /** The job's learning handle. Expedition asks; job intelligence decides what is revealed. */
+  knowledge: (work: ReadonlyQuest) => JobKnowledge;
   settleQuest: (quest: ReadonlyQuest, party: Party, success: boolean) => void;
   leaveLoot: (quest: ReadonlyQuest, party: Party, fallen: Hero[]) => void;
 }
@@ -104,13 +104,13 @@ function travel(p: Party, q: ReadonlyQuest, context: ExpeditionContext): void {
   readTheRoad(p, q, {
     rng: context.rng,
     skillDc: context.skillDc,
-    learn: () => context.learnIntel(q),
+    knowledge: context.knowledge(q),
     report: (text) => log(context, 'party', text),
   });
   if (--p.ticksLeft <= 0) {
     p.status = 'questing';
     p.progress = 0;
-    const surprise = learnOnArrival(q, () => context.revealAll(q));
+    const surprise = learnOnArrival(q, context.knowledge(q));
     log(context, 'party', `${p.name} reach ${q.place}${surprise ? ` and take stock: ${q.encounters.length} fights ahead [${difficultyCode(q)}]` : ''}.`);
   }
 }

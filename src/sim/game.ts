@@ -17,7 +17,7 @@ import type { DeepReadonly } from '../core/readonly';
 import { hashString, Rng } from '../core/rng';
 import { MAX_LEVEL, xpToNextLevel } from '../core/xp';
 import { describeEncounter, type Difficulty } from '../quests/encounters';
-import { DEFAULT_JOB_INTEL_CONFIG, defaultJobIntelSteps, learnOne, revealEveryFact } from '../quests/job-intel';
+import { DEFAULT_JOB_INTEL_CONFIG, defaultJobIntelSteps } from '../quests/job-intel';
 import { difficultyCode, type Quest, type ReadonlyQuest } from '../quests/quest';
 import { THEMES, type ThemeId } from '../quests/themes';
 import { ASSET_KINDS, rollThreat, type Asset } from '../town/assets';
@@ -764,8 +764,7 @@ export class Game {
         if (chronicle) this.chronicleLog(kind, text);
         else this.log(kind, text, detail);
       },
-      learnIntel: (quest) => learnOne(this.board.knowledge(quest), quest),
-      revealAll: (quest) => revealEveryFact(this.board.knowledge(quest), quest.encounters.length),
+      knowledge: (quest) => this.board.knowledge(quest),
       settleQuest: (quest, party, success) => this.board.settle(quest, party, success, this.boardContext()),
       leaveLoot: (quest, party, fallen) => this.leaveLoot(quest, party, fallen),
     });

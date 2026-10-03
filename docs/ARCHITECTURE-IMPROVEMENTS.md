@@ -276,30 +276,31 @@ the roster grew pass-throughs (`learnIntel`, `revealAll`, `recordInvestigation`,
 **Change.** `src/quests/job-intel.ts` is job intelligence. After a job is
 created, it is the only writer of the two public facts — whether the encounter
 count is known, and how many encounters are revealed — and of what each company
-has tried. The Board keeps the job and exposes `knowledge`, those two fields
-and nothing else. What a company has tried is one record per job, with
-`freeAttempt`, `roundsBought` and `roadRead`, not string keys. An idle hour
-tries an ordered list of steps in the same shape as town services.
-`defaultJobIntelSteps` is the free attempt, then divination, then a paid round.
-Reading the road and taking stock on arrival are the other ways of learning.
-Divination and rounds pay through the coin module with reason `intel`, whose
-counters match `service`. `JobIntelConfig` holds the skill difficulty, both
-prices per level, both reserve multiples, and the round limit. The resurrection
-price keeps its definition on the hero. `learnQuestIntel` throws when the job
-is already fully known, instead of describing the last encounter. The Board and
-roster pass-throughs are gone.
+has tried. The Board keeps the job and `knowledge` returns the two operations
+knowledge allows: learn the next fact, and reveal every fact. Knowledge only
+grows. What a company has tried is one record per job, with `freeAttempt`,
+`roundsBought` and `roadRead`, not string keys. An idle hour tries an ordered
+list of steps in the same shape as town services. `defaultJobIntelSteps` is the
+free attempt, then divination, then a paid round. Reading the road and taking
+stock on arrival call those operations themselves; the caller passes the
+handle, not the write. Divination and rounds pay through the coin module with
+reason `intel`, whose counters match `service`. `JobIntelConfig` holds the
+skill difficulty, both prices per level, both reserve multiples, and the round
+limit. The resurrection price keeps its definition on the hero. Learning the
+next fact about a job that is already fully known throws. The Board and roster
+pass-throughs are gone, and `quest.ts` no longer wraps the writers.
 
 **Files.** `src/quests/job-intel.ts`, Quest, Party, Board, Game, Expedition,
 the company roster and coin reasons; `test/job-intel-module.test.ts` and
-`test/job-intel-regression.test.ts`; the six road assertions in
+`test/job-intel-regression.test.ts`; six assertions in five tests in
 `test/expedition.test.ts`; call sites in `test/job-intel.test.ts` and
 `test/board.test.ts` that named the removed Board methods; `CONTEXT.md` and
 the architecture references.
 
 **Evidence.** Module tests drive each way of learning, a ruined tavern, a
 ruined temple, both reserves, the round limit, one free attempt per job, and a
-made-up step placed in the list. `learnOne` and `learnQuestIntel` throw on a
-fully known job. The three-seed, 400-hour proof compares every tick with
+made-up step placed in the list. Learning another fact about a fully known job
+throws. The three-seed, 400-hour proof compares every tick with
 `investigations` removed to hashes taken from the code before the records
 changed shape. Those hashes match, so the regression snapshot was refreshed
 once, only because the inquiry records changed shape.

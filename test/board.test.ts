@@ -2,7 +2,6 @@ import assert from 'node:assert/strict';
 import { describe, expect, it } from 'vitest';
 import { createParty, type Party } from '../src/adventurers/party';
 import { Rng } from '../src/core/rng';
-import { learnOne, revealEveryFact } from '../src/quests/job-intel';
 import { generateAssault, generateQuest } from '../src/quests/quest';
 import { Board, WORK_KINDS, DEFAULT_BOARD_CONFIG, type BoardConfig, type BoardContext, type BoardLedger, type WorkKinds, type WorkBehavior } from '../src/sim/board';
 import { Game } from '../src/sim/game';
@@ -754,10 +753,10 @@ describe('Board refusals and intelligence', () => {
     const work = board.postContract(patron, holding, 'goblins', 5, null, context);
     check();
     expect(work.countRevealed).toBe(false);
-    expect(learnOne(board.knowledge(work), work)).toContain('fights');
+    expect(board.knowledge(work).learnNext()).toContain('fights');
     check();
     expect(board.byId(work.id)?.countRevealed).toBe(true);
-    revealEveryFact(board.knowledge(work), work.encounters.length);
+    board.knowledge(work).revealAll();
     check();
     expect(work.revealed).toBe(work.encounters.length);
     // Compile-time checks: none of the query routes exposes writable work.

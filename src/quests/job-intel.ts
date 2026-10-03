@@ -2,9 +2,9 @@
  * Job intelligence: what is publicly known about a Contract or Bounty, what
  * each company has tried in order to learn it, and every way of learning.
  *
- * The Board keeps the job. Callers that change a posted job pass only the two
- * knowledge fields. What a company has tried lives on the company; this module
- * is the only writer of either fact after the job is created.
+ * The Board keeps the job and hands out a handle that can only learn the next
+ * fact or reveal every fact. What a company has tried lives on the company.
+ * This module is the only writer of either fact after the job is created.
  *
  * An idle hour tries an ordered list of steps, the same shape as town services:
  * true when that step spends the hour. Reading the road and taking stock on
@@ -19,10 +19,20 @@ import { coinReasons, purse, transfer, treasury, type GoldStatistics } from '../
 import { serviceOf, type Town } from '../town/town';
 import { describeEncounter, type EncounterSpec } from './encounters';
 
-/** The two public facts. Nothing else on the job is writable here. */
+/**
+ * What a caller may do to public knowledge. Both operations only reveal more.
+ * A fully known job makes `learnNext` throw.
+ */
 export interface JobKnowledge {
+  learnNext(): string;
+  revealAll(): void;
+}
+
+interface KnowledgeRecord {
   revealed: number;
   countRevealed: boolean;
+  readonly title: string;
+  readonly encounters: readonly DeepReadonly<EncounterSpec>[];
 }
 
 /** Plain data. The resurrection price keeps its definition on the hero. */
@@ -71,6 +81,7 @@ export interface JobIntelEvent {
 
 export interface JobIntelContext {
   work: IntelWork;
+  /** Learning handle for `work`. The module calls it; the caller does not write. */
   knowledge: JobKnowledge;
   town: Town;
   rng: Rng;
@@ -100,8 +111,8 @@ export function seekJobIntelligence(company: Party, context: JobIntelContext, st
 export interface RoadIntelContext {
   rng: Rng;
   skillDc: number;
-  /** Wording of the one fact just learned. The caller grants the knowledge write. */
-  learn: () => string;
+  /** The job being travelled. The module decides what a successful reading reveals. */
+  knowledge: JobKnowledge;
   report: (text: string) => void;
 }
 
@@ -126,34 +137,39 @@ export function difficultyCode(work: {
   return [...known, ...Array.from({ length: hidden }, () => '?')].join('/');
 }
 
+/** How much is public when a job is posted. A bounty already shows its length. */
+export function knowledgeAtPosting(kind: 'contract' | 'assault'): { revealed: number; countRevealed: boolean } {
+  return { revealed: 1, countRevealed: kind === 'assault' };
+}
+
+/** A handle for a job this module may reveal. Knowledge only grows. */
+export function jobKnowledge(work: KnowledgeRecord): JobKnowledge {
+  return {
+    learnNext() {
+      const learned = revealNextFact(work);
+      if (learned === null) throw new Error(`"${work.title}" is already fully known.`);
+      if (learned === 'count') return `it means ${work.encounters.length} fights`;
+      const next = work.encounters[work.revealed - 1]!;
+      return `the next fight will be ${describeEncounter(next)} (${next.difficulty})`;
+    },
+    revealAll() {
+      work.countRevealed = true;
+      work.revealed = work.encounters.length;
+    },
+  };
+}
+
 /** Learn the next fact: the encounter count first, then one encounter. */
-export function revealNextFact(knowledge: JobKnowledge, encounterCount: number): 'count' | 'encounter' | null {
-  if (!knowledge.countRevealed) {
-    knowledge.countRevealed = true;
+function revealNextFact(work: KnowledgeRecord): 'count' | 'encounter' | null {
+  if (!work.countRevealed) {
+    work.countRevealed = true;
     return 'count';
   }
-  if (knowledge.revealed < encounterCount) {
-    knowledge.revealed += 1;
+  if (work.revealed < work.encounters.length) {
+    work.revealed += 1;
     return 'encounter';
   }
   return null;
-}
-
-export function revealEveryFact(knowledge: JobKnowledge, encounterCount: number): void {
-  knowledge.countRevealed = true;
-  knowledge.revealed = encounterCount;
-}
-
-/**
- * Reveal the next fact and describe it. A job that is already fully known is
- * an error: nothing remains to learn, so there is no wording to return.
- */
-export function learnOne(knowledge: JobKnowledge, work: { readonly title: string; readonly encounters: readonly DeepReadonly<EncounterSpec>[] }): string {
-  const learned = revealNextFact(knowledge, work.encounters.length);
-  if (learned === null) throw new Error(`"${work.title}" is already fully known.`);
-  if (learned === 'count') return `it means ${work.encounters.length} fights`;
-  const next = work.encounters[knowledge.revealed - 1]!;
-  return `the next fight will be ${describeEncounter(next)} (${next.difficulty})`;
 }
 
 /** One try per job, while the tavern stands. Success and failure both spend the hour. */
@@ -166,7 +182,7 @@ export function freeAttempt(company: Party, context: JobIntelContext): boolean {
   const dice = diceText(check);
   const dc = context.config.skillDc;
   if (check.success) {
-    const learned = learnOne(context.knowledge, context.work);
+    const learned = context.knowledge.learnNext();
     context.report({ kind: 'shop', text: `${check.hero.name} works the room at ${tavern.name} (Persuasion ${dice} vs DC ${dc}): ${learned}.` });
   } else {
     context.report({ kind: 'shop', text: `${check.hero.name} tries to get the regulars at ${tavern.name} talking about "${context.work.title}" (Persuasion ${dice} vs DC ${dc}) and gets nowhere.` });
@@ -183,7 +199,7 @@ export function divination(company: Party, context: JobIntelContext): boolean {
   const reserve = resurrectionCost(level) * context.config.divinationReserveFactor;
   if (company.gold - cost < reserve) return false;
   transfer(purse(company), treasury(temple), cost, 'intel', context.statistics, coinReasons);
-  revealEveryFact(context.knowledge, context.work.encounters.length);
+  context.knowledge.revealAll();
   context.report({
     kind: 'temple',
     text: `${company.name} pay ${cost} gp for a divination at the ${temple.name}. The priests see "${context.work.title}" whole: ${context.work.encounters.length} fights [${difficultyCode(context.work)}].`,
@@ -202,7 +218,7 @@ export function paidRound(company: Party, context: JobIntelContext): boolean {
   if (tavern.ruined || company.gold - cost < reserve) return false;
   transfer(purse(company), treasury(tavern), cost, 'intel', context.statistics, coinReasons);
   ensureInquiry(company, context.work.id).roundsBought = done + 1;
-  const learned = learnOne(context.knowledge, context.work);
+  const learned = context.knowledge.learnNext();
   context.report({ kind: 'shop', text: `${company.name} buy a round at ${tavern.name} (${cost} gp) and ask about "${context.work.title}": ${learned}.` });
   return true;
 }
@@ -218,20 +234,20 @@ export function readTheRoad(
   const check = rollSkill(context.rng, aliveMembers(company), 'Survival', context.skillDc);
   if (!check) return;
   const dice = diceText(check);
-  if (check.success) context.report(`On the road, ${check.hero.name} reads the tracks (Survival ${dice} vs DC ${context.skillDc}): ${context.learn()}.`);
+  if (check.success) context.report(`On the road, ${check.hero.name} reads the tracks (Survival ${dice} vs DC ${context.skillDc}): ${context.knowledge.learnNext()}.`);
   else context.report(`${check.hero.name} tries to read the tracks along the road (Survival ${dice} vs DC ${context.skillDc}) and learns nothing.`);
 }
 
 /**
- * Taking stock on arrival. Returns whether the company still had something to
- * learn before the destination was laid bare. `reveal` grants the knowledge write.
+ * Taking stock on arrival. Reveals every remaining fact and returns whether
+ * the company still had something to learn before that.
  */
 export function learnOnArrival(
   work: { readonly countRevealed: boolean; readonly revealed: number; readonly encounters: { readonly length: number } },
-  reveal: () => void,
+  knowledge: JobKnowledge,
 ): boolean {
   const surprise = !isFullyKnown(work);
-  reveal();
+  knowledge.revealAll();
   return surprise;
 }
 

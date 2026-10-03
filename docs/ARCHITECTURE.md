@@ -170,10 +170,8 @@ enchanter buys back.
   for companies larger than four.
 - **`quest.ts`** — a `Quest` is the unit of work: two to six `EncounterSpec`s, a
   reward, an optional item, a giver, the holding at stake and the lair behind it.
-  Creation still sets how much is public at posting. Later changes to
-  `revealed` and `countRevealed` belong to job intelligence; `revealNext`,
-  `revealAll` and `learnQuestIntel` delegate there. `learnQuestIntel` throws
-  when the job is already fully known.
+  How much is public at posting, and every later change to `revealed` and
+  `countRevealed`, is inside job intelligence.
   `generateQuest` prices a contract from the holding's income, the difficulty
   mix, the employer's generosity and desperation; `generateAssault` builds the
   standing bounty on a lair.
@@ -181,11 +179,12 @@ enchanter buys back.
   created, of the two public facts (whether the encounter count is known, and
   how many encounters are revealed) and of what each company has tried: a free
   attempt, rounds bought, and a look at the road, named fields per job.
-  Callers that change a posted job pass only those two fields, from
-  `Board.knowledge`. An idle hour tries an ordered list of steps — the free
-  attempt, then divination, then a paid round — the same shape as town
-  services. `defaultJobIntelSteps` is that list. Reading the road and taking
-  stock on arrival are the other ways of learning. `JobIntelConfig` and
+  `Board.knowledge` hands back the two operations knowledge allows: learn the
+  next fact, or reveal every fact. Knowledge only grows. An idle hour tries an
+  ordered list of steps — the free attempt, then divination, then a paid round
+  — the same shape as town services. `defaultJobIntelSteps` is that list.
+  Reading the road and taking stock on arrival call those same operations
+  themselves. `JobIntelConfig` and
   `DEFAULT_JOB_INTEL_CONFIG` hold the skill difficulty, the price per level of
   divination and of a round, each reserve as a multiple of the resurrection
   price, and the limit on paid rounds. The resurrection price keeps its
@@ -233,8 +232,8 @@ before the Board closes work, then applies them after closure. The three
 shared defaults for renown cap, encounter company size and lair strength cap
 come from `MAX_RENOWN`, `PARTY_SIZE` and `MAX_STRENGTH`; other users read those
 same constants. Query results are deeply read-only TypeScript views, including
-encounters and rewards. `knowledge` hands job intelligence the two public
-facts and nothing else. Only scenario setup uses `recordsForScenario` and
+encounters and rewards. `knowledge` hands back learn-next and reveal-all;
+those operations live in job intelligence, and knowledge only grows. Only scenario setup uses `recordsForScenario` and
 `replaceForScenario`; regression serialization uses `all()`.
 
 The ordering of `step()` is the game:
@@ -283,8 +282,8 @@ progress and hands the finished work and outcome to settlement exactly once.
 Game forwards that callback to the Board, which alone releases the company.
 On a wipe, Expedition first invokes its roster-supplied `disband` operation at
 the same point before loot storage, wipe counting and settlement as before.
-Expedition asks job intelligence to read the road and to take stock on arrival;
-the caller grants the knowledge write. Expiring
+Expedition asks job intelligence to read the road and to take stock on arrival,
+passing the job's learning handle; the module decides what each reveals. Expiring
 a Contract without its employer or holding is an error before it is closed or
 counted; real games never remove those entities. Lost-loot storage stays in `Game` and is called at the same
 point in the journey. A broken lair's hoard is paid out by `Game` when the

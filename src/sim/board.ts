@@ -2,7 +2,7 @@ import { MAX_RENOWN, PARTY_SIZE, type Party } from '../adventurers/party';
 import type { DeepReadonly } from '../core/readonly';
 import type { Rng } from '../core/rng';
 import { coinReasons, hoard, loot, purse, sink, source, transfer, treasury, type GoldStatistics } from '../town/coin';
-import type { JobKnowledge } from '../quests/job-intel';
+import { jobKnowledge, type JobKnowledge } from '../quests/job-intel';
 import { difficultyCode, generateAssault, generateQuest, type Quest, type QuestKind, type ReadonlyQuest } from '../quests/quest';
 import { THEMES, type ThemeId } from '../quests/themes';
 import { ASSET_KINDS, type Asset } from '../town/assets';
@@ -199,15 +199,9 @@ export class Board {
     }
   }
 
-  /** The two public-knowledge fields. Job intelligence is the only writer. */
+  /** Learn the next fact, or reveal every fact. Knowledge only grows. */
   knowledge(work: ReadonlyQuest): JobKnowledge {
-    const owned = this.owned(work);
-    return {
-      get revealed() { return owned.revealed; },
-      set revealed(value: number) { owned.revealed = value; },
-      get countRevealed() { return owned.countRevealed; },
-      set countRevealed(value: boolean) { owned.countRevealed = value; },
-    };
+    return jobKnowledge(this.owned(work));
   }
 
   /** Finish work and release only the holding/lair links that name it. */

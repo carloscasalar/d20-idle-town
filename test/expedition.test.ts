@@ -6,8 +6,8 @@ import type { CombatOutcome } from '../src/combat/battlecast';
 import { listNames } from '../src/core/names';
 import { Rng } from '../src/core/rng';
 import type { EncounterSpec } from '../src/quests/encounters';
-import { jobInquiry } from '../src/quests/job-intel';
-import { learnQuestIntel, revealAll, type Quest } from '../src/quests/quest';
+import { jobInquiry, jobKnowledge } from '../src/quests/job-intel';
+import type { Quest } from '../src/quests/quest';
 import { advanceExpedition, type CombatResolver, type ExpeditionContext, type ExpeditionEvent } from '../src/sim/expedition';
 import { generateTown, serviceOf } from '../src/town/town';
 
@@ -58,8 +58,7 @@ function setup(level = 1) {
     combat,
     disband: (company) => roster.disband(company),
     report: (event) => { events.push(event); calls.push(`event:${event.kind}`); },
-    learnIntel: () => learnQuestIntel(quest),
-    revealAll: () => revealAll(quest),
+    knowledge: () => jobKnowledge(quest),
     settleQuest,
     leaveLoot,
   };
@@ -619,8 +618,7 @@ describe('reading the road', () => {
     party.questId = nextQuest.id;
     party.ticksLeft = 3;
     context.quest = nextQuest;
-    context.learnIntel = () => learnQuestIntel(nextQuest);
-    context.revealAll = () => revealAll(nextQuest);
+    context.knowledge = () => jobKnowledge(nextQuest);
     context.skillDc = 0;
     advanceExpedition(party, context);
 

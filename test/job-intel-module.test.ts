@@ -10,17 +10,15 @@ import {
   freeAttempt,
   isFullyKnown,
   jobInquiry,
+  jobKnowledge,
   learnOnArrival,
-  learnOne,
   paidRound,
   readTheRoad,
-  revealEveryFact,
   seekJobIntelligence,
   type JobIntelContext,
   type JobIntelEvent,
   type JobIntelStep,
 } from '../src/quests/job-intel';
-import { learnQuestIntel, type Quest } from '../src/quests/quest';
 import { emptyGoldStatistics } from '../src/town/coin';
 import { generateTown, serviceOf, type ServiceKind } from '../src/town/town';
 
@@ -48,7 +46,7 @@ function scene(options: { gold?: number; level?: number; skillDc?: number; ruine
   const events: JobIntelEvent[] = [];
   const context: JobIntelContext = {
     work,
-    knowledge: work,
+    knowledge: jobKnowledge(work),
     town,
     rng: new Rng(3),
     statistics,
@@ -201,7 +199,7 @@ describe('job intelligence', () => {
     const road = (skillDc: number) => readTheRoad(company, work, {
       rng: new Rng(4),
       skillDc,
-      learn: () => learnOne(work, work),
+      knowledge: jobKnowledge(work),
       report: (text) => lines.push(text),
     });
 
@@ -222,7 +220,7 @@ describe('job intelligence', () => {
     const road = () => readTheRoad(company, work, {
       rng: new Rng(4),
       skillDc: 0,
-      learn: () => learnOne(work, work),
+      knowledge: jobKnowledge(work),
       report: (text) => lines.push(text),
     });
 
@@ -235,13 +233,13 @@ describe('job intelligence', () => {
 
   it('does not read a road when the job is already fully known', () => {
     const { company, work } = scene();
-    revealEveryFact(work, work.encounters.length);
+    jobKnowledge(work).revealAll();
     const lines: string[] = [];
 
     readTheRoad(company, work, {
       rng: new Rng(4),
       skillDc: 0,
-      learn: () => { throw new Error('A fully known job is not read.'); },
+      knowledge: jobKnowledge(work),
       report: (text) => lines.push(text),
     });
 
@@ -251,25 +249,21 @@ describe('job intelligence', () => {
 
   it('taking stock on arrival reveals a surprise, and a known destination is familiar', () => {
     const { work } = scene();
-    let reveals = 0;
+    const knowledge = jobKnowledge(work);
 
-    expect(learnOnArrival(work, () => {
-      reveals += 1;
-      revealEveryFact(work, work.encounters.length);
-    })).toBe(true);
-    expect(reveals).toBe(1);
+    expect(learnOnArrival(work, knowledge)).toBe(true);
     expect(isFullyKnown(work)).toBe(true);
 
-    expect(learnOnArrival(work, () => { reveals += 1; })).toBe(false);
-    expect(reveals).toBe(2);
+    expect(learnOnArrival(work, knowledge)).toBe(false);
+    expect(isFullyKnown(work)).toBe(true);
   });
 
   it('refuses to learn a fact about a job that is already fully known', () => {
     const { work } = scene();
-    revealEveryFact(work, work.encounters.length);
+    const knowledge = jobKnowledge(work);
+    knowledge.revealAll();
 
-    expect(() => learnOne(work, work)).toThrow(/already fully known/);
-    expect(() => learnQuestIntel(work as Quest)).toThrow(/already fully known/);
+    expect(() => knowledge.learnNext()).toThrow(/already fully known/);
     expect(work.revealed).toBe(work.encounters.length);
   });
 
@@ -284,6 +278,21 @@ describe('job intelligence', () => {
     expect(seekJobIntelligence(praying.company, praying.context, defaultJobIntelSteps())).toBe(true);
     expect(praying.events.map((event) => event.kind)).toEqual(['temple']);
     expect(isFullyKnown(praying.work)).toBe(true);
+  });
+
+  it('divines when the free attempt is already spent and both a divination and a round can be paid', () => {
+    const { company, work, town, context, events } = scene({ skillDc: 100, gold: 5000 });
+    const tavernBefore = serviceOf(town, 'tavern').treasury;
+    expect(freeAttempt(company, context)).toBe(true);
+    events.length = 0;
+
+    expect(seekJobIntelligence(company, context, defaultJobIntelSteps())).toBe(true);
+
+    expect(events.map((event) => event.kind)).toEqual(['temple']);
+    expect(isFullyKnown(work)).toBe(true);
+    expect(company.spent).toBe(DEFAULT_JOB_INTEL_CONFIG.divinationCostPerLevel * partyLevel(company));
+    expect(serviceOf(town, 'tavern').treasury).toBe(tavernBefore);
+    expect(jobInquiry(company, work.id)?.roundsBought).toBe(0);
   });
 
   it('runs a made-up way of learning in the place the list gives it', () => {
