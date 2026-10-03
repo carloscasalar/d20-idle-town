@@ -17,7 +17,7 @@ Status values: `todo`, `in-progress`, `done`, `blocked`.
 | 06 | Coin transfers: one module moves gold, with reasons as data | refactor | done | 0288d2a, f11e248 (bug fix), a7ed2a9, 991b039 (Cursor; 2 correction rounds) |
 | 06c | A fight crashes when a Gargantuan monster does not fit (seed 75) | bug fix | done | b615320 (Cursor; reviewed by Sonnet, no corrections) |
 | 07 | Company roster: characterisation tests (arrivals, recruiting, merging, retirement) | tests | in-progress | beb00ac (Cursor); review pending |
-| 07b | The long simulation tests time out on a slow machine | test fix | in-progress | Cursor |
+| 07b | The long simulation tests time out on a slow machine | test fix | in-progress | Codex (the Cursor run died on reconnects overnight, no file changed) |
 | 07c | Roster bugs found by turn 07 (band of five arrives as four; ruined temple still raises the dead; retirement does not pick the most seasoned veteran) | bug fix | todo | |
 | 08 | Company roster: deepen the module, remove the `tryRetire` callback | refactor | todo | |
 | 09 | Job intel: characterisation tests (investigation, divination, reading the road) | tests | todo | |
@@ -55,3 +55,4 @@ Bugs found during a task get a new row inserted before the task continues.
 - Lesson: a Sonnet reviewer is enough for a contained bug fix; keep the default model for refactor reviews where design judgement matters.
 - Turn 07: Cursor took about an hour. It reported five suspected bugs. Three are bugs (a band of five is built as four by `rollClasses`; a ruined temple is still paid to raise the dead, unlike every other service; retirement takes the first level-8 veteran, not the most seasoned as the code's own comment says) and go to turn 07c. Two are rule questions for an issue (the temple raises the fallen in company order, not the cheapest first; a partial merge moves the whole purse, potions and stash to the host, leaving those who stay behind with nothing).
 - The suite now times out on this machine: a 400-hour run takes 4-5 s at every commit tonight (about 1 s earlier), so the machine is slower, not the code. Per-tick checkers make the long tests several times slower than the simulation. Turn 07b.
+- Turn 07b: the Cursor run stalled overnight (the machine slept), then died with exit 143 while reconnecting for the fourth time; no file had changed. Codex's limit had reset by then, so the turn restarted on Codex in a new session.
