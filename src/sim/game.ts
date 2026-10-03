@@ -1,25 +1,17 @@
-import { listNames } from '../core/names';
 import { coinReasons, emptyGoldStatistics, hoard, loot, purse, sink, source, transfer, treasury } from '../town/coin';
-import { visitTownServices } from '../town/services';
+import { buyPotions, sellLoot, buyMagicItem, payGuildDues, buyBlessing, buyArmour, visitTownServices } from '../town/services';
+import { CompanyRoster, DEFAULT_COMPANY_ROSTER_CONFIG, type CompanyRosterConfig, type RosterContext } from '../adventurers/company-roster';
 import {
-  describeHero,
-  resurrectHero,
   resurrectionCost,
   rollSkill,
   type Hero,
 } from '../adventurers/hero';
 import {
   aliveMembers,
-  buryDead,
-  createParty,
   deadMembers,
-  describeParty,
-  hasRoom,
-  isFull,
-  mergeParties,
   partyLevel,
-  PARTY_SIZE,
   type Party,
+  type ReadonlyParty,
 } from '../adventurers/party';
 import { runCombat } from '../combat/battlecast';
 import { describeEffect, rollStockItem, type MagicItem } from '../items/items';
@@ -37,9 +29,6 @@ import {
   generateTown,
   ITEM_SHOPS,
   MAX_STOCK,
-  RETIREMENT_LEVEL,
-  RETIREMENT_PRICE,
-  retiredEmployer,
   serviceOf,
   type Employer,
   type Town,
@@ -75,7 +64,9 @@ export interface GameStats {
   lairsCleared: number;
 }
 
-export interface GameConfig extends Omit<BoardConfig, 'contractOpenTicks'> {
+export interface GameConfig extends Omit<BoardConfig, 'contractOpenTicks'>, Omit<CompanyRosterConfig, 'maxCompanies' | 'disbandTicks'> {
+  /** Days before a broken company joins a host. */
+  disbandDays: number;
   seed: number;
   maxOpenQuests: number;
   maxParties: number;
@@ -257,24 +248,25 @@ export interface GameQuestView {
   readonly encounters: readonly GameEncounterView[];
 }
 
+export const TICKS_PER_DAY = 24;
+
 const { contractOpenTicks: _contractOpenTicks, ...boardDefaults } = DEFAULT_BOARD_CONFIG;
+const { maxCompanies, disbandTicks, ...rosterDefaults } = DEFAULT_COMPANY_ROSTER_CONFIG;
 
 export const DEFAULT_CONFIG: GameConfig = {
   ...boardDefaults,
+  ...rosterDefaults,
+  disbandDays: disbandTicks / TICKS_PER_DAY,
   seed: 20260907,
   maxOpenQuests: 8,
-  maxParties: 8,
-  arrivalInterval: 10,
+  maxParties: maxCompanies,
   travelTicks: 2,
   restTicks: 8,
   shortRestHealFraction: 0.5,
-  patienceTicks: 12,
   contractDays: 3,
   ruinDays: 3,
   difficultyScale: 1.15,
 };
-
-export const TICKS_PER_DAY = 24;
 
 /** An employer posts work only when its treasury is at least this much. */
 export const POSTING_THRESHOLD = 25;
@@ -291,8 +283,6 @@ const LAIR_LEVELS: [number, number] = [5, 8];
 const LAIR_RESPAWN_DAYS = 12;
 /** The odds an eligible company goes for a lair on a given idle hour. */
 const ASSAULT_APPETITE = 0.35;
-/** Days a broken company waits for its own recruits before its survivors sign on with whoever has room. */
-const DISBAND_AFTER_DAYS = 3;
 
 export class Game {
   private readonly config: GameConfig;
@@ -300,7 +290,7 @@ export class Game {
   private readonly town: Town;
   private tick = 0;
   private readonly board: Board;
-  private parties: Party[] = [];
+  private readonly roster: CompanyRoster;
   private events: GameEvent[] = [];
   private chronicle: GameEvent[] = [];
   private stats: GameStats = {
@@ -320,7 +310,6 @@ export class Game {
     lairsCleared: 0,
   };
   private lairs: Lair[] = [];
-  private nextArrival: number;
   private debtDays = new Map<string, number>();
   private listeners: ((event: GameEventView) => void)[] = [];
 
@@ -346,7 +335,21 @@ export class Game {
     });
     this.rng = new Rng(this.config.seed);
     this.town = generateTown(this.rng);
-    this.nextArrival = 1;
+    this.roster = new CompanyRoster({
+      maxCompanies: this.config.maxParties,
+      arrivalInterval: this.config.arrivalInterval,
+      patienceTicks: this.config.patienceTicks,
+      disbandTicks: this.config.disbandDays * TICKS_PER_DAY,
+      companySize: this.config.companySize,
+      maxCompanySize: this.config.maxCompanySize,
+      retirementLevel: this.config.retirementLevel,
+      retirementPrice: this.config.retirementPrice,
+      retirementCapitalShare: this.config.retirementCapitalShare,
+      firstArrivalTick: this.config.firstArrivalTick,
+      arrivalQuestLevelChance: this.config.arrivalQuestLevelChance,
+      strangerExtraMembers: this.config.strangerExtraMembers,
+      recruitLevelTolerance: this.config.recruitLevelTolerance,
+    });
     const temple = serviceOf(this.town, 'temple');
     this.log('town', `Welcome to ${this.town.name}. Adventurers gather at ${this.town.tavernName}; the ${temple.name} keeps its doors open for the fallen.`);
     for (const e of this.town.employers) {
@@ -377,8 +380,8 @@ export class Game {
       get tick() { return duringSetup(() => game.tick); },
       set tick(value) { duringSetup(() => { game.tick = value; }); },
       get town() { return duringSetup(() => game.town); },
-      get parties() { return duringSetup(() => game.parties); },
-      set parties(value) { duringSetup(() => { game.parties = value; }); },
+      get parties() { return duringSetup(() => game.roster.recordsForScenario()); },
+      set parties(value) { duringSetup(() => { game.roster.replaceForScenario(value); }); },
       get quests() { return duringSetup(() => game.board.recordsForScenario()); },
       set quests(value) { duringSetup(() => { game.board.replaceForScenario(value); }); },
       get lairs() { return duringSetup(() => game.lairs); },
@@ -402,7 +405,7 @@ export class Game {
     return JSON.stringify({
       tick: this.tick,
       town: this.town,
-      parties: this.parties,
+      parties: this.roster.all(),
       quests: this.board.all(),
       lairs: this.lairs,
       stats: this.stats,
@@ -447,13 +450,13 @@ export class Game {
     return this.board.open();
   }
 
-  private get activeParties(): Party[] {
-    return this.parties.filter((p) => p.status !== 'disbanded');
+  private get activeParties(): readonly ReadonlyParty[] {
+    return this.roster.active();
   }
 
   /** A fresh, immutable snapshot for renderers. */
   view(): GameView {
-    const partyNames = new Map(this.parties.map((party) => [party.id, party.name]));
+    const partyNames = new Map(this.roster.all().map((party) => [party.id, party.name]));
     const lairs = new Map(this.lairs.map((lair) => [lair.id, lair]));
     return Object.freeze({
       time: formatTime(this.tick),
@@ -571,11 +574,11 @@ export class Game {
     });
   }
 
-  private partyStatusText(party: Party): string {
+  private partyStatusText(party: ReadonlyParty): string {
     const quest = this.questById(party.questId);
     switch (party.status) {
       case 'idle':
-        return aliveMembers(party).length < PARTY_SIZE ? `waiting for recruits (${party.idleTicks}h)` : 'looking at the board';
+        return !this.roster.isReady(party) ? `waiting for recruits (${party.idleTicks}h)` : 'looking at the board';
       case 'traveling':
         return `on the road to ${quest?.place ?? '?'} (${party.ticksLeft}h)`;
       case 'questing':
@@ -608,9 +611,9 @@ export class Game {
     this.raids();
     this.postQuests();
     this.postAssaults();
-    this.arrivals();
+    this.roster.arrivals({ ...this.rosterContext(), board: this.board });
     // Famous companies get first pick of the board.
-    for (const party of [...this.activeParties].sort((a, b) => b.renown - a.renown)) this.updateParty(party);
+    this.roster.updateActive((party) => this.updateParty(party));
     this.expireQuests();
   }
 
@@ -749,31 +752,6 @@ export class Game {
     this.board.expireContracts(this.boardContext());
   }
 
-  // ---------------------------------------------------------------- arrivals
-
-  private arrivals(): void {
-    if (this.tick < this.nextArrival) return;
-    this.nextArrival = this.tick + this.rng.int(Math.ceil(this.config.arrivalInterval / 2), this.config.arrivalInterval * 2);
-    if (this.activeParties.length >= this.config.maxParties) return;
-
-    const stranded = this.activeParties.find((p) => p.status === 'idle' && !isFull(p) && p.idleTicks >= this.config.patienceTicks);
-    if (stranded) {
-      const missing = PARTY_SIZE - aliveMembers(stranded).length;
-      const band = createParty(this.rng, partyLevel(stranded), this.rng.int(Math.max(1, missing), Math.max(1, missing) + 1), this.tick);
-      this.parties.push(band);
-      this.stats.partiesArrived += 1;
-      this.log('party', `${describeParty(band)} arrive at ${this.town.tavernName}: survivors of another company, looking for work.`);
-      return;
-    }
-
-    let level = 1;
-    if (this.openQuests.length > 0 && this.rng.chance(0.3)) level = this.rng.pick(this.openQuests).level;
-    const party = createParty(this.rng, level, PARTY_SIZE, this.tick);
-    this.parties.push(party);
-    this.stats.partiesArrived += 1;
-    this.log('party', `${describeParty(party)} arrive at ${this.town.tavernName}: ${party.members.map(describeHero).join(', ')}.`);
-  }
-
   // ---------------------------------------------------------------- parties
 
   private updateParty(p: Party): void {
@@ -802,9 +780,9 @@ export class Game {
 
   private idle(p: Party): void {
     p.idleTicks += 1;
-    if (!isFull(p)) {
-      this.recruit(p);
-      if (!isFull(p)) return;
+    if (!this.roster.isReady(p)) {
+      this.roster.recruit(p, this.rosterContext());
+      if (!this.roster.isReady(p)) return;
     }
     if (this.shop(p)) return;
     const level = partyLevel(p);
@@ -890,12 +868,12 @@ export class Game {
   private hasFirstRefusal(q: ReadonlyQuest, p: Party): boolean {
     const employer = this.employerById(q.giverId);
     if (!employer?.favoredPartyId || employer.favoredPartyId === p.id) return true;
-    const friends = this.parties.find((o) => o.id === employer.favoredPartyId);
+    const friends = this.roster.byId(employer.favoredPartyId);
     if (!friends || friends.status === 'disbanded') return true;
     return this.tick - q.postedAt >= TICKS_PER_DAY;
   }
 
-  /** Spend this idle hour on the town's services, keeping retirement in Game. */
+  /** The complete service order is data supplied by Game. */
   private shop(p: Party): boolean {
     return visitTownServices(p, {
       town: this.town,
@@ -906,90 +884,24 @@ export class Game {
         if (chronicle) this.chronicleLog(kind, text);
         else this.log(kind, text);
       },
-      tryRetire: () => this.retire(p),
-    });
+    }, [
+      buyPotions, sellLoot, buyMagicItem, payGuildDues, buyBlessing,
+      this.roster.retirementStep(this.rosterContext()), buyArmour,
+    ]);
   }
 
-  /** The most seasoned living veteran may retire when the company can afford a business. */
-  private retire(p: Party): boolean {
-    const veteran = aliveMembers(p)
-      .filter((h) => h.level >= RETIREMENT_LEVEL)
-      .sort((a, b) => b.level - a.level || b.xp - a.xp)[0];
-    if (!veteran || p.gold < RETIREMENT_PRICE + resurrectionCost(partyLevel(p))) return false;
-    p.members = p.members.filter((h) => h !== veteran);
-    for (const item of veteran.items) p.stash.push(item);
-    veteran.items = [];
-    const capital = Math.floor(RETIREMENT_PRICE * 0.2);
-    const employer = retiredEmployer(this.rng, veteran.name, p.id);
-    // 20,000 leaves the world; 5,000 is the new employer's opening treasury. No event between them.
-    sink(purse(p), RETIREMENT_PRICE - capital, 'retirement', this.stats, coinReasons);
-    transfer(purse(p), treasury(employer), capital, 'retirement', this.stats, coinReasons);
-    this.town.employers.push(employer);
-    this.stats.retirements += 1;
-    this.chronicleLog(
-      'town',
-      `${describeHero(veteran)} retires from ${p.name}, buys ${employer.assets[0]!.name} for ${RETIREMENT_PRICE} gp and settles in ${this.town.name}. Old friends will hear of any trouble first.`,
-    );
-    return true;
-  }
-
-  /** Fill empty seats: temple first if the coin is there, then merge with another incomplete band. */
-  private recruit(p: Party): void {
-    const temple = serviceOf(this.town, 'temple');
-    const raised: Hero[] = [];
-    let bill = 0;
-    if (!temple.ruined) {
-      for (const dead of deadMembers(p)) {
-        const cost = resurrectionCost(dead.level);
-        if (p.gold < cost) continue;
-        transfer(purse(p), treasury(temple), cost, 'service', this.stats, coinReasons, dead);
-        resurrectHero(dead);
-        this.stats.resurrections += 1;
-        raised.push(dead);
-        bill += cost;
-      }
-    }
-    if (raised.length > 0) {
-      this.chronicleLog('temple', `${p.name} pay ${bill} gp at the ${temple.name}. ${listNames(raised.map(describeHero))} ${raised.length === 1 ? 'draws' : 'draw'} breath again.`);
-    }
-    if (isFull(p)) return;
-
-    const level = partyLevel(p);
-    const donor = this.activeParties.find((o) => o !== p && o.status === 'idle' && !isFull(o) && partyLevel(o) === level);
-    if (donor) {
-      this.absorb(p, donor);
-      return;
-    }
-    // Nobody in the same boat. After a few days the survivors sign on with whoever has room.
-    if (p.idleTicks < DISBAND_AFTER_DAYS * TICKS_PER_DAY) return;
-    const host = this.activeParties
-      .filter((o) => o !== p && (o.status === 'idle' || o.status === 'resting') && isFull(o) && hasRoom(o) && Math.abs(partyLevel(o) - level) <= 1)
-      .sort((a, b) => Math.abs(partyLevel(a) - level) - Math.abs(partyLevel(b) - level) || aliveMembers(a).length - aliveMembers(b).length)[0];
-    if (!host) return;
-    this.absorb(host, p, true);
-  }
-
-  /** Donor survivors join the host while there is room; a host with six turns the rest away. */
-  private absorb(host: Party, donor: Party, gaveUp = false): void {
-    const donorName = donor.name;
-    const donorMembers = aliveMembers(donor).map((h) => h.name);
-    const leftover = mergeParties(host, donor, this.stats);
-    const size = aliveMembers(host).length;
-    if (leftover.length === 0) {
-      for (const h of buryDead(donor)) this.log('death', `${donorName} leave ${h.name} in the temple's care for good.`);
-      donor.status = 'disbanded';
-      this.log(
-        'party',
-        gaveUp
-          ? `${donorName} give up waiting. ${listNames(donorMembers)} sign on with ${host.name}, now ${size} strong.`
-          : `${donorName} (${listNames(donorMembers)}) join ${host.name}. The company marches ${size} strong.`,
-      );
-    } else {
-      this.log('party', `${host.name} take on ${listNames(donorMembers.filter((n) => !leftover.some((h) => h.name === n)))} from ${donorName}; ${listNames(leftover.map((h) => h.name))} stay behind waiting for another band.`);
-    }
-    if (isFull(host)) {
-      for (const h of buryDead(host)) this.log('death', `${host.name} lay ${h.name} to rest. They will not be coming back.`);
-    }
+  private rosterContext(): RosterContext {
+    return {
+      town: this.town,
+      rng: this.rng,
+      tick: this.tick,
+      ledger: this.stats,
+      statistics: this.stats,
+      report: ({ kind, text, chronicle }) => {
+        if (chronicle) this.chronicleLog(kind, text);
+        else this.log(kind, text);
+      },
+    };
   }
 
   /**
@@ -1069,7 +981,7 @@ function itemView(item: DeepReadonly<MagicItem>): GameItemView {
   return Object.freeze({ name: item.name, effect: describeEffect(item.effect), price: item.price });
 }
 
-function heroView(hero: Hero): GameHeroView {
+function heroView(hero: DeepReadonly<Hero>): GameHeroView {
   const nextLevel = xpToNextLevel(hero.level);
   return Object.freeze({
     name: hero.name,

@@ -182,3 +182,65 @@ across 17 files, including the unchanged three-seed, 400-hour trajectory
 snapshots. `git diff --check` passed. The regression snapshot has no diff.
 Its SHA-256 is `84469c230e1e08ca637af7dc7bdec70af68e619b7d04a1ef6f04c8899763c39a`,
 the same checksum recorded after the previous turn.
+
+## 5. Give the Company roster its lifecycle and services an ordered list
+
+**Problem.** Game owned the company population, arrival timing, stranded
+companies' strangers, temple recruitment, merging, disbanding and retirement.
+Party helpers moved members and supplies, and Expedition independently marked
+wiped companies as disbanded. Service priority was split between the town
+services module's fixed sequence and a callback into Game for retirement.
+
+**Change.** `CompanyRoster` now owns the company list and arrival schedule,
+recruitment, joining other companies, disbanding and retirement. Queries expose
+deeply read-only companies through `all`, `active` and `byId`, with frozen
+array copies and live records. Operations accept query views and resolve owned
+records. `updateActive` lends records to Game's hourly actions in the existing
+stable renown order over the population at the start of the hour; a donor
+absorbed during that hour still receives its original scheduled update.
+`recordsForScenario` and `replaceForScenario` back `scenario.parties` during
+setup, and disbanded history remains in the roster. Game keeps idle work
+selection, investigation and Board acceptance. Expedition's wipe now calls the
+roster module's `disbandCompany`; `mergeParties` and `buryDead` remain compatible
+imports from `party.ts`, re-exporting the roster implementations.
+
+All roster tuning is plain `CompanyRosterConfig` data, with exported defaults.
+Game builds it from `GameConfig`, keeping the existing names (`maxParties`,
+`arrivalInterval`, `patienceTicks`) and converting the new `disbandDays` to
+`disbandTicks`. Shared sizes and retirement thresholds retain one definition.
+`company-size.ts` supplies the sizes to both Party and the roster without
+requiring initialization through their compatibility re-exports. Operations
+receive only their required town, Board query, RNG, tick, counters, gold
+statistics and synchronous event reporter; context goes last. The full
+interface and numerical configuration are listed in
+[Architecture interfaces](ARCHITECTURE-INTERFACES.md#company-roster-configuration).
+
+`visitTownServices` tries caller-supplied `TownServiceStep` functions until one
+spends the hour. Six small steps retain the existing purchases and equipment
+rules. Game's default list is potions, loot, magic items, guild dues, blessing,
+the roster's contributed retirement step, then armour. Adding or reordering a
+service means editing the supplied list. The services module has no retirement
+rule or callback. Coin reasons, synchronous event points, statistics and random
+draw order are preserved, including spending an arrival before checking the
+company cap and transferring all supplies in a partial merge.
+
+**Files.** `src/adventurers/company-roster.ts`, `company-size.ts`, Party, Game,
+Expedition and town services; `test/company-roster-interface.test.ts` and
+`test/town-service-steps.test.ts`; the permitted coin-movement call and its list
+import; `CONTEXT.md` and the architecture references.
+
+**Evidence.** The existing 468 tests passed against the old code before the
+extraction, then passed unchanged except the permitted no-retirement service
+call. Twenty-three new tests exercise roster queries and every operation,
+configuration, event-time visibility, compatibility exports, and a made-up
+service placed between potions and armour. Compile-time assertions prohibit
+membership, status, hero and item mutations through roster queries. A search
+of `src/` finds company additions, member removals/transfers and disbanding
+writes only in the roster module. The services callback has been removed.
+
+**Verification.** `pnpm typecheck` passed. `pnpm test` passed all 491 tests
+across 22 files. `git diff --check` passed. The regression snapshot has no diff;
+its SHA-256 remains
+`84469c230e1e08ca637af7dc7bdec70af68e619b7d04a1ef6f04c8899763c39a`.
+`scripts/combat-sweep.ts` completed seeds 1–150 for 1,500 hours each
+(225,000 simulated hours) with no crashes.

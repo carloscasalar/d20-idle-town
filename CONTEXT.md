@@ -8,6 +8,9 @@ A town simulation where companies take paid work from employers while holdings a
 A group of adventurers sharing a purse, equipment, renown and work.
 _Avoid_: Party in prose; `Party` remains the code type.
 
+**Company roster**:
+The companies in town, including their arrival schedule, recruitment, joining other companies, disbanding and retirement. It alone changes company membership.
+
 **Contract**:
 Work posted by an employer to recover a threatened holding through a sequence of encounters.
 
@@ -58,6 +61,7 @@ The squares a creature controls on the battlefield. In the 2024 rules a Huge cre
 ## Relationships
 
 - The **Board** posts, accepts, and ends each **Contract** and **Bounty**.
+- The **Company roster** admits companies, recruits adventurers, brings companies together and records disbanding and retirement.
 - A **Company** accepts one **Contract** or **Bounty** at a time.
 - An accepted **Contract** or **Bounty** starts one **Expedition**.
 - A **Contract** concerns one **Holding**; a **Bounty** concerns one **Lair**.

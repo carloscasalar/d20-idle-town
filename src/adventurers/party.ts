@@ -2,12 +2,15 @@ import { partyName } from '../core/names';
 import type { Rng } from '../core/rng';
 import type { MagicItem } from '../items/items';
 import { HERO_CLASS_NAMES, type HeroClassName } from 'battlecast-engine';
-import { coinReasons, purse, transfer, type GoldStatistics } from '../town/coin';
+import type { DeepReadonly } from '../core/readonly';
+import { PARTY_SIZE, MAX_PARTY_SIZE } from './company-size';
 import { createHero, type Hero } from './hero';
 
-/** A company sets out with at least this many and never more than MAX_PARTY_SIZE. */
-export const PARTY_SIZE = 4;
-export const MAX_PARTY_SIZE = 6;
+// Compatibility exports: membership mutations are implemented only by the roster.
+export { mergeParties, buryDead } from './company-roster';
+export { PARTY_SIZE, MAX_PARTY_SIZE } from './company-size';
+
+/** Maximum fame from expeditions; Board configuration uses the same default. */
 export const MAX_RENOWN = 10;
 
 export type PartyStatus =
@@ -99,58 +102,36 @@ export function createParty(rng: Rng, level: number, size: number, tick: number)
   };
 }
 
-export function aliveMembers(p: Party): Hero[] {
+export type ReadonlyParty = DeepReadonly<Party>;
+
+export function aliveMembers(p: Party): Hero[];
+export function aliveMembers(p: ReadonlyParty): DeepReadonly<Hero>[];
+export function aliveMembers(p: ReadonlyParty): DeepReadonly<Hero>[] {
   return p.members.filter((m) => m.alive);
 }
 
-export function deadMembers(p: Party): Hero[] {
+export function deadMembers(p: Party): Hero[];
+export function deadMembers(p: ReadonlyParty): DeepReadonly<Hero>[];
+export function deadMembers(p: ReadonlyParty): DeepReadonly<Hero>[] {
   return p.members.filter((m) => !m.alive);
 }
 
 /** Enough to take a contract. */
-export function isFull(p: Party): boolean {
+export function isFull(p: ReadonlyParty): boolean {
   return aliveMembers(p).length >= PARTY_SIZE;
 }
 
-export function hasRoom(p: Party): boolean {
+export function hasRoom(p: ReadonlyParty): boolean {
   return aliveMembers(p).length < MAX_PARTY_SIZE;
 }
 
-export function partyLevel(p: Party): number {
+export function partyLevel(p: ReadonlyParty): number {
   const alive = aliveMembers(p);
   if (alive.length === 0) return 1;
   return Math.max(1, Math.round(alive.reduce((s, h) => s + h.level, 0) / alive.length));
 }
 
-/**
- * Moves survivors of `donor` into `host` while there is room (six at most).
- * Returns the survivors that did not fit (the donor keeps them).
- */
-export function mergeParties(host: Party, donor: Party, statistics: GoldStatistics): Hero[] {
-  const moved: Hero[] = [];
-  for (const h of aliveMembers(donor)) {
-    if (!hasRoom(host)) break;
-    host.members.push(h);
-    moved.push(h);
-  }
-  donor.members = donor.members.filter((h) => !moved.includes(h));
-  transfer(purse(donor), purse(host), donor.gold, 'merger', statistics, coinReasons);
-  host.potions += donor.potions;
-  donor.potions = 0;
-  host.stash.push(...donor.stash);
-  donor.stash = [];
-  host.renown = Math.max(host.renown, donor.renown);
-  return aliveMembers(donor);
-}
-
-/** Drops fallen members who will never be raised (party gave up on them). */
-export function buryDead(p: Party): Hero[] {
-  const dead = deadMembers(p);
-  p.members = p.members.filter((m) => m.alive);
-  return dead;
-}
-
-export function describeParty(p: Party): string {
+export function describeParty(p: ReadonlyParty, companySize = PARTY_SIZE): string {
   const n = aliveMembers(p).length;
-  return `${p.name} (lvl ${partyLevel(p)}, ${n < PARTY_SIZE ? `${n} of ${PARTY_SIZE} needed` : `${n} strong`})`;
+  return `${p.name} (lvl ${partyLevel(p)}, ${n < companySize ? `${n} of ${companySize} needed` : `${n} strong`})`;
 }

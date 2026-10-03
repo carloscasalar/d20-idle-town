@@ -9,7 +9,7 @@ import { advanceExpedition, type ExpeditionContext } from '../src/sim/expedition
 import { DEFAULT_CONFIG, Game, TICKS_PER_DAY, type GameConfig, type GameScenario, type GameStats } from '../src/sim/game';
 import { createAsset } from '../src/town/assets';
 import { createLair, type Lair } from '../src/town/lairs';
-import { visitTownServices } from '../src/town/services';
+import { TOWN_PURCHASE_STEPS, visitTownServices } from '../src/town/services';
 import { generateTown, RETIREMENT_PRICE, serviceOf, type Town } from '../src/town/town';
 import { LONG_SIMULATION_TIMEOUT_MS, readSimulationState } from './helpers/simulation';
 
@@ -252,7 +252,7 @@ describe('service purchase ledgers', () => {
     const ledger = { itemsSold: 3 };
     const statistics = { goldPaid: 0, goldSpentByHeroes: 7 };
 
-    expect(visitTownServices(p, { town, day: 1, ledger, statistics, report: () => {}, tryRetire: () => false })).toBe(true);
+    expect(visitTownServices(p, { town, day: 1, ledger, statistics, report: () => {} }, TOWN_PURCHASE_STEPS)).toBe(true);
 
     expect(p).toMatchObject({ gold: left, earned: 30, spent });
     expect(shop).toMatchObject({ treasury, earned, spent: 5 });

@@ -2,7 +2,8 @@
 
 d20 Town is a headless simulation with a thin browser front-end bolted on. The
 world advances through `Game`, which owns a seeded RNG and orchestrates
-discrete hourly ticks. `Board` owns the contracts and bounties; Expedition owns
+discrete hourly ticks. `CompanyRoster` owns the companies and membership;
+`Board` owns the contracts and bounties; Expedition owns
 a company’s journey. Combat — the one part with real rules in it — is
 delegated to [battlecast-engine](https://github.com/bjedrzejewski/battlecast-engine)
 behind a single adapter module.
@@ -80,8 +81,28 @@ RNG argument. Interleaving two worlds cannot change either world's IDs.
   `SKILL_ADVANTAGE`) used for tavern investigation and reading the road.
 - **`party.ts`** — a `Party` is members, shared gold, potions, stash, renown,
   guild membership and a `PartyStatus`. Four to six strong. `rollClasses` fills
-  the four classic roles (front line, support, skirmisher, arcane);
-  `mergeParties` folds a broken company into another of the same level.
+  the four classic roles (front line, support, skirmisher, arcane).
+  Pure queries also accept deeply read-only companies. `mergeParties` and
+  `buryDead` are compatibility re-exports implemented by the roster.
+- **`company-size.ts`** — the single definitions of `PARTY_SIZE` and
+  `MAX_PARTY_SIZE`, re-exported by `party.ts`. The roster reads these directly
+  so its defaults do not depend on initialization of the compatibility exports.
+- **`company-roster.ts`** — the Company roster owns the company list, arrival
+  schedule, strangers, temple recruitment, merging, absorption, disbanding and
+  retirement. It exposes deeply read-only `all`, `active` and `byId` queries
+  with frozen array copies and live records. Operations accept those views and
+  resolve owned companies; a company absent from the roster is an error.
+  `updateActive` lends mutable companies for Game’s hourly actions in descending
+  renown order, preserving the original population snapshot and stable ties.
+  Game still chooses idle work; neither it nor Expedition writes membership.
+  Expedition calls the roster module’s `disbandCompany` on a wipe. Scenario
+  setup alone uses `recordsForScenario` and `replaceForScenario`.
+  `CompanyRosterConfig` and `DEFAULT_COMPANY_ROSTER_CONFIG` hold plain data;
+  Game maps its existing `maxParties` to `maxCompanies` and converts the new
+  `disbandDays` to `disbandTicks`. Sizes and retirement defaults come from the
+  shared constants. Context is last and supplies only the operation’s required
+  town, Board query, RNG, tick, ledger, coin statistics and synchronous report.
+  `retirementStep` contributes a service function for the caller’s ordered list.
 
 ### `src/items` — the magic-item economy
 
@@ -107,16 +128,15 @@ enchanter buys back.
   assaulted. `pickBoss` uses the engine's `calculateDifficulty` to find a stat
   block worth being the last fight.
 
-- **`services.ts`** — `visitTownServices(party, context)` owns an idle
-  company's purchases and equipment allocation: potions, loot sharing/sales,
-  magic items, guild dues, blessings and armour. It updates the supplied town,
-  party and spending counters, returning whether the hour was consumed.
-  Regular purchases retain the resurrection reserve; blessings retain 1.5 times
-  that amount. Events are reported synchronously to Game, which publishes them
-  to the log and chronicle. A retirement callback keeps Game's population change
-  between blessings and armour in the priority order. Recruitment and resurrection
-  remain in Game. Payments go through the coin module; `BLESSING_HP_PER_LEVEL`
-  is shared with combat setup.
+- **`services.ts`** — `visitTownServices(party, context, steps)` tries the
+  caller's ordered list of `TownServiceStep` functions until one spends the
+  hour. The regular steps are potions, loot sharing/sales, magic items, guild
+  dues, blessing and armour; `TOWN_PURCHASE_STEPS` is that list for standalone
+  visits. Game supplies its full default list with the roster's retirement
+  step between blessing and armour. Adding or reordering a service changes
+  the supplied list; services has no knowledge of retirement. Each step keeps
+  the existing reserve, equipment allocation, coin reasons and synchronous
+  reporting. `BLESSING_HP_PER_LEVEL` remains shared with combat setup.
 
 - **`coin.ts`** — the only writer of a gold balance or a gold counter. Callers
   name a purse, treasury, hoard or loot and one of three operations: `transfer`,
@@ -126,7 +146,7 @@ enchanter buys back.
   `goldSpent`) that reason touches. A hoard and a loot store have no earned/spent counters. The module
   does not decide whether anyone can afford the amount, and it does not import
   `Game`; it receives the gold statistics and nothing else. Factories still
-  set a holder's starting amount. `party.ts` calls it for a merger.
+  set a holder's starting amount. The roster calls it for mergers and retirement.
   `payForService` is gone.
 
 ### `src/quests` — what companies actually do
@@ -171,7 +191,7 @@ Game code above this line never sees a `Creature`, a `BattleLog` or a
 
 ### `src/sim` — the world
 
-`Game` (`game.ts`) owns the town, the parties, the lairs, the stats and the
+`Game` (`game.ts`) owns the town, the lairs, the stats and the
 event log, and exposes one method that matters: `step()`, one in-game hour.
 The **Board** (`board.ts`) owns the contracts and bounties. It is the only
 code that posts them, accepts them, ends them, or writes the links between a
@@ -205,8 +225,8 @@ step()
  ├─ raids()          lairs strike holdings; unanswered raids make them stronger
  ├─ postQuests()     threatened holdings become contracts on the board
  ├─ postAssaults()   the guild posts a bounty when a company can take a lair
- ├─ arrivals()       new companies turn up at the tavern
- ├─ updateParty()    every company, most renowned first
+ ├─ roster.arrivals() new companies turn up at the tavern
+ ├─ roster.updateActive(updateParty) every company, most renowned first
  └─ expireQuests()   nobody answered; looters move in
 ```
 
@@ -227,7 +247,7 @@ idle ──accept──► traveling ──arrive──► questing ──cleare
   └── recruit / shop / merge / retire / take a lair bounty
 ```
 
-`idle` is where most of the economy happens: recruiting or merging, buying
+`idle` delegates recruiting and merging to the roster, then chooses purchases and work: buying
 potions, armour, items and blessings, paying guild dues and selling loot
 through `visitTownServices`,
 investigating a contract, and finally accepting one. During `questing`, the
@@ -239,6 +259,8 @@ combat resolver through an interface: `runCombat` is the production adapter,
 while tests supply scripted outcomes. A wipe or homecoming resets expedition
 progress and hands the finished work and outcome to settlement exactly once.
 Game forwards that callback to the Board, which alone releases the company.
+On a wipe, Expedition first asks the roster module to disband the company at
+the same point before loot storage, wipe counting and settlement as before.
 Expedition's road intelligence callbacks also go through the Board. Expiring
 a Contract without its employer or holding is an error before it is closed or
 counted; real games never remove those entities. Lost-loot storage stays in `Game` and is called at the same
@@ -312,6 +334,10 @@ checks repeatability; `simulation-regression.test.ts` additionally compares each
 | `test/game-access.test.ts` | State boundary: scenario setup expires before the game runs, and event subscribers receive immutable data |
 | `test/game-view.test.ts` | Immutable renderer snapshots: party states, linked board data, town economy, lairs, counters and chronicle |
 | `test/simulation-regression.test.ts` | Three seeds, 400 hours each: SHA-256 references over every tick’s domain state, RNG state and event history |
+| `test/company-roster.test.ts` | Existing hourly characterization of arrivals, recruiting, merging, disbanding and retirement |
+| `test/company-roster-interface.test.ts` | Direct roster operations, configuration, deeply read-only queries and synchronous event state |
+| `test/town-service-steps.test.ts` | Caller-supplied service order with a made-up step between potions and armour |
+| `scripts/combat-sweep.ts` | Long runs for seeds 1–150, 1,500 hours each, reporting crashes |
 | `test/party.test.ts` | Hero progression on the 5e thresholds, death and resurrection, merging, party levels |
 | `test/encounters.test.ts` | XP bands land inside the engine's own thresholds |
 | `test/items.test.ts` | Item effects reach the engine as overrides |
@@ -335,6 +361,8 @@ touching `difficultyScale` or the XP bands.
 - **A new kind of work** — add a `WorkBehavior` entry to the Board's kind table.
   Its creation/posting, success/failure, acceptance, optional expiry and optional
   withdrawal rule supply the behavior; `post`, `take` and `settle` dispatch it.
+- **A new town service** — add a `TownServiceStep` function and insert it into
+  the list passed by Game to `visitTownServices`. The dispatcher does not change.
 - **A new holding** — add an `AssetKind` and its `AssetKindDef` (income, titles,
   threat weights) in `src/town/assets.ts`. Nothing else needs to change.
 - **A new magic item** — add an `ItemTemplate` to `ITEM_CATALOGUE` in
