@@ -19,10 +19,10 @@ Status values: `todo`, `in-progress`, `done`, `blocked`.
 | 07 | Company roster: characterisation tests (arrivals, recruiting, merging, retirement) | tests | done | beb00ac (Cursor), 1e6902c (Codex correction; 13 targeted mutations caught, not re-reviewed) |
 | 07b | The long simulation tests time out on a slow machine | test fix | done | 1d5e6ef (Codex; per-tick checking cut from about 5 s to under 2 s a run) |
 | 07c | Roster bugs found by turn 07 (band of five arrives as four; ruined temple still raises the dead; retirement does not pick the most seasoned veteran) | bug fix | done | 63a1b43 (Codex; snapshot unchanged; review folded into turn 08's) |
-| 08 | Company roster module; town services as an ordered list of steps (removes `tryRetire`) | refactor | in-progress | Codex |
-| 09 | Job intel: characterisation tests (investigation, divination, reading the road) | tests | todo | |
-| 10 | Job intel: deepen the module, remove the string-keyed `investigations`; take `learnIntel`/`revealAll` off the Board | refactor | todo | |
-| 11 | Configuration: `GameConfig` in sections per module, plain data, ready to load from YAML; remaining `'assault'` branches in `Game` and the expedition; a coin object built once with its statistics and reason table, named effect fields instead of five positional booleans | refactor | todo | |
+| 08 | Company roster module; town services as an ordered list of steps (removes `tryRetire`) | refactor | done | e6f1112, 8366971 (Codex; 1 correction round) |
+| 09 | Job intel: characterisation tests (investigation, divination, reading the road) | tests | in-progress | Codex |
+| 10 | Job intel: deepen the module, remove the string-keyed `investigations`; take `learnIntel`/`revealAll` off the Board and `recordInvestigation`/`payService` off the roster | refactor | todo | |
+| 11 | Configuration: `GameConfig` in sections per module, plain data, ready to load from YAML; remaining `'assault'` branches in `Game` and the expedition; a coin object built once with its statistics and reason table, named effect fields instead of five positional booleans; town service steps as named entries instead of one positional slot; `GameConfig` sections (`board`, `roster`, ...) instead of flat-merged renamed fields | refactor | todo | |
 
 Not planned: typed domain events (candidate 6). It waits for a second renderer.
 
@@ -59,3 +59,4 @@ Bugs found during a task get a new row inserted before the task continues.
 - Turn 07 review (Sonnet): 86 mutations, 67 caught; seven real gaps, correction prompt queued until 07b ends (one implementer in the tree at a time).
 - Incident: the reviewer ran `pkill -f vitest` to clear its own hung mutation run, which also matched the Cursor 07b process (its prompt text contains "vitest"). That, not only the reconnects, is what killed 07b with exit 143. Rule added to the flow: reviewers stop only processes they started, by id.
 - Turn 07 correction: not sent to a reviewer again. It was a list of seven named mutations, and Codex reported checking 13 targeted mutations in a temporary copy; the one source change is a single export. Saving a review where the correction is a closed checklist.
+- Turn 08: first review failed on second doors (exported `mergeParties`/`buryDead`/`disbandCompany`, the expedition disbanding through a wrapper, an import cycle hidden by a workaround file). One correction with a test-edit allowance closed them; the second review read every edited test and passed. The implementer did not stop and report when it hit the single-writer conflict, as the prompt said; the reviewer caught it.
