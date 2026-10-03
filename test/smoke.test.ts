@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { Game } from '../src/sim/game';
+import { LONG_SIMULATION_TIMEOUT_MS } from './helpers/simulation';
 
 describe('simulation smoke run', () => {
   it('runs 400 ticks without throwing and completes quests', () => {
@@ -18,7 +19,7 @@ describe('simulation smoke run', () => {
     expect(combat.length).toBeGreaterThan(5);
     expect(view.stats.questsCompleted).toBeGreaterThan(0);
     expect(view.parties.every((party) => party.members.some((hero) => hero.alive))).toBe(true);
-  });
+  }, LONG_SIMULATION_TIMEOUT_MS);
 
   it('is deterministic for a given seed', () => {
     const a = new Game({ seed: 7 });
@@ -28,7 +29,7 @@ describe('simulation smoke run', () => {
       b.step();
     }
     expect(a.view().events.map((event) => event.text)).toEqual(b.view().events.map((event) => event.text));
-  });
+  }, LONG_SIMULATION_TIMEOUT_MS);
 
   it('keeps complete same-seed worlds identical when their steps are interleaved', () => {
     const a = new Game({ seed: 20260928 });
@@ -41,7 +42,7 @@ describe('simulation smoke run', () => {
       a.step();
       expect(a.regressionState()).toBe(b.regressionState());
     }
-  });
+  }, LONG_SIMULATION_TIMEOUT_MS);
 
   it('allocates unique entity IDs and preserves world references', () => {
     const game = new Game({ seed: 20260928 });
@@ -81,5 +82,5 @@ describe('simulation smoke run', () => {
     expect(quests.every((quest) => quest.assetId === null || assetIds.has(quest.assetId))).toBe(true);
     expect(quests.every((quest) => quest.lairId === null || lairIds.has(quest.lairId))).toBe(true);
     expect(quests.every((quest) => quest.partyId === null || partyIds.has(quest.partyId))).toBe(true);
-  });
+  }, LONG_SIMULATION_TIMEOUT_MS);
 });

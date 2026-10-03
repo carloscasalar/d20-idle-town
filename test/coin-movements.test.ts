@@ -1,3 +1,4 @@
+import assert from 'node:assert/strict';
 import { describe, expect, it } from 'vitest';
 import { createHero, killHero } from '../src/adventurers/hero';
 import { createParty, partyLevel, type Party } from '../src/adventurers/party';
@@ -10,6 +11,7 @@ import { createAsset } from '../src/town/assets';
 import { createLair, type Lair } from '../src/town/lairs';
 import { visitTownServices } from '../src/town/services';
 import { generateTown, RETIREMENT_PRICE, serviceOf, type Town } from '../src/town/town';
+import { LONG_SIMULATION_TIMEOUT_MS, readSimulationState } from './helpers/simulation';
 
 interface World {
   tick: number;
@@ -30,7 +32,7 @@ function totalGold(world: Pick<World, 'town' | 'parties' | 'lairs'>): number {
     + world.lairs.reduce((sum, l) => sum + l.hoard.gold, 0);
 }
 function assertConservation(before: number, after: number, sources = 0, sinks = 0): void {
-  expect(after, 'world gold: opening + audited sources − audited sinks').toBe(before + sources - sinks);
+  assert.equal(after, before + sources - sinks, 'world gold: opening + audited sources − audited sinks');
 }
 function openings(world: Pick<World, 'town' | 'parties'>): Map<string, number> {
   return new Map([
@@ -40,27 +42,42 @@ function openings(world: Pick<World, 'town' | 'parties'>): Map<string, number> {
 }
 function assertHolderCounters(world: Pick<World, 'town' | 'parties'>, starting: Map<string, number>): void {
   for (const p of world.parties) {
-    expect(starting.has(p.id), `opening purse for ${p.id}`).toBe(true);
-    expect(p.gold, `company ${p.id}: opening + earned − spent`).toBe(starting.get(p.id)! + p.earned - p.spent);
+    assert.ok(starting.has(p.id), `opening purse for ${p.id}`);
+    assert.equal(p.gold, starting.get(p.id)! + p.earned - p.spent, `company ${p.id}: opening + earned − spent`);
   }
   for (const e of world.town.employers) {
-    expect(starting.has(e.id), `opening treasury for ${e.id}`).toBe(true);
-    expect(e.treasury, `employer ${e.id}: opening + earned − spent`).toBe(starting.get(e.id)! + e.earned - e.spent);
+    assert.ok(starting.has(e.id), `opening treasury for ${e.id}`);
+    assert.equal(e.treasury, starting.get(e.id)! + e.earned - e.spent, `employer ${e.id}: opening + earned − spent`);
   }
+}
+
+// Keep the preceding observation's indexes instead of searching its arrays
+// for every holder and every work transition. They are replaced at each event,
+// so pruning, arrivals, retirement and Lair respawns remain visible immediately.
+function indexWorld(world: World) {
+  return {
+    parties: new Map(world.parties.map((p) => [p.id, p])),
+    employers: new Map(world.town.employers.map((e) => [e.id, e])),
+    lairs: new Map(world.lairs.map((l) => [l.id, l])),
+    quests: new Map(world.quests.map((q) => [q.id, q])),
+    holdings: new Map(world.town.employers.flatMap((e) => e.assets.map((a) => [a.id, a] as const))),
+  };
 }
 
 /** Observe domain state at public events, including arrivals before their first
  * purchase/merge. No event text, private access, or RNG position is used. */
 function watchBooks(game: Game, config: Partial<GameConfig> = {}) {
   const rules = { ...DEFAULT_CONFIG, ...config };
-  let previous = readWorld(game);
+  let previous = readSimulationState(game);
+  let previousIndex = indexWorld(previous);
   const starting = openings(previous);
   let sources = 0;
   let sinks = 0;
   const observe = () => {
-    const current = readWorld(game);
+    const current = readSimulationState(game);
+    const currentIndex = indexWorld(current);
     for (const p of current.parties) {
-      if (!previous.parties.some((old) => old.id === p.id)) {
+      if (!previousIndex.parties.has(p.id)) {
         // C01: derive opening gold from the public constructor, using an
         // independent RNG so observation cannot affect the simulation.
         const purse = createParty(new Rng(0), partyLevel(p), p.members.length, p.arrivedAt).gold;
@@ -70,39 +87,41 @@ function watchBooks(game: Game, config: Partial<GameConfig> = {}) {
     }
     let retirementCapital = 0;
     for (const e of current.town.employers) {
-      if (!previous.town.employers.some((old) => old.id === e.id)) {
+      if (!previousIndex.employers.has(e.id)) {
         starting.set(e.id, e.treasury); // C04: record the business's opening capital at birth.
         retirementCapital += e.treasury;
       }
     }
     for (const l of current.lairs) {
-      if (!previous.lairs.some((old) => old.id === l.id)) {
+      if (!previousIndex.lairs.has(l.id)) {
         sources += createLair(new Rng(0), l.theme, l.level, l.spawnedAt).hoard.gold; // C03
       }
     }
     sinks += RETIREMENT_PRICE * (current.stats.retirements - previous.stats.retirements) - retirementCapital; // G03
     for (const work of current.quests) {
-      const old = previous.quests.find((q) => q.id === work.id);
+      const old = previousIndex.quests.get(work.id);
       if (old?.status === 'taken' && work.status === 'done' && work.kind === 'contract') {
-        const holding = current.town.employers.flatMap((e) => e.assets).find((a) => a.id === work.assetId);
+        const holding = currentIndex.holdings.get(work.assetId ?? '');
         sources += (holding?.incomePerDay ?? 0) * rules.windfallDays; // B02, independent of treasury delta.
       }
       if (old?.status === 'open' && work.status === 'failed'
         && current.stats.questsExpired > previous.stats.questsExpired) {
-        const origin = previous.lairs.find((l) => l.id === work.lairId);
+        const origin = previousIndex.lairs.get(work.lairId ?? '');
         if (origin?.status !== 'active') {
-          const payer = previous.town.employers.find((e) => e.id === work.giverId)!;
+          const payer = previousIndex.employers.get(work.giverId)!;
           const holding = payer.assets.find((a) => a.id === work.assetId)!;
           sinks += Math.max(0, Math.min(payer.treasury, holding.incomePerDay * rules.lootingDays)); // B06
         }
       }
     }
     previous = current;
+    previousIndex = currentIndex;
   };
   game.onEvent(observe);
   return {
     step() {
-      const before = readWorld(game);
+      // The final observation of the preceding tick is its immutable opening.
+      const before = previous;
       sources = 0;
       sinks = 0;
       if ((before.tick + 1) % TICKS_PER_DAY === 0) {
@@ -114,7 +133,7 @@ function watchBooks(game: Game, config: Partial<GameConfig> = {}) {
       }
       game.step();
       observe();
-      const after = readWorld(game);
+      const after = previous;
       assertConservation(totalGold(before), totalGold(after), sources, sinks);
       assertHolderCounters(after, starting);
     },
@@ -504,7 +523,7 @@ describe('bookkeeping across 400 hours', () => {
     const game = new Game({ seed });
     const books = watchBooks(game);
     for (let hour = 0; hour < 400; hour++) books.step();
-  });
+  }, LONG_SIMULATION_TIMEOUT_MS);
 });
 
 describe('opening gold sources', () => {

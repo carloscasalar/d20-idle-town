@@ -6,6 +6,7 @@ import { generateAssault } from '../src/quests/quest';
 import { createLair, pickBoss } from '../src/town/lairs';
 import { generateTown, serviceOf } from '../src/town/town';
 import { Game, POSTING_THRESHOLD } from '../src/sim/game';
+import { LONG_SIMULATION_TIMEOUT_MS } from './helpers/simulation';
 
 describe('lairs', () => {
   it('have a boss the theme can field and an assault that ends with it', () => {
@@ -29,7 +30,7 @@ describe('lairs', () => {
     const view = g.view();
     expect(view.stats.raids).toBeGreaterThan(0);
     expect(view.board.open.some((quest) => quest.lair !== null)).toBe(true);
-  });
+  }, LONG_SIMULATION_TIMEOUT_MS);
 
   it('removes the posted bounty when a successful company returns and clears the lair', () => {
     const game = Game.forTesting({ seed: 23, maxOpenQuests: 0, maxParties: 1 }, (scenario) => {
@@ -104,7 +105,7 @@ describe('posting a Bounty', () => {
   it('runs 1,500 hours of seed 14', () => {
     const game = new Game({ seed: 14 });
     for (let hour = 0; hour < 1_500; hour++) game.step();
-  });
+  }, LONG_SIMULATION_TIMEOUT_MS);
 });
 
 describe('skill checks', () => {

@@ -5,6 +5,7 @@ import { runCombat } from '../src/combat/battlecast';
 import { Rng } from '../src/core/rng';
 import type { EncounterSpec } from '../src/quests/encounters';
 import { Game } from '../src/sim/game';
+import { LONG_SIMULATION_TIMEOUT_MS } from './helpers/simulation';
 
 const roc = getMonsterByName('Roc')!;
 
@@ -31,5 +32,5 @@ describe('a Gargantuan creature\'s space', () => {
     const game = new Game({ seed: 75 });
     for (let hour = 0; hour < 1500; hour++) game.step();
     expect(game.view().time).toBe('Day 63, 12:00');
-  }, 60_000);
+  }, LONG_SIMULATION_TIMEOUT_MS);
 });

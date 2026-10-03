@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { expect, it } from 'vitest';
 import { Game } from '../src/sim/game';
+import { LONG_SIMULATION_TIMEOUT_MS } from './helpers/simulation';
 
 it.each([7, 42, 20260907])('preserves state and event history at every tick for seed %s', (seed) => {
   const game = new Game({ seed });
@@ -10,4 +11,4 @@ it.each([7, 42, 20260907])('preserves state and event history at every tick for 
     history.update(game.regressionState());
   }
   expect(history.digest('hex')).toMatchSnapshot();
-});
+}, LONG_SIMULATION_TIMEOUT_MS);

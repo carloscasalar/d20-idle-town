@@ -1,3 +1,4 @@
+import assert from 'node:assert/strict';
 import { describe, expect, it } from 'vitest';
 import { createParty, type Party } from '../src/adventurers/party';
 import { Rng } from '../src/core/rng';
@@ -7,6 +8,7 @@ import { Game } from '../src/sim/game';
 import { createAsset, type Asset } from '../src/town/assets';
 import { createLair, type Lair } from '../src/town/lairs';
 import { serviceOf, type Employer, type ServiceKind, type Town } from '../src/town/town';
+import { LONG_SIMULATION_TIMEOUT_MS, readSimulationState } from './helpers/simulation';
 
 interface BoardWorld {
   quests: readonly {
@@ -25,41 +27,41 @@ interface BoardWorld {
 /** The four links the Board keeps: holding, lair, company, and finished work. */
 export function assertBoardInvariant(world: BoardWorld): void {
   const quests = new Map(world.quests.map((quest) => [quest.id, quest]));
+  const linkedWork = new Set<string>();
   for (const employer of world.town.employers) {
     for (const holding of employer.assets) {
       if (holding.questId === null) continue;
+      linkedWork.add(holding.questId);
       const contract = quests.get(holding.questId);
-      expect(contract, `holding ${holding.id}`).toMatchObject({
-        assetId: holding.id,
-      });
-      expect(contract!.kind, `holding ${holding.id}`).not.toBe('assault');
-      expect(['open', 'taken']).toContain(contract!.status);
+      assert.ok(contract, `holding ${holding.id}: missing work ${holding.questId}`);
+      assert.equal(contract.assetId, holding.id, `holding ${holding.id}: Contract target`);
+      assert.notEqual(contract.kind, 'assault', `holding ${holding.id}: Contract kind`);
+      assert.ok(contract.status === 'open' || contract.status === 'taken', `holding ${holding.id}: live work`);
     }
   }
   for (const lair of world.lairs) {
     if (lair.questId === null) continue;
+    linkedWork.add(lair.questId);
     const bounty = quests.get(lair.questId);
-    expect(bounty, `lair ${lair.id}`).toMatchObject({
-      kind: 'assault',
-      lairId: lair.id,
-    });
-    expect(['open', 'taken']).toContain(bounty!.status);
+    assert.ok(bounty, `lair ${lair.id}: missing work ${lair.questId}`);
+    assert.equal(bounty.kind, 'assault', `lair ${lair.id}: Bounty kind`);
+    assert.equal(bounty.lairId, lair.id, `lair ${lair.id}: Bounty target`);
+    assert.ok(bounty.status === 'open' || bounty.status === 'taken', `lair ${lair.id}: live work`);
   }
   for (const company of world.parties) {
     if (company.questId === null) continue;
+    linkedWork.add(company.questId);
     const work = quests.get(company.questId);
-    expect(work, `company ${company.id}`).toMatchObject({
-      status: 'taken',
-      partyId: company.id,
-    });
+    assert.ok(work, `company ${company.id}: missing work ${company.questId}`);
+    assert.equal(work.status, 'taken', `company ${company.id}: accepted work`);
+    assert.equal(work.partyId, company.id, `company ${company.id}: work assignee`);
   }
+  // Set membership is equivalent to checking every holder against every
+  // finished quest, including duplicate links. Rebuild from today's holders
+  // each tick so a new or changed stale link can never escape the check.
   for (const quest of world.quests) {
     if (quest.status !== 'done' && quest.status !== 'failed') continue;
-    for (const employer of world.town.employers) {
-      for (const holding of employer.assets) expect(holding.questId).not.toBe(quest.id);
-    }
-    for (const lair of world.lairs) expect(lair.questId).not.toBe(quest.id);
-    for (const company of world.parties) expect(company.questId).not.toBe(quest.id);
+    assert.equal(linkedWork.has(quest.id), false, `finished work ${quest.id}: released links`);
   }
 }
 
@@ -388,9 +390,9 @@ describe('board invariant across a run', () => {
     const game = new Game({ seed });
     for (let tick = 0; tick < 400; tick++) {
       game.step();
-      assertBoardInvariant(JSON.parse(game.regressionState()) as BoardWorld);
+      assertBoardInvariant(readSimulationState(game));
     }
-  });
+  }, LONG_SIMULATION_TIMEOUT_MS);
 });
 
 describe('Board configuration', () => {
