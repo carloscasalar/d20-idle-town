@@ -1,11 +1,12 @@
-import { describeHero, gainXp, healHero, isBloodied, killHero, potionHeal, resurrectionCost, rollSkill, type Hero } from '../adventurers/hero';
+import { describeHero, gainXp, healHero, isBloodied, killHero, potionHeal, resurrectionCost, type Hero } from '../adventurers/hero';
 import { aliveMembers, deadMembers, MAX_RENOWN, partyLevel, type Party } from '../adventurers/party';
 import type { CombatOptions, CombatOutcome } from '../combat/battlecast';
 import { listNames } from '../core/names';
 import type { DeepReadonly } from '../core/readonly';
 import type { Rng } from '../core/rng';
 import { describeEncounter, scaleEncounter, type EncounterSpec } from '../quests/encounters';
-import { difficultyCode, isFullyKnown, type ReadonlyQuest } from '../quests/quest';
+import { learnOnArrival, readTheRoad } from '../quests/job-intel';
+import { difficultyCode, type ReadonlyQuest } from '../quests/quest';
 import { coinReasons, purse, transfer, treasury, type GoldStatistics } from '../town/coin';
 import { BLESSING_HP_PER_LEVEL } from '../town/services';
 import { serviceOf, type Town } from '../town/town';
@@ -100,21 +101,16 @@ function chronicleLog(context: ExpeditionContext, kind: ExpeditionEvent['kind'],
 }
 
 function travel(p: Party, q: ReadonlyQuest, context: ExpeditionContext): void {
-  const { rng, skillDc } = context;
-  if (!isFullyKnown(q) && !p.investigations[`${q.id}:tracks`]) {
-    p.investigations[`${q.id}:tracks`] = 1;
-    const check = rollSkill(rng, aliveMembers(p), 'Survival', skillDc);
-    if (check) {
-      const dice = `${check.roll}${check.bonus >= 0 ? '+' : ''}${check.bonus} = ${check.total}${check.advantage ? ', with advantage' : ''}`;
-      if (check.success) log(context, 'party', `On the road, ${check.hero.name} reads the tracks (Survival ${dice} vs DC ${skillDc}): ${context.learnIntel(q)}.`);
-      else log(context, 'party', `${check.hero.name} tries to read the tracks along the road (Survival ${dice} vs DC ${skillDc}) and learns nothing.`);
-    }
-  }
+  readTheRoad(p, q, {
+    rng: context.rng,
+    skillDc: context.skillDc,
+    learn: () => context.learnIntel(q),
+    report: (text) => log(context, 'party', text),
+  });
   if (--p.ticksLeft <= 0) {
     p.status = 'questing';
     p.progress = 0;
-    const surprise = !isFullyKnown(q);
-    context.revealAll(q);
+    const surprise = learnOnArrival(q, () => context.revealAll(q));
     log(context, 'party', `${p.name} reach ${q.place}${surprise ? ` and take stock: ${q.encounters.length} fights ahead [${difficultyCode(q)}]` : ''}.`);
   }
 }

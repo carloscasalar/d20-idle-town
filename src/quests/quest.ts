@@ -4,8 +4,11 @@ import { rollLootItem, type MagicItem } from '../items/items';
 import { ASSET_KINDS, type Asset } from '../town/assets';
 import type { Lair } from '../town/lairs';
 import type { Employer } from '../town/town';
-import { buildEncounter, describeEncounter, type Difficulty, type EncounterSpec } from './encounters';
+import { buildEncounter, type Difficulty, type EncounterSpec } from './encounters';
+import { learnOne, revealEveryFact, revealNextFact } from './job-intel';
 import { THEMES, themeMonsters, type ThemeId } from './themes';
+
+export { difficultyCode, isFullyKnown } from './job-intel';
 
 export type QuestStatus = 'open' | 'taken' | 'done' | 'failed';
 
@@ -53,12 +56,12 @@ const DIFFICULTY_PAY: Record<Difficulty, number> = { easy: 1, intermediate: 1.5,
 export const MIN_ENCOUNTERS = 2;
 export const MAX_ENCOUNTERS = 6;
 
-/** Reveal the next piece of contract intelligence and describe it for the log. */
+/**
+ * Reveal the next piece of job intelligence and describe it.
+ * A job that is already fully known throws: nothing remains to describe.
+ */
 export function learnQuestIntel(quest: Quest): string {
-  const learned = revealNext(quest);
-  if (learned === 'count') return `it means ${quest.encounters.length} fights`;
-  const next = quest.encounters[quest.revealed - 1]!;
-  return `the next fight will be ${describeEncounter(next)} (${next.difficulty})`;
+  return learnOne(quest, quest);
 }
 
 /** Short jobs are common, long ones rare. */
@@ -190,32 +193,11 @@ export function questXp(q: ReadonlyQuest): number {
   return q.encounters.reduce((s, e) => s + e.totalXp, 0);
 }
 
-export function isFullyKnown(q: ReadonlyQuest): boolean {
-  return q.countRevealed && q.revealed >= q.encounters.length;
-}
-
 /** Learn the next thing about the job: first how long it is, then one more encounter each time. */
 export function revealNext(q: Quest): 'count' | 'encounter' | null {
-  if (!q.countRevealed) {
-    q.countRevealed = true;
-    return 'count';
-  }
-  if (q.revealed < q.encounters.length) {
-    q.revealed += 1;
-    return 'encounter';
-  }
-  return null;
+  return revealNextFact(q, q.encounters.length);
 }
 
 export function revealAll(q: Quest): void {
-  q.countRevealed = true;
-  q.revealed = q.encounters.length;
-}
-
-/** "I/?/?" for a three-fight job with one known; "I/…" while even the length is a secret. */
-export function difficultyCode(q: ReadonlyQuest): string {
-  const known = q.encounters.slice(0, q.revealed).map((e) => e.difficulty[0]!.toUpperCase());
-  if (!q.countRevealed) return q.revealed < q.encounters.length ? `${known.join('/')}/…` : known.join('/');
-  const hidden = q.encounters.length - q.revealed;
-  return [...known, ...Array.from({ length: hidden }, () => '?')].join('/');
+  revealEveryFact(q, q.encounters.length);
 }

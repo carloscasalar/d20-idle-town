@@ -94,8 +94,8 @@ RNG argument. Interleaving two worlds cannot change either world's IDs.
   resolve owned companies; a company absent from the roster is an error.
   `updateActive` supplies deeply read-only companies in descending renown
   order, preserving the original population snapshot and stable ties. Game
-  uses explicit `wait`, `advance`, `depart`, `visitServices`,
-  `recordInvestigation` and `payService` operations to act on owned companies.
+  uses explicit `wait`, `advance`, `depart`, `visitServices` and
+  `seekIntelligence` operations to act on owned companies.
   `bury` removes fallen members through the same ownership check; no free
   membership or disbanding mutator is exported.
   Game still chooses idle work; neither it nor Expedition writes membership.
@@ -149,7 +149,8 @@ enchanter buys back.
   `source` or `sink`, each with an amount and a reason. `coinReasons` is a
   frozen table of typed keys. It decides which earned/spent counters and which
   lifetime statistics (`goldPaid`, `goldSpentByHeroes`, and a named adventurer's
-  `goldSpent`) that reason touches. A hoard and a loot store have no earned/spent counters. The module
+  `goldSpent`) that reason touches. Divination and a paid round use the `intel`
+  reason, with the same counters as `service`. A hoard and a loot store have no earned/spent counters. The module
   does not decide whether anyone can afford the amount, and it does not import
   `Game`; it receives the gold statistics and nothing else. Factories still
   set a holder's starting amount. The roster calls it for mergers and retirement.
@@ -169,11 +170,26 @@ enchanter buys back.
   for companies larger than four.
 - **`quest.ts`** — a `Quest` is the unit of work: two to six `EncounterSpec`s, a
   reward, an optional item, a giver, the holding at stake and the lair behind it.
-  Partial information is a first-class feature: `revealed` / `countRevealed`
-  track how much is public, `revealNext` and `revealAll` open it up.
+  Creation still sets how much is public at posting. Later changes to
+  `revealed` and `countRevealed` belong to job intelligence; `revealNext`,
+  `revealAll` and `learnQuestIntel` delegate there. `learnQuestIntel` throws
+  when the job is already fully known.
   `generateQuest` prices a contract from the holding's income, the difficulty
   mix, the employer's generosity and desperation; `generateAssault` builds the
   standing bounty on a lair.
+- **`job-intel.ts`** — job intelligence. It is the only writer, after a job is
+  created, of the two public facts (whether the encounter count is known, and
+  how many encounters are revealed) and of what each company has tried: a free
+  attempt, rounds bought, and a look at the road, named fields per job.
+  Callers that change a posted job pass only those two fields, from
+  `Board.knowledge`. An idle hour tries an ordered list of steps — the free
+  attempt, then divination, then a paid round — the same shape as town
+  services. `defaultJobIntelSteps` is that list. Reading the road and taking
+  stock on arrival are the other ways of learning. `JobIntelConfig` and
+  `DEFAULT_JOB_INTEL_CONFIG` hold the skill difficulty, the price per level of
+  divination and of a round, each reserve as a multiple of the resurrection
+  price, and the limit on paid rounds. The resurrection price keeps its
+  definition on the hero. Divination and rounds pay with the `intel` coin reason.
 
 ### `src/combat` — the adapter, and the only file that knows the engine's shape
 
@@ -217,8 +233,8 @@ before the Board closes work, then applies them after closure. The three
 shared defaults for renown cap, encounter company size and lair strength cap
 come from `MAX_RENOWN`, `PARTY_SIZE` and `MAX_STRENGTH`; other users read those
 same constants. Query results are deeply read-only TypeScript views, including
-encounters and rewards. Intelligence changes go through `learnIntel` and
-`revealAll`. Only scenario setup uses `recordsForScenario` and
+encounters and rewards. `knowledge` hands job intelligence the two public
+facts and nothing else. Only scenario setup uses `recordsForScenario` and
 `replaceForScenario`; regression serialization uses `all()`.
 
 The ordering of `step()` is the game:
@@ -256,7 +272,7 @@ idle ──accept──► traveling ──arrive──► questing ──cleare
 `idle` delegates recruiting and merging to the roster, then chooses purchases and work: buying
 potions, armour, items and blessings, paying guild dues and selling loot
 through `visitTownServices`,
-investigating a contract, and finally accepting one. During `questing`, the
+learning about a contract through `seekJobIntelligence`, and finally accepting one. During `questing`, the
 Expedition module resolves one fight per tick, applies casualties and XP,
 subtracts combat potions, handles retreat and recovery through `shortRest`
 (a configured fraction of maximum HP, default 0.5, then a potion for each hero
@@ -267,7 +283,8 @@ progress and hands the finished work and outcome to settlement exactly once.
 Game forwards that callback to the Board, which alone releases the company.
 On a wipe, Expedition first invokes its roster-supplied `disband` operation at
 the same point before loot storage, wipe counting and settlement as before.
-Expedition's road intelligence callbacks also go through the Board. Expiring
+Expedition asks job intelligence to read the road and to take stock on arrival;
+the caller grants the knowledge write. Expiring
 a Contract without its employer or holding is an error before it is closed or
 counted; real games never remove those entities. Lost-loot storage stays in `Game` and is called at the same
 point in the journey. A broken lair's hoard is paid out by `Game` when the
@@ -343,6 +360,9 @@ checks repeatability; `simulation-regression.test.ts` additionally compares each
 | `test/company-roster.test.ts` | Existing hourly characterization of arrivals, recruiting, merging, disbanding and retirement |
 | `test/company-roster-interface.test.ts` | Direct roster operations, configuration, deeply read-only queries and synchronous event state |
 | `test/town-service-steps.test.ts` | Caller-supplied service order with a made-up step between potions and armour |
+| `test/job-intel.test.ts` | Hourly characterization of learning a contract or bounty |
+| `test/job-intel-module.test.ts` | Job intelligence through its own interface: each way of learning, each refusal, and a made-up step |
+| `test/job-intel-regression.test.ts` | Three seeds, 400 hours: the world with investigations removed matches the run from before inquiries changed shape |
 | `scripts/combat-sweep.ts` | Long runs for seeds 1–150, 1,500 hours each, reporting crashes |
 | `test/party.test.ts` | Hero progression on the 5e thresholds, death and resurrection, merging, party levels |
 | `test/encounters.test.ts` | XP bands land inside the engine's own thresholds |
@@ -369,6 +389,8 @@ touching `difficultyScale` or the XP bands.
   withdrawal rule supply the behavior; `post`, `take` and `settle` dispatch it.
 - **A new town service** — add a `TownServiceStep` function and insert it into
   the list passed by Game to `visitTownServices`. The dispatcher does not change.
+- **A new way of learning in an idle hour** — add a `JobIntelStep` and insert it
+  into the list passed to `seekJobIntelligence`. The dispatcher does not change.
 - **A new holding** — add an `AssetKind` and its `AssetKindDef` (income, titles,
   threat weights) in `src/town/assets.ts`. Nothing else needs to change.
 - **A new magic item** — add an `ItemTemplate` to `ITEM_CATALOGUE` in

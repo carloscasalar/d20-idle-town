@@ -56,6 +56,8 @@ function effects(
 export const coinReasons = Object.freeze({
   /** A company pays an employer for a service. */
   service: effects(true, true, false, true, true),
+  /** A company pays to learn about a Contract or Bounty. Same counters as a service. */
+  intel: effects(true, true, false, true, true),
   /** An employer buys gear back from a company. */
   resale: effects(true, true, false, false, false),
   /** An employer pays a completed Contract or Bounty. */

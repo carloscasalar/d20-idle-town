@@ -3,11 +3,9 @@ import { defaultTownServiceSteps } from '../town/services';
 import { CompanyRoster, DEFAULT_COMPANY_ROSTER_CONFIG, type CompanyRosterConfig, type RosterContext } from '../adventurers/company-roster';
 import {
   resurrectionCost,
-  rollSkill,
   type Hero,
 } from '../adventurers/hero';
 import {
-  aliveMembers,
   deadMembers,
   partyLevel,
   type Party,
@@ -19,7 +17,8 @@ import type { DeepReadonly } from '../core/readonly';
 import { hashString, Rng } from '../core/rng';
 import { MAX_LEVEL, xpToNextLevel } from '../core/xp';
 import { describeEncounter, type Difficulty } from '../quests/encounters';
-import { difficultyCode, isFullyKnown, type Quest, type ReadonlyQuest } from '../quests/quest';
+import { DEFAULT_JOB_INTEL_CONFIG, defaultJobIntelSteps, learnOne, revealEveryFact } from '../quests/job-intel';
+import { difficultyCode, type Quest, type ReadonlyQuest } from '../quests/quest';
 import { THEMES, type ThemeId } from '../quests/themes';
 import { ASSET_KINDS, rollThreat, type Asset } from '../town/assets';
 import { createLair, describeLair, LAIR_THEMES, raidInterval, type Lair } from '../town/lairs';
@@ -270,12 +269,6 @@ export const DEFAULT_CONFIG: GameConfig = {
 /** An employer posts work only when its treasury is at least this much. */
 export const POSTING_THRESHOLD = 25;
 
-/** Asking around about a job costs this much per company level, and a company asks at most this many times. */
-const INVESTIGATION_COST_PER_LEVEL = 15;
-const MAX_INVESTIGATIONS = 2;
-/** A divination at the temple lays the whole job bare, for a price per company level. */
-const DIVINATION_COST_PER_LEVEL = 60;
-const SKILL_DC = 15;
 /** Lairs: how many the town starts with, their level range, and how long a cleared one stays quiet. */
 const STARTING_LAIRS: [number, number] = [2, 3];
 const LAIR_LEVELS: [number, number] = [5, 8];
@@ -764,15 +757,15 @@ export class Game {
       travelTicks: this.config.travelTicks,
       restTicks: this.config.restTicks,
       shortRestHealFraction: this.config.shortRestHealFraction,
-      skillDc: SKILL_DC,
+      skillDc: DEFAULT_JOB_INTEL_CONFIG.skillDc,
       combat: runCombat,
       disband: (company) => this.roster.disband(company),
       report: ({ kind, text, detail, chronicle }) => {
         if (chronicle) this.chronicleLog(kind, text);
         else this.log(kind, text, detail);
       },
-      learnIntel: (quest) => this.board.learnIntel(quest),
-      revealAll: (quest) => this.board.revealAll(quest),
+      learnIntel: (quest) => learnOne(this.board.knowledge(quest), quest),
+      revealAll: (quest) => revealEveryFact(this.board.knowledge(quest), quest.encounters.length),
       settleQuest: (quest, party, success) => this.board.settle(quest, party, success, this.boardContext()),
       leaveLoot: (quest, party, fallen) => this.leaveLoot(quest, party, fallen),
     });
@@ -806,7 +799,15 @@ export class Game {
       (a, b) => favored(b) - favored(a) || Math.abs(a.level - level) - Math.abs(b.level - level) || rep(b) - rep(a) || b.reward - a.reward,
     );
     const quest = candidates[0]!;
-    if (this.investigate(p, quest)) return;
+    if (this.roster.seekIntelligence(p, defaultJobIntelSteps(), {
+      work: quest,
+      knowledge: this.board.knowledge(quest),
+      town: this.town,
+      rng: this.rng,
+      statistics: this.stats,
+      config: DEFAULT_JOB_INTEL_CONFIG,
+      report: ({ kind, text }) => this.log(kind, text),
+    })) return;
     this.acceptQuest(p, quest);
   }
 
@@ -814,53 +815,6 @@ export class Game {
     const context = this.boardContext();
     const departure = this.roster.depart(p, quest, { board: this.board, work: context });
     context.report(departure.acceptance);
-  }
-
-  /**
-   * Before signing, a company with coin to spare buys a round at the tavern and
-   * asks around: first how long the job is, then what else waits out there.
-   * Returns true if the hour went on that.
-   */
-  private investigate(p: ReadonlyParty, quest: ReadonlyQuest): boolean {
-    if (isFullyKnown(quest)) return false;
-    const level = partyLevel(p);
-    const reserve = resurrectionCost(level);
-    const tavern = serviceOf(this.town, 'tavern');
-
-    // Talk first, while the tavern stands: a good tongue gets the regulars talking for free. One try per job.
-    if (!tavern.ruined && !p.investigations[`${quest.id}:talk`]) {
-      this.roster.recordInvestigation(p, `${quest.id}:talk`, 1);
-      const check = rollSkill(this.rng, aliveMembers(p), 'Persuasion', SKILL_DC);
-      if (check) {
-        const dice = `${check.roll}${check.bonus >= 0 ? '+' : ''}${check.bonus} = ${check.total}${check.advantage ? ', with advantage' : ''}`;
-        if (check.success) {
-          this.log('shop', `${check.hero.name} works the room at ${tavern.name} (Persuasion ${dice} vs DC ${SKILL_DC}): ${this.board.learnIntel(quest)}.`);
-        } else {
-          this.log('shop', `${check.hero.name} tries to get the regulars at ${tavern.name} talking about "${quest.title}" (Persuasion ${dice} vs DC ${SKILL_DC}) and gets nowhere.`);
-        }
-        return true;
-      }
-    }
-
-    // The rich ask the priests, who see the whole thing.
-    const temple = serviceOf(this.town, 'temple');
-    const divination = DIVINATION_COST_PER_LEVEL * level;
-    if (!temple.ruined && p.gold - divination >= reserve * 2) {
-      this.roster.payService(p, temple, divination, { statistics: this.stats });
-      this.board.revealAll(quest);
-      this.log('temple', `${p.name} pay ${divination} gp for a divination at the ${temple.name}. The priests see "${quest.title}" whole: ${quest.encounters.length} fights [${difficultyCode(quest)}].`);
-      return true;
-    }
-
-    // Otherwise a round buys one thing at a time.
-    const done = p.investigations[quest.id] ?? 0;
-    if (done >= MAX_INVESTIGATIONS) return false;
-    const cost = INVESTIGATION_COST_PER_LEVEL * level;
-    if (tavern.ruined || p.gold - cost < reserve) return false;
-    this.roster.payService(p, tavern, cost, { statistics: this.stats });
-    this.roster.recordInvestigation(p, quest.id, done + 1);
-    this.log('shop', `${p.name} buy a round at ${tavern.name} (${cost} gp) and ask about "${quest.title}": ${this.board.learnIntel(quest)}.`);
-    return true;
   }
 
   /** A retired adventurer's contracts are held a day for their old company. */

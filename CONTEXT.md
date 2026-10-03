@@ -20,6 +20,10 @@ Work posted by the guild to clear a lair through a sequence of encounters, and o
 **Board**:
 The posted contracts and bounties. It is the only thing that links a holding, a lair, or a company to that work.
 
+**Job intelligence**:
+What is publicly known about a Contract or Bounty — whether its encounter count is known, and how many of its encounters are revealed — what each company has tried in order to learn that, and the ways of learning: a free attempt at the tavern, a divination, a paid round, reading the road, and taking stock on arrival.
+_Avoid_: investigation as the name of this module.
+
 **Expedition**:
 One company's journey on an accepted contract or bounty, including travel, encounters, return and recovery unless the company is wiped out.
 
@@ -61,6 +65,7 @@ The squares a creature controls on the battlefield. In the 2024 rules a Huge cre
 ## Relationships
 
 - The **Board** posts, accepts, and ends each **Contract** and **Bounty**.
+- **Job intelligence** is the only writer, after a job is posted, of what is publicly known about it and of what each company has tried in order to learn it.
 - The **Company roster** admits companies, recruits adventurers, brings companies together and records disbanding and retirement.
 - A **Company** accepts one **Contract** or **Bounty** at a time.
 - An accepted **Contract** or **Bounty** starts one **Expedition**.

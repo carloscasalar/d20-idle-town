@@ -3,6 +3,7 @@ import { createHero } from '../src/adventurers/hero';
 import { createParty, type Party } from '../src/adventurers/party';
 import { Rng } from '../src/core/rng';
 import type { EncounterSpec } from '../src/quests/encounters';
+import { learnOne, revealEveryFact } from '../src/quests/job-intel';
 import { difficultyCode, isFullyKnown, learnQuestIntel, revealAll, revealNext, type Quest } from '../src/quests/quest';
 import { Board, DEFAULT_BOARD_CONFIG } from '../src/sim/board';
 import { advanceExpedition, type ExpeditionContext, type ExpeditionEvent } from '../src/sim/expedition';
@@ -113,7 +114,8 @@ function road(work = job(), skillDc = 15, seed = 1) {
     disband: () => { throw new Error('Travel does not disband'); },
     settleQuest: () => { throw new Error('Travel does not settle work'); },
     leaveLoot: () => { throw new Error('Travel does not leave loot'); },
-    learnIntel: (work) => board.learnIntel(work), revealAll: (work) => board.revealAll(work),
+    learnIntel: (work) => learnOne(board.knowledge(work), work),
+    revealAll: (work) => revealEveryFact(board.knowledge(work), work.encounters.length),
     report: (event) => { events.push(event); },
   };
   return { p, board, context, events };
@@ -231,7 +233,7 @@ describe('learning the next fact about a job', () => {
     const board = new Board(DEFAULT_BOARD_CONFIG);
     board.replaceForScenario([job({ kind, countRevealed })]);
     const work = board.byId('tower')!;
-    const learned = reports.map(() => board.learnIntel(work));
+    const learned = reports.map(() => learnOne(board.knowledge(work), work));
 
     expect(learned).toEqual(reports);
 

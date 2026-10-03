@@ -51,8 +51,19 @@ export interface Party {
   guildMember: boolean;
   /** In-game day the dues were last paid. */
   duesPaidDay: number;
-  /** Rounds bought at the tavern to learn about a contract, by quest id. */
-  investigations: Record<string, number>;
+  /** What this company has tried in order to learn about each job. Job intelligence is the only writer. */
+  investigations: JobInquiry[];
+}
+
+/** What one company has tried for one job. */
+export interface JobInquiry {
+  jobId: string;
+  /** The free attempt at the tavern has been made. */
+  freeAttempt: boolean;
+  /** Paid rounds bought. */
+  roundsBought: number;
+  /** The road has been read. */
+  roadRead: boolean;
 }
 
 /** A full company covers the classic roles; smaller bands are whoever survived. */
@@ -97,7 +108,7 @@ export function createParty(rng: Rng, level: number, size: number, tick: number)
     blessed: false,
     guildMember: false,
     duesPaidDay: -1,
-    investigations: {},
+    investigations: [],
   };
 }
 

@@ -264,3 +264,48 @@ across 23 files; the regression snapshot is byte-for-byte unchanged and
 `git diff --check` passed. All 589 existing matchers and their expected values
 in the adapted files are unchanged. Every edited test is named in the
 [correction report](../.scratch/architecture-flow/turns/08-company-roster-correction-1-report.md).
+
+## 6. Give job intelligence one module
+
+**Problem.** What a company knows about a Contract or Bounty, and how it finds
+out, was spread across the job record, the Board, Game's idle hour, the road
+and arrival in Expedition, and a string-keyed map on the company. The Board and
+the roster grew pass-throughs (`learnIntel`, `revealAll`, `recordInvestigation`,
+`payService`) so Game could write those facts without holding the records.
+
+**Change.** `src/quests/job-intel.ts` is job intelligence. After a job is
+created, it is the only writer of the two public facts — whether the encounter
+count is known, and how many encounters are revealed — and of what each company
+has tried. The Board keeps the job and exposes `knowledge`, those two fields
+and nothing else. What a company has tried is one record per job, with
+`freeAttempt`, `roundsBought` and `roadRead`, not string keys. An idle hour
+tries an ordered list of steps in the same shape as town services.
+`defaultJobIntelSteps` is the free attempt, then divination, then a paid round.
+Reading the road and taking stock on arrival are the other ways of learning.
+Divination and rounds pay through the coin module with reason `intel`, whose
+counters match `service`. `JobIntelConfig` holds the skill difficulty, both
+prices per level, both reserve multiples, and the round limit. The resurrection
+price keeps its definition on the hero. `learnQuestIntel` throws when the job
+is already fully known, instead of describing the last encounter. The Board and
+roster pass-throughs are gone.
+
+**Files.** `src/quests/job-intel.ts`, Quest, Party, Board, Game, Expedition,
+the company roster and coin reasons; `test/job-intel-module.test.ts` and
+`test/job-intel-regression.test.ts`; the six road assertions in
+`test/expedition.test.ts`; call sites in `test/job-intel.test.ts` and
+`test/board.test.ts` that named the removed Board methods; `CONTEXT.md` and
+the architecture references.
+
+**Evidence.** Module tests drive each way of learning, a ruined tavern, a
+ruined temple, both reserves, the round limit, one free attempt per job, and a
+made-up step placed in the list. `learnOne` and `learnQuestIntel` throw on a
+fully known job. The three-seed, 400-hour proof compares every tick with
+`investigations` removed to hashes taken from the code before the records
+changed shape. Those hashes match, so the regression snapshot was refreshed
+once, only because the inquiry records changed shape.
+
+**Verification.** `pnpm typecheck` passed. `pnpm test` passed all 563 tests
+across 26 files. The regression snapshot was refreshed once; with each
+company's investigations removed, the three 400-hour trajectories match the
+hashes recorded before this turn. `scripts/combat-sweep.ts` completed seeds
+1–150 for 1,500 hours each (225,000 simulated hours) with no crashes.

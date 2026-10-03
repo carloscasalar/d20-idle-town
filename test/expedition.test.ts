@@ -6,6 +6,7 @@ import type { CombatOutcome } from '../src/combat/battlecast';
 import { listNames } from '../src/core/names';
 import { Rng } from '../src/core/rng';
 import type { EncounterSpec } from '../src/quests/encounters';
+import { jobInquiry } from '../src/quests/job-intel';
 import { learnQuestIntel, revealAll, type Quest } from '../src/quests/quest';
 import { advanceExpedition, type CombatResolver, type ExpeditionContext, type ExpeditionEvent } from '../src/sim/expedition';
 import { generateTown, serviceOf } from '../src/town/town';
@@ -82,7 +83,7 @@ describe('an expedition hour', () => {
 
     advanceExpedition(party, context);
 
-    expect(party.investigations[`${quest.id}:tracks`]).toBe(1);
+    expect(jobInquiry(party, quest.id)?.roadRead).toBe(true);
     expect(party.status).toBe('questing');
     expect(party.progress).toBe(0);
     expect(quest.countRevealed).toBe(true);
@@ -578,7 +579,7 @@ describe('reading the road', () => {
 
     expect({ count: quest.countRevealed, revealed: quest.revealed }).toEqual(intel);
     expect(events).toHaveLength(1);
-    expect(party.investigations[`${quest.id}:tracks`]).toBe(1);
+    expect(jobInquiry(party, quest.id)?.roadRead).toBe(true);
     expect(combat).not.toHaveBeenCalled();
   });
 
@@ -601,7 +602,7 @@ describe('reading the road', () => {
 
     expect({ count: quest.countRevealed, revealed: quest.revealed }).toEqual(intel);
     expect(events).toHaveLength(1);
-    expect(party.investigations[`${quest.id}:tracks`]).toBe(1);
+    expect(jobInquiry(party, quest.id)?.roadRead).toBe(true);
   });
 
   it('allows a fresh road check for a different contract', () => {
@@ -626,8 +627,8 @@ describe('reading the road', () => {
     expect(events).toHaveLength(2);
     expect(events[1]!.kind).toBe('party');
     expect(events[1]!.text).toContain('reads the tracks');
-    expect(party.investigations[`${quest.id}:tracks`]).toBe(1);
-    expect(party.investigations[`${nextQuest.id}:tracks`]).toBe(1);
+    expect(jobInquiry(party, quest.id)?.roadRead).toBe(true);
+    expect(jobInquiry(party, nextQuest.id)?.roadRead).toBe(true);
     expect(quest.countRevealed).toBe(false);
     expect(nextQuest.countRevealed).toBe(true);
   });
@@ -642,7 +643,7 @@ describe('reading the road', () => {
     advanceExpedition(party, context);
 
     expect(events).toEqual([]);
-    expect(party.investigations[`${quest.id}:tracks`]).toBeUndefined();
+    expect(jobInquiry(party, quest.id)?.roadRead).toBeUndefined();
   });
 });
 

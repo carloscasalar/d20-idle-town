@@ -2,7 +2,8 @@ import { MAX_RENOWN, PARTY_SIZE, type Party } from '../adventurers/party';
 import type { DeepReadonly } from '../core/readonly';
 import type { Rng } from '../core/rng';
 import { coinReasons, hoard, loot, purse, sink, source, transfer, treasury, type GoldStatistics } from '../town/coin';
-import { difficultyCode, generateAssault, generateQuest, learnQuestIntel, revealAll, type Quest, type QuestKind, type ReadonlyQuest } from '../quests/quest';
+import type { JobKnowledge } from '../quests/job-intel';
+import { difficultyCode, generateAssault, generateQuest, type Quest, type QuestKind, type ReadonlyQuest } from '../quests/quest';
 import { THEMES, type ThemeId } from '../quests/themes';
 import { ASSET_KINDS, type Asset } from '../town/assets';
 import { MAX_STRENGTH, type Lair } from '../town/lairs';
@@ -198,12 +199,15 @@ export class Board {
     }
   }
 
-  learnIntel(work: ReadonlyQuest): string {
-    return learnQuestIntel(this.owned(work));
-  }
-
-  revealAll(work: ReadonlyQuest): void {
-    revealAll(this.owned(work));
+  /** The two public-knowledge fields. Job intelligence is the only writer. */
+  knowledge(work: ReadonlyQuest): JobKnowledge {
+    const owned = this.owned(work);
+    return {
+      get revealed() { return owned.revealed; },
+      set revealed(value: number) { owned.revealed = value; },
+      get countRevealed() { return owned.countRevealed; },
+      set countRevealed(value: boolean) { owned.countRevealed = value; },
+    };
   }
 
   /** Finish work and release only the holding/lair links that name it. */

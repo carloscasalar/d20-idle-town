@@ -3,12 +3,13 @@ import { aliveMembers, createParty, deadMembers, describeParty, partyLevel, PART
 import { listNames } from '../core/names';
 import type { DeepReadonly } from '../core/readonly';
 import type { Rng } from '../core/rng';
+import { seekJobIntelligence, type JobIntelContext, type JobIntelStep } from '../quests/job-intel';
 import type { ReadonlyQuest } from '../quests/quest';
 import { coinReasons, purse, sink, transfer, treasury, type GoldStatistics } from '../town/coin';
 import { visitTownServices, type TownServiceStep, type TownServiceContext } from '../town/services';
 import { advanceExpedition, startExpedition, type ExpeditionContext } from '../sim/expedition';
 import type { Board, BoardContext, TakenWork } from '../sim/board';
-import { RETIREMENT_LEVEL, RETIREMENT_PRICE, retiredEmployer, serviceOf, type Employer, type Town } from '../town/town';
+import { RETIREMENT_LEVEL, RETIREMENT_PRICE, retiredEmployer, serviceOf, type Town } from '../town/town';
 
 /** Plain data; all durations are in ticks. Shared defaults retain their one definition. */
 export interface CompanyRosterConfig {
@@ -144,12 +145,9 @@ export class CompanyRoster {
     return visitTownServices(this.owned(company), context, steps);
   }
 
-  recordInvestigation(company: ReadonlyParty, key: string, count: number): void {
-    this.owned(company).investigations[key] = count;
-  }
-
-  payService(company: ReadonlyParty, employer: Employer, amount: number, context: Pick<RosterEventContext, 'statistics'>): void {
-    transfer(purse(this.owned(company)), treasury(employer), amount, 'service', context.statistics, coinReasons);
+  /** The supplied steps decide what is learned. This only resolves the owned company. */
+  seekIntelligence(company: ReadonlyParty, steps: readonly JobIntelStep[], context: JobIntelContext): boolean {
+    return seekJobIntelligence(this.owned(company), context, steps);
   }
 
   bury(company: ReadonlyParty): readonly DeepReadonly<Hero>[] {
