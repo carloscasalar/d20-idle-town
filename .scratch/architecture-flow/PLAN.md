@@ -14,12 +14,13 @@ Status values: `todo`, `in-progress`, `done`, `blocked`.
 | 04 | Board: the Board owns the lifecycle and is the single writer of the references | refactor | done | f7e9e4a (Cursor; passed review, two small corrections folded into 04b) |
 | 04b | Board: configuration, behaviour per kind of work by data, and three interface leaks | refactor | done | 091a2c8, 37cb0ca, db154f6 (Codex; 1 correction round) |
 | 05 | Coin transfers: audit and characterisation tests, plus two counter bugs they exposed | tests + bug fix | done | f78a95f, e2ad6f4, 3e02d62 (Codex, then Cursor; 1 correction round) |
-| 06 | Coin transfers: one module moves gold, with reasons as data | refactor | in-progress | Cursor |
+| 06 | Coin transfers: one module moves gold, with reasons as data | refactor | done | 0288d2a, f11e248 (bug fix), a7ed2a9, 991b039 (Cursor; 2 correction rounds) |
+| 06c | A fight crashes when a Gargantuan monster does not fit (seed 75) | bug fix | in-progress | Cursor |
 | 07 | Company roster: characterisation tests (arrivals, recruiting, merging, retirement) | tests | todo | |
 | 08 | Company roster: deepen the module, remove the `tryRetire` callback | refactor | todo | |
 | 09 | Job intel: characterisation tests (investigation, divination, reading the road) | tests | todo | |
 | 10 | Job intel: deepen the module, remove the string-keyed `investigations`; take `learnIntel`/`revealAll` off the Board | refactor | todo | |
-| 11 | Configuration: `GameConfig` in sections per module, plain data, ready to load from YAML; remaining `'assault'` branches in `Game` and the expedition | refactor | todo | |
+| 11 | Configuration: `GameConfig` in sections per module, plain data, ready to load from YAML; remaining `'assault'` branches in `Game` and the expedition; a coin object built once with its statistics and reason table, named effect fields instead of five positional booleans | refactor | todo | |
 
 Not planned: typed domain events (candidate 6). It waits for a second renderer.
 
@@ -45,3 +46,6 @@ Bugs found during a task get a new row inserted before the task continues.
 - Turn 05: conservation holds on all 1,200 seeded ticks; the per-holder rule exposed two bugs (a wiped purse and a merge were not recorded in `earned`/`spent`), fixed in e2ad6f4. The reviewer's 76 mutations left six boundary survivors; the tests-only correction was cut off by Codex's usage limit (retry after 4:26 AM on 2026-10-03) with partial edits in the working tree, and was handed to Cursor in a new session.
 - Lesson: a usage limit can land mid-turn. The handover prompt points the next implementer at the task file and at `git diff`, and tells it to verify every item rather than trust the partial work.
 - Turn 05 correction: Codex had in fact finished all nine items before its limit cut it off; Cursor verified each against the payment code and kept the diff unchanged (3e02d62).
+- Turn 06: the reviewer's 1,500-hour sweep over 150 seeds found that a guild in debt posts a Bounty with a negative reward; the coin module's new refusal turned that old bug into a crash on five seeds. Fixed first (f11e248: Bounties use the Contract posting threshold), then two corrections typed the gold statistics and froze the reason table. Fixture edits were allowed only to move where an expected value is read from.
+- Lesson: a long random sweep (150 seeds × 1,500 hours) found what the three 400-hour regression seeds never reach. Worth running once per refactor.
+- The same sweep found an older crash (seed 75: a Gargantuan Roc does not fit the red team's zone). Bug-fix turn 06c before the roster work.
