@@ -20,9 +20,9 @@ The issue file you were given (the contract), its parent PRD, `.claude/skills/im
 
 1. **Checks.** The project's check commands pass at the commit.
 2. **Every acceptance criterion.** For each one: the test that covers it, and proof the test is real: revert or break the behaviour in the worktree and show the test fails. A criterion with no test, or a test that survives the breakage, is a correction.
-3. **Only what the issue describes changed.** Compare behaviour with the parent commit using the project's regression guard and, when you were asked for it, the long sweep. A change the acceptance criteria do not explain is a correction. A guard that changed must be explained by a criterion.
+3. **Only what the issue describes changed.** The guard is whatever the issue names: tests it lists as surviving unchanged must show no diff from the parent commit and still pass; regression hashes are treated as the issue says (kept, re-recorded once, or left skipped for a named later issue). Where the issue names nothing, compare behaviour with the parent using the project's regression guard. Run the long sweep when you were asked for it. A change the acceptance criteria do not explain is a correction.
 4. **Design rules.** Single writers (search for writes hidden behind exported helpers, not only direct assignments); tunable values in their module's configuration section; no production fallback to a default; behaviour by kind selected by data; interfaces no wider than the issue needs.
-5. **Tests.** Through public interfaces, exact expected values, nothing that restates the code's formula, nothing that pins a bug. If existing tests were edited, every edited assertion keeps its expected value.
+5. **Tests.** Through public interfaces, exact expected values, nothing that restates the code's formula, nothing that pins a bug. If existing tests were edited, the issue allowed it, and every edited assertion that the issue does not change keeps its expected value.
 6. **Scope.** No agent or editor configuration, no unrelated refactor, documents true after the change.
 
 ## Reply

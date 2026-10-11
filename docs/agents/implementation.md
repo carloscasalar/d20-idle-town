@@ -15,7 +15,7 @@ Long simulations in the tests share one timeout (`test/helpers/simulation.ts`); 
 
 ## Regression guard
 
-`test/simulation-regression.test.ts` hashes the whole world at every tick of three seeded 400-hour runs (`test/__snapshots__/`), and `test/job-intel-regression.test.ts` does the same with investigation records stripped. A feature issue usually changes them. The issue says how to treat them (re-record once, or skip until a named later issue); when it says nothing, they are re-recorded once in the turn that changes behaviour, and the report names the acceptance criterion that caused it.
+`test/simulation-regression.test.ts` hashes the whole world at every tick of three seeded 400-hour runs (`test/__snapshots__/`), and `test/job-intel-regression.test.ts` does the same with investigation records stripped. A feature issue usually changes them. The issue says how to treat them (re-record once, or skip until a named later issue); when it says nothing, they are re-recorded once in the turn that changes behaviour, and the report names the acceptance criterion that caused it. While an issue keeps the hashes skipped, the tests it lists as surviving unchanged are the guard: no diff, still passing.
 
 Every random draw comes from one seeded generator in a fixed order, so a new draw shifts every later one. An issue that adds dice says where in the order they go.
 

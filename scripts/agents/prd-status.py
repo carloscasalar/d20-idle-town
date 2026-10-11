@@ -6,8 +6,9 @@
 Reads `issues/*.md` under the PRD folder. An issue is *workable* when its
 `Status:` is `ready-for-agent` and every issue named on its `Blocked-by:` line
 is `done`. Prints one line per issue and then the workable issues in order.
-Exit code: 0 when something is workable, 3 when every candidate is done,
-4 when candidates remain but none is workable (blocked or parked).
+Exit code: 0 when something is workable; 3 when nothing is left to do; 4 when
+nothing is workable but work remains: issues blocked by an issue that is not
+done, or issues parked as `needs-info`.
 """
 import re
 import sys
@@ -34,6 +35,7 @@ def main():
         issues[path.name] = {"status": field(text, "Status"), "blockers": [Path(b).name for b in blockers]}
 
     workable, waiting = [], []
+    parked = [name for name, issue in issues.items() if issue["status"] == "needs-info"]
     for name, issue in issues.items():
         open_blockers = [b for b in issue["blockers"] if issues.get(b, {}).get("status") != "done"]
         note = f"  blocked by {', '.join(open_blockers)}" if open_blockers else ""
@@ -42,12 +44,17 @@ def main():
             (waiting if open_blockers else workable).append(name)
 
     print()
+    if workable and parked:
+        print("parked (needs-info): " + ", ".join(parked))
     if workable:
         print("workable: " + ", ".join(workable))
         print(f"next: {workable[0]}")
         sys.exit(0)
+    if parked:
+        print("parked (needs-info): " + ", ".join(parked))
     if waiting:
         print("nothing workable: " + ", ".join(waiting) + " wait on issues that are not done")
+    if waiting or parked:
         sys.exit(4)
     print("nothing left that is ready-for-agent")
     sys.exit(3)

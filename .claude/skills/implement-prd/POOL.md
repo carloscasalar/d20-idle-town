@@ -11,7 +11,7 @@
 | Smoke tester | `smoke-tester` agent (Sonnet, built-in browser) | Running the app and comparing with the last smoke report |
 | Orchestrator | you | A diff of three files or fewer that is mechanical: read it yourself instead of spending a reviewer |
 
-One implementer works in the tree at a time. Reviewers and the smoke tester that run meanwhile use a throwaway worktree, or only read.
+One implementer works in the tree at a time, so issues are taken one after another. Reviewers and the smoke tester that run meanwhile use a throwaway worktree, or only read. Running unblocked issues in parallel, each in its own worktree and branch and merged in dependency order, is the planned extension; this version does not do it.
 
 ## Running an implementer or opencode
 

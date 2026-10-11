@@ -1,5 +1,7 @@
 # Orchestrated agent flow (1.0)
 
+> This is the record of the architecture run and its lessons. Its rules were written for refactors. To implement a PRD, follow the `implement-prd` skill in `.claude/skills/implement-prd/` and `docs/agents/implementation.md`.
+
 How the architecture work on this repo is run: one orchestrator that plans and
 judges, one implementing agent that writes code, and short-lived subagents that
 verify. This document is the record of the flow so it can later be turned into
