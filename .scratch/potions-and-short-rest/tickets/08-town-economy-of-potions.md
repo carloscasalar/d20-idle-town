@@ -32,3 +32,5 @@ Decided with carloscasalar on 2026-10-11. Facts measured on `main` for this tick
 - **Poor or ruined apothecary.** No new rule. With nothing on offer the purchase step returns false and the company goes on with the Hit Dice and whatever potions it still carries. Ruin stays permanent for every service. A retired adventurer taking over a ruined business and bringing their own wealth is a separate idea, in the map's fog.
 - **Documentation.** The correction to `healing-potion-tiers.md` (its "Magic Item Crafting Cost" line gives the table values before the consumables halving; the raw material cost is half) is in the map's fog under documentation updates. The production costs of [04](04-potion-catalogue-and-availability.md) match the SRD raw materials exactly.
 - **Glossary.** Healing potion's supply sentence rewritten and Apothecary reserve added in `CONTEXT.md`.
+
+- 2026-10-11: [Retuned values prototype](09-retuned-values-prototype.md) refines "Rewards: no special rule": a Contract done for the apothecary gives it a production discount (half cost) until the savings equal the reward. Without it, 12 of 20 apothecaries were ruined in 3,000 ticks; with it, 7 of 20.

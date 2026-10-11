@@ -30,11 +30,14 @@ A `PRD.md` in this directory that decides how the game models Hit Dice at a shor
 
 - [Town economy of potions](tickets/08-town-economy-of-potions.md) — sale uses `service`, production is a new `production` sink with a production statistic; the apothecary offers `floor((treasury - reserve) / cost)` of each tier, reserve = 3 days of its own upkeep; production instant (documented deviation with a knob); no special rule for rewards or a ruined apothecary.
 
+- [Retuned values prototype](tickets/09-retuned-values-prototype.md) — only `heroes.startingGoldPerLevel` moves, 20 to 50 (a level 1 purse could not buy the 50 gp potion); `potionCoverFraction` 0.5, weights 50 / 50, divisor `N / 2`, scale 1.15, `retreatHpFraction` 0.35, encounters and reserve all stay; new rule: a Contract done for the apothecary halves its production cost until the savings match the reward; supreme tier accepted as unreachable for now; passes the acceptance at 160 seeds, long-run apothecary ruin stays a PRD check.
+
 ## Not yet specified
 
 - Apothecary staffing and production time: a tier needing a cleric on the payroll whose level can cast the matching healing spell, and the SRD's days of work per potion (the game keeps production instant, [08](tickets/08-town-economy-of-potions.md)) shared out among the shop's workers. Waits until businesses have employees; until then treasury alone gates tiers.
 - Taking over a ruined service: a retired adventurer (for example a cleric) buying the business of a ruined apothecary, or any ruined service, and opening it with their own wealth, instead of `retirement` always founding a new one. Touches the roster and every service; not yet sharp.
-- Documentation updates to `CONTEXT.md` and `docs/CONFIGURATION.md` once the rules are fixed, including the production-time deviation and the fix to the "Magic Item Crafting Cost" line of [research/healing-potion-tiers.md](research/healing-potion-tiers.md) (table values before the consumables halving).
+- Documentation updates to `CONTEXT.md` and `docs/CONFIGURATION.md` once the rules are fixed, including the production-time deviation and the fix to the "Magic Item Crafting Cost" line of [research/healing-potion-tiers.md](research/healing-potion-tiers.md) (table values before the consumables halving), the apothecary credit rule and the new starting purse of [Retuned values prototype](tickets/09-retuned-values-prototype.md).
+- Long-run health of the apothecary: with the potion margin halved and the credit rule, 7 of 20 apothecaries are ruined in 3,000 ticks (0 of 20 today; [Retuned values prototype](tickets/09-retuned-values-prototype.md)). The PRD carries a 3,000-tick check; if the real code still ruins them, the lever is the apothecary's income or upkeep, which the knobs of [07](tickets/07-balance-targets.md) do not include.
 - Test fixtures that hold party shapes (`potions` becomes a map, companies gain a policies object). The game has no save files; only tests need migrating. The regression-hash policy is settled in [Healing rolls and seeded-run stability](tickets/06-healing-rolls-and-seeded-run-stability.md).
 
 ## Out of scope
