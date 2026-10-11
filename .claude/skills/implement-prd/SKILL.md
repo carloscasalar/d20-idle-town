@@ -48,7 +48,7 @@ A bug that blocks the current issue gets its own bug-fix turn before the issue c
 
 ## Stop and report
 
-Stop when the status script exits 3 (nothing left) or 4 (what remains is blocked or parked as `needs-info`), or when every implementer in the pool is at its usage limit. Report: issues done with their commits, issues parked and why, decisions the `prd-answerer` made, new issues filed, and the state of the checks. Run the full checks and a final smoke check before reporting a finished PRD.
+Stop when the status script exits 3 (nothing left) or 4 (what remains is blocked or parked as `needs-info`), or when every implementer in the pool is at its usage limit. Report: issues done with their commits, issues parked and why, decisions the `prd-answerer` made, new issues filed, and the state of the checks. Run the full checks and a final smoke check before reporting a finished PRD. The work stays on its branch; opening a pull request is the user's call.
 
 ## Rules every prompt carries
 
