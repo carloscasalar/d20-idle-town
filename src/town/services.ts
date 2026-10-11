@@ -99,7 +99,7 @@ function buyPotionsNew(p: Party, context: TownServiceContext): boolean {
   if (packAssured >= target && packCount >= alive.length) return false;
   const n = target / alive.length;
   const resv = PROTO.reserveDays * apothecary.upkeepPerDay;
-  const offered = TIERS.map((t) => Math.max(0, Math.floor((apothecary.treasury - resv) / prodCost(t))));
+  const offered = TIERS.map((t) => PROTO.noGate ? 1e9 : Math.max(0, Math.floor((apothecary.treasury - resv) / prodCost(t))));
   const budget = p.gold - reserve;
   let idx = -1;
   TIERS.forEach((t, i) => { if (offered[i]! > 0 && assured(t) <= n / PROTO.divisor) idx = i; });

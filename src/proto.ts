@@ -19,6 +19,7 @@ export const rollTier = (rng: Rng, t: Tier) => roll(rng, t.dice, t.faces, t.bonu
 export const PROTO = {
   newRules: false, cover: 0.5, divisor: 2, wOrder: 50, wFallen: 50, reserveDays: 3,
   apoCredit: false,
+  noGate: false, // sale proceeds pay for production: offer without looking at the treasury
   apothecaryStart: undefined as number | undefined,
   bought: {} as Record<string, number>, drunk: {} as Record<string, number>,
   production: 0, rests: 0, hdRolled: 0,
