@@ -2,7 +2,7 @@
 
 Type: prototype (wayfinder:prototype)
 State: open
-Claimed-by: —
+Claimed-by: carloscasalar (session 2026-10-11)
 Blocked-by: 08-town-economy-of-potions
 
 ## Question
