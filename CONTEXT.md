@@ -65,7 +65,7 @@ The rest a Company takes in town after an Expedition returns, lasting at least e
 A draught from the company's shared supply that restores hit points to the adventurer who drinks it or receives it from a companion. It comes in four tiers (basic, greater, superior, supreme), healing 2d4+2, 4d4+4, 8d4+8 and 10d4+20. The company buys them from the apothecary at 50, 200, 2,000 and 20,000 gp; the apothecary makes each on demand, instantly, for half that out of its treasury, and offers every tier for as long as it is not ruined. A company restocks until its supply can heal each living adventurer for half their maximum hit points, with at least one potion per adventurer, favouring the lower tiers; an adventurer drinks the smallest tier that covers the hit points they are missing, or the strongest if none does.
 
 **Reward set-aside**:
-The gold an apothecary has promised in the rewards of its posted Contracts and not yet paid. It is kept out of what new rewards are sized from, so paying a reward never leaves the apothecary's treasury negative.
+The gold an employer has promised in the rewards of its posted Contracts and not yet paid. It is kept out of what new rewards are sized from, so paying a reward never leaves the treasury negative. Only the apothecary sets its rewards aside for now; the rule is built so that any employer can.
 
 **Assured healing**:
 The healing a **Healing potion** tier is counted on for when buying and choosing: each die counts as half its faces plus 1, plus the fixed bonus (basic 8, greater 16, superior 32, supreme 50).

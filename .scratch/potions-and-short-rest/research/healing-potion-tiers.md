@@ -31,7 +31,9 @@ Drinking or administering any potion takes a Bonus Action (p. 204).
 - The SRD says values only "help you set prices", and a seller may ask for a
   service instead of coin.
 - Magic Item Crafting Cost (p. 207) lists Common 50, Uncommon 200, Rare 2,000,
-  Very Rare 20,000 gp, also with the consumable halving.
+  Very Rare 20,000 gp **before** the consumable halving. Halved, the raw
+  materials of a potion are 25 / 100 / 1,000 / 10,000 gp, which is half the
+  selling price of each tier (see [potion-crafting-time.md](potion-crafting-time.md)).
 
 ## Availability
 
