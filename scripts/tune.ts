@@ -1,18 +1,13 @@
 import { readFileSync } from 'node:fs';
 import { Game } from '../src/sim/game';
 import {
-  ApothecaryTracker, compareMetrics, formatComparison, formatScaleReport, parseTuneArgs,
-  summarizeApothecaries, TUNE_CONFIG, type ApothecaryReport, type ScaleReport,
+  ApothecaryTracker, compareScaleToBaseline, formatScaleReport, parseTuneArgs,
+  summarizeApothecaries, TUNE_CONFIG, type ApothecaryReport, type ScaleReport, type TuneBaseline,
 } from './tune-report';
 
-interface Baseline {
-  commit: string;
-  tuning: { ticks: number; results: ScaleReport[] };
-}
-
-function readBaseline(): Baseline | undefined {
+function readBaseline(): TuneBaseline | undefined {
   try {
-    return JSON.parse(readFileSync(new URL('./tune-baseline.json', import.meta.url), 'utf8')) as Baseline;
+    return JSON.parse(readFileSync(new URL('./tune-baseline.json', import.meta.url), 'utf8')) as TuneBaseline;
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined;
     throw error;
@@ -54,19 +49,9 @@ function main(): void {
       apothecary: summarizeApothecaries(apothecaries),
     };
     for (const line of formatScaleReport(report)) console.log(line);
-    const reference = baseline?.tuning.results.find((result) => result.scale === difficultyScale);
-    if (!baseline) {
-      console.log('baseline comparison: unavailable (scripts/tune-baseline.json not recorded yet)');
-    } else if (ticks !== baseline.tuning.ticks) {
-      console.log(`baseline comparison: unavailable (TICKS=${ticks}; baseline has ${baseline.tuning.ticks} ticks)`);
-    } else if (!reference) {
-      console.log(`baseline comparison: unavailable (scale ${difficultyScale} not recorded)`);
-      process.exitCode = 1;
-    } else {
-      const comparison = compareMetrics(report.metrics, reference.metrics, TUNE_CONFIG.tolerance);
-      for (const line of formatComparison(comparison)) console.log(line);
-      if (comparison.some((metric) => !metric.passed)) process.exitCode = 1;
-    }
+    const comparison = compareScaleToBaseline({ seeds, ticks }, report, baseline, TUNE_CONFIG.tolerance);
+    for (const line of comparison.lines) console.log(line);
+    if (comparison.exitCode === 1) process.exitCode = 1;
   }
 }
 

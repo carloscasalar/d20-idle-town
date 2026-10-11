@@ -432,9 +432,12 @@ be non-negative whole numbers. Parsing and report logic live in
 `scripts/tune-report.ts`, which can be imported without running a simulation.
 
 The baseline records the measured commit, commands, per-scale metrics and the
-3,000-tick apothecary figures. Comparisons use the 600-tick baseline; a different
-tick count is reported as unavailable, so a long run is not compared to a
-short-run metric. An unrecorded scale at 600 ticks exits with status 1. When
+3,000-tick apothecary figures. Comparisons require the baseline's tick count and
+seed sample: 600 ticks and seeds 1 through 80, each exactly once. Seed-list order
+does not matter. A different tick count or seed sample is reported as
+unavailable, prints no PASS or FAIL verdict and does not cause a failing exit
+status. This includes the default three seeds and the ten-seed scale-shape run.
+With matching ticks and seeds, an unrecorded scale exits with status 1. When
 initially recording a baseline, a missing file is reported as unavailable.
 
 The apothecary report reads `Game.view()` at initialization and after every tick.

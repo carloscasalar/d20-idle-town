@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { compareScaleToBaseline, type TuneBaseline } from '../scripts/tune-report';
 import {
   ApothecaryTracker, compareMetrics, formatComparison, formatScaleReport, parseTuneArgs,
   summarizeApothecaries, type ScaleReport, type TuneMetrics,
@@ -73,6 +74,55 @@ describe('baseline comparison', () => {
       { metric: 'wiped', deviationPercent: 0, passed: true },
       { metric: 'raised', deviationPercent: Infinity, passed: false },
     ]);
+  });
+});
+
+describe('baseline run selection', () => {
+  const report: ScaleReport = {
+    scale: 1.75,
+    metrics: { quests: 100, failed: 100, deaths: 100, deathsPerQuest: 1, wiped: 100, arrived: 100, raised: 100 },
+    apothecary: { ruined: 0, count: 10, lowestTreasuryReached: 50, treasuryAtEnd: 100 },
+  };
+  const baseline: TuneBaseline = {
+    tuning: {
+      ticks: 600, seeds: { from: 1, to: 80 },
+      results: [{ ...report, metrics: { ...report.metrics, raised: 50 } }],
+    },
+  };
+
+  it('reports different seeds without any metric verdict or failing status', () => {
+    expect(compareScaleToBaseline(parseTuneArgs({ SEEDS: '1..10' }), report, baseline, 0.15)).toEqual({
+      lines: ["baseline comparison: unavailable (seeds differ from baseline's 1..80)"], exitCode: 0,
+    });
+  });
+
+  it('leaves the default seed sample without a baseline verdict', () => {
+    expect(compareScaleToBaseline(parseTuneArgs({}), report, baseline, 0.15)).toEqual({
+      lines: ["baseline comparison: unavailable (seeds differ from baseline's 1..80)"], exitCode: 0,
+    });
+  });
+
+  it.each(['1,2,4', '1,2,2'])('rejects a different sample of the same size: %s', (SEEDS) => {
+    const smallBaseline = { tuning: { ...baseline.tuning, seeds: { from: 1, to: 3 } } };
+    expect(compareScaleToBaseline(parseTuneArgs({ SEEDS }), report, smallBaseline, 0.15)).toEqual({
+      lines: ["baseline comparison: unavailable (seeds differ from baseline's 1..3)"], exitCode: 0,
+    });
+  });
+
+  it('compares matching seeds and still fails a metric outside the band', () => {
+    const run = parseTuneArgs({ SEEDS: '1..80' });
+    const expected = {
+      lines: [
+        'baseline quests: deviation 0% PASS',
+        'baseline failed: deviation 0% PASS',
+        'baseline deathsPerQuest: deviation 0% PASS',
+        'baseline wiped: deviation 0% PASS',
+        'baseline raised: deviation 100% FAIL',
+        'baseline comparison: FAIL',
+      ], exitCode: 1,
+    };
+    expect(compareScaleToBaseline(run, report, baseline, 0.15)).toEqual(expected);
+    expect(compareScaleToBaseline({ ...run, seeds: [...run.seeds].reverse() }, report, baseline, 0.15)).toEqual(expected);
   });
 });
 

@@ -144,3 +144,27 @@ correctly returning exit 1 for that smaller sample. The full captured output,
 checks and acceptance-criterion coverage are in the turn report. No questions
 or new bugs; no requested implementation remains. The commit containing this
 comment contains the measuring tool, baseline, tests and documentation only.
+
+### Turn 01, correction 1
+
+The previous comparison ignored baseline seeds, so a smaller seed sample could
+receive a failing verdict against the 80-seed baseline on unchanged game code.
+Correction: require matching ticks and seeds before comparing any metric or
+checking for an unrecorded scale. A seed mismatch prints that the seeds differ
+from the baseline's and returns no verdict with a successful exit status.
+
+Decision: match the seed sample regardless of list order, preserving how the
+metrics average independent seeded runs. Every seed in the recorded inclusive
+range must occur exactly once; missing, extra or duplicate seeds differ from
+the baseline. The recorded baseline and all existing test expectations remain
+unchanged. The comparison decision lives at the public report interface so
+tests can verify printed lines and exit status without running a simulation.
+
+Verification: the new mismatch test first observed the reported false verdict
+and exit 1, then passed after seed gating. All 34 tune tests and all 613 tests
+in 30 files pass; `pnpm typecheck` passes. Both the ten-seed scale-shape CLI and
+the default CLI exit 0, print only seed-mismatch messages for comparisons, and
+print no PASS/FAIL verdicts. Both code-review axes report no findings. Baseline
+measurements, game code, all six regression hashes and every existing test
+expectation are unchanged. Full correction report and actual CLI outputs:
+`../run/turns/01-02-correction-1-report.md`.

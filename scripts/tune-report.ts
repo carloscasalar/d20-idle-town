@@ -131,3 +131,32 @@ export function formatComparison(comparison: readonly MetricComparison[]): strin
     `baseline comparison: ${comparison.every((metric) => metric.passed) ? 'PASS' : 'FAIL'}`,
   ];
 }
+
+export interface TuneBaseline {
+  tuning: { seeds: { from: number; to: number }; ticks: number; results: ScaleReport[] };
+}
+
+export function compareScaleToBaseline(
+  run: Pick<TuneArgs, 'seeds' | 'ticks'>,
+  report: ScaleReport,
+  baseline: TuneBaseline | undefined,
+  tolerance: number,
+): { lines: string[]; exitCode: 0 | 1 } {
+  if (!baseline) {
+    return { lines: ['baseline comparison: unavailable (scripts/tune-baseline.json not recorded yet)'], exitCode: 0 };
+  }
+  if (run.ticks !== baseline.tuning.ticks) {
+    return { lines: [`baseline comparison: unavailable (TICKS=${run.ticks}; baseline has ${baseline.tuning.ticks} ticks)`], exitCode: 0 };
+  }
+  const { from, to } = baseline.tuning.seeds;
+  const sortedSeeds = [...run.seeds].sort((a, b) => a - b);
+  if (sortedSeeds.length !== to - from + 1 || !sortedSeeds.every((seed, index) => seed === from + index)) {
+    return { lines: [`baseline comparison: unavailable (seeds differ from baseline's ${from}..${to})`], exitCode: 0 };
+  }
+  const reference = baseline.tuning.results.find((result) => result.scale === report.scale);
+  if (!reference) {
+    return { lines: [`baseline comparison: unavailable (scale ${report.scale} not recorded)`], exitCode: 1 };
+  }
+  const comparison = compareMetrics(report.metrics, reference.metrics, tolerance);
+  return { lines: formatComparison(comparison), exitCode: comparison.some((metric) => !metric.passed) ? 1 : 0 };
+}
