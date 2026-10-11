@@ -25,6 +25,7 @@ A `PRD.md` in this directory that decides how the game models Hit Dice at a shor
 - [Potion catalogue and availability](tickets/04-potion-catalogue-and-availability.md) — all four tiers as configurable data; company pays 50 / 200 / 2,000 / 20,000 gp; apothecary makes each on demand for half that and offers a tier only while its treasury covers the cost plus a reserve; no level or town-size gating.
 - [Balance targets for the retune](tickets/07-balance-targets.md) — re-measure baseline on `main` (seeds 1-80, scales 1/1.15/1.25/1.5/1.75); all five `tune.ts` metrics within +/-15% at 1.15 and 1.5 (80 seeds), scale shape at the rest; movable knobs listed, rules and potion prices fixed.
 - [Potion buying and drinking policy](tickets/05-potion-buying-and-drinking-policy.md) — pack is a tier-to-count map; stock target = half of each hero's max HP in assured healing (plus one potion per hero), buying one low-biased tier per visit; drink the smallest tier that covers the missing HP; a seeded-drawn sharing policy per company (company order or fallen first).
+- [Healing rolls and seeded-run stability](tickets/06-healing-rolls-and-seeded-run-stability.md) — real dice from the game's own Rng (never the engine's `rollDice`); one dice module; combat potions from a sub-seed after placement, the rest takes one world seed only when it happens; regression hashes re-recorded once at the end, combat-potions tests kept via scripted dice.
 
 ## Not yet specified
 
@@ -32,7 +33,7 @@ A `PRD.md` in this directory that decides how the game models Hit Dice at a shor
 - Interaction with town economy: which coin movement reasons the production sink and the potion sale use, the numeric reserve the apothecary keeps, and how a ruined or poor apothecary affects potion supply over a long run.
 - Apothecary staffing: a tier needing a cleric on the payroll whose level can cast the matching healing spell. Waits until businesses have employees; until then treasury alone gates tiers.
 - Documentation updates to `CONTEXT.md` and `docs/CONFIGURATION.md` once the rules are fixed.
-- Test fixtures and the regression snapshot that hold party shapes (`potions` becomes a map, companies gain a policies object). The game has no save files; only tests need migrating.
+- Test fixtures that hold party shapes (`potions` becomes a map, companies gain a policies object). The game has no save files; only tests need migrating. The regression-hash policy is settled in [Healing rolls and seeded-run stability](tickets/06-healing-rolls-and-seeded-run-stability.md).
 - Whether the buying rule should reach the supreme tier: at the defaults only a company averaging about 200 maximum hit points buys it ([05](tickets/05-potion-buying-and-drinking-policy.md)). Settle during the retune, with the tier divisor as a candidate knob.
 
 ## Out of scope

@@ -1,8 +1,8 @@
 # Healing rolls and seeded-run stability
 
 Type: grilling (wayfinder:grilling)
-State: open
-Claimed-by: —
+State: closed
+Claimed-by: carloscasalar (session 2026-10-11)
 Blocked-by: 03-short-rest-spending-policy, 05-potion-buying-and-drinking-policy
 
 ## Notes from other tickets
@@ -12,3 +12,23 @@ Blocked-by: 03-short-rest-spending-policy, 05-potion-buying-and-drinking-policy
 ## Question
 
 Are Hit Die and potion rolls real dice drawn from the simulation's seeded RNG, or averages? Where do rolls happen (expedition code, or the combat adapter through the engine's `heal`)? What does the change do to seeded trajectories and the existing regression and characterisation tests?
+
+## Resolution
+
+Decided with carloscasalar on 2026-10-11.
+
+- **Real dice.** A Hit Die heals `1dN + Constitution` and a potion heals its configured formula (2d4+2, 4d4+4, 8d4+8, 10d4+20), all rolled with the game's seeded `Rng`. This is the D&D 2024 rule. The assured healing of [05](05-potion-buying-and-drinking-policy.md) stays a planning value only (buying, choosing which tier to drink); a drink may heal more or less than it promised, and no code corrects for that. A Hit Die never heals less than 1 (the 2024 rule as quoted by [players on D&D Beyond](https://www.dndbeyond.com/forums/class-forums/warlock/141786-are-they-gutting-short-rests-in-5-5e?comment=21); the SRD 5.1 text on [5thsrd.org](https://5thsrd.org/adventuring/resting/) has no minimum). The clamp never fires today (Constitution is +2 for every class, so the worst d6 heals 3) but is written because [02](02-hit-dice-pool-model.md) reads Constitution from `hpFormula`. The exact SRD 5.2 wording was not found; confirm it when implementing.
+- **One game-side dice module; the engine's dice are banned.** One parser and roller for `NdM+K` expressions over the game's `Rng` (or any source with `int(min, max)`, so tests can script it) in `src/core`. It serves the potion formulas, the assured-healing derivation of 05 (same parser, so the two cannot drift apart), and Hit Dice. Never call the engine's exported `rollDice`: it draws from `engineRandom()`, which outside `withRng` falls back to `Math.random()`, so a run would silently stop being reproducible and nothing would fail. The engine only ever receives a number, through `enc.heal(id, amount)`, which does not roll (checked in 0.1.1), so the engine's own random stream never moves with healing.
+- **Where rolls happen.**
+  - *Combat, between rounds and for a fallen hero:* in the adapter ([battlecast.ts](../../../src/combat/battlecast.ts)). It rolls the chosen potion and passes the total to `heal`. The roll comes from a dedicated child `Rng` taken with `rng.seed()` right after placement (after every setup draw, so nothing before it moves). The adapter's local `Rng(seed)` and the engine's `SeededRng(seed)` are the same generator on the same seed, so a dedicated sub-seed keeps healing from mirroring the engine's draws at another offset. `CombatOptions` gains an optional dice source so tests can script it. The log line shows the roll, for example "Nym drinks a greater healing potion (4d4+4: 14)".
+  - *Short rest:* in the expedition code, with the pure spending function from [03](03-short-rest-spending-policy.md) taking a dice source. The log lists what each hero rolled.
+- **Stream discipline (one seed per event, as for combat).** A Short rest takes exactly one `rng.seed()` from the world stream, and only when a rest happens (nobody hurt means no rest and no draw). Every Hit Die of every hero, then the potions drunk after the dice (step 3 of the rest), roll from one local `Rng` made from that seed, in that order. So the world stream advances a fixed amount per rest however many dice are spent, which strategy paces them, or how many heroes are in the company. The company's sharing policy is one more world draw when the company is constituted ([05](05-potion-buying-and-drinking-policy.md)), taken at a fixed place in company creation.
+- **What it does to seeded runs.** Nothing keeps byte-identical trajectories: the extra rest hour, the removed 50% heal, the policy draw and the rest seed already move every run, independently of dice. The promise going forward is narrower: a given seed reproduces itself (the `smoke` determinism and interleaving tests keep checking this), and healing changes never shift unrelated world draws.
+- **Tests.**
+  - *Break and are re-recorded once, in the last implementation slice:* the three hashes in [simulation-regression.test.ts](../../../test/simulation-regression.test.ts) and the three `STRIPPED_WORLD` hashes in [job-intel-regression.test.ts](../../../test/job-intel-regression.test.ts). The second keeps its purpose ("nothing but investigations moved") only against the new baseline, so record it on the commit before whatever it next guards. Note it in `CHANGELOG.md`.
+  - *Rewritten for 03/05 anyway, and for the rest seed:* the three short-rest tests in [expedition.test.ts](../../../test/expedition.test.ts) (the 50% heal, `shortRestHealFraction: 0.25`), and "uses one world seed per fight, takes a short rest, and returns after clearing the contract" (its `new Rng(99)` mirror now has a rest seed draw between the fights, so both its assertion and its name change).
+  - *Survive by scripting:* [combat-potions.test.ts](../../../test/combat-potions.test.ts) seeds 1 and 2 and the "hp 18" expectation. The roll comes from a sub-seed after placement, so the fights are the same as before; a scripted source giving 3 and 3 makes 2d4+2 equal 8, the old heal for a 20 HP hero. Use that as the migration path rather than re-deriving the scenarios.
+  - *Survive unchanged:* `smoke`, `combat-space` seed 75 (asserts only the clock after 1,500 hours), `lairs` seed 14 (asserts only that nothing throws), `deployment` (no potions), and the seeded loops in `company-roster.test.ts` (ranges and invariants, not trajectories). The `potions` shape change (a map, a policies object) touches fixtures in a dozen test files; that part stays in the map's fog about fixtures.
+  - *New:* dice module (parse, scripted roll, bounds, min 1 per Hit Die, parse failure throws), spending function stops at max HP, rest draws no seed when nobody is hurt, one seed per rest regardless of dice spent, a hero's roll never touches the engine's stream (same fight, potions rolled low or high, identical engine log until the first drink).
+  - Update the test table and the seeding section in `docs/ARCHITECTURE.md`.
+- **Glossary.** Nothing new beyond Hit Dice and Healing potion.
