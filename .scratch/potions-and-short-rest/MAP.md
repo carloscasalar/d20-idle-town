@@ -23,10 +23,11 @@ A `PRD.md` in this directory that decides how the game models Hit Dice at a shor
 - [Hit Dice pool model](tickets/02-hit-dice-pool-model.md) — one pool per hero stored as dice spent (max = level, so a level-up needs no update); die size and Constitution read from the engine's `hpFormula`; reset at the end of `resting` with a test; death and resurrection leave it alone.
 - [Short rest spending policy](tickets/03-short-rest-spending-policy.md) — rest only when someone is hurt, costs one logged tick; dice spent by a swappable pacing strategy (default `ceil(D / E)`, stop at full HP), then retreat check, then potions for the still Bloodied if the company goes on; `shortRestHealFraction` removed.
 - [Potion catalogue and availability](tickets/04-potion-catalogue-and-availability.md) — all four tiers as configurable data; company pays 50 / 200 / 2,000 / 20,000 gp; apothecary makes each on demand for half that and offers a tier only while its treasury covers the cost plus a reserve; no level or town-size gating.
+- [Balance targets for the retune](tickets/07-balance-targets.md) — re-measure baseline on `main` (seeds 1-80, scales 1/1.15/1.25/1.5/1.75); all five `tune.ts` metrics within +/-15% at 1.15 and 1.5 (80 seeds), scale shape at the rest; movable knobs listed, rules and potion prices fixed.
 
 ## Not yet specified
 
-- Concrete retuned values (potion supply per level, scales in `scripts/tune.ts`). Needs the rules above settled first and probably a throwaway prototype of the economy.
+- Concrete retuned values (potion supply per level, `difficultyScale`, `retreatHpFraction`, encounters per job, starting purse). The targets and allowed knobs are settled ([07](tickets/07-balance-targets.md)); what remains is choosing the values. Needs the rules above settled first and probably a throwaway prototype of the economy.
 - Interaction with town economy: which coin movement reasons the production sink and the potion sale use, the numeric reserve the apothecary keeps, and how a ruined or poor apothecary affects potion supply over a long run.
 - Apothecary staffing: a tier needing a cleric on the payroll whose level can cast the matching healing spell. Waits until businesses have employees; until then treasury alone gates tiers.
 - Documentation updates to `CONTEXT.md` and `docs/CONFIGURATION.md` once the rules are fixed.
