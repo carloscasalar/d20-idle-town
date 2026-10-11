@@ -15,7 +15,6 @@ import { freeze } from '../core/freeze';
 export interface GoldStatistics {
   goldPaid: number;
   goldSpentByHeroes: number;
-  goldSpentOnProduction: number;
 }
 
 /** What one adventurer has had spent on them. Named by the movement that spends it. */
@@ -36,7 +35,6 @@ export interface CoinEffects {
   readonly goldSpentByHeroes: boolean;
   /** When set, an adventurer named on the movement has `goldSpent` increased. */
   readonly adventurer: boolean;
-  readonly production?: boolean;
 }
 
 /** A table of reasons. A movement's reason must be one of its keys. */
@@ -104,13 +102,12 @@ export const coinReasons = freeze({
   upkeep,
   /** Buying a business. The new treasury is opening capital, not earnings. */
   retirement: freeze({ spent: true, earned: false, goldPaid: false, goldSpentByHeroes: true, adventurer: false }),
-  production: freeze({ spent: true, earned: false, goldPaid: false, goldSpentByHeroes: false, adventurer: false, production: true }),
 });
 
 export type CoinReason = keyof typeof coinReasons;
 
 export function emptyGoldStatistics(): GoldStatistics {
-  return { goldPaid: 0, goldSpentByHeroes: 0, goldSpentOnProduction: 0 };
+  return { goldPaid: 0, goldSpentByHeroes: 0 };
 }
 
 /** The world's gold statistics and the reason table, built once. */
@@ -278,7 +275,6 @@ function move<Reason extends string>(
   }
   if (reasonEffects.goldPaid) statistics.goldPaid += amount;
   if (reasonEffects.goldSpentByHeroes) statistics.goldSpentByHeroes += amount;
-  if (reasonEffects.production) statistics.goldSpentOnProduction += amount;
   if (reasonEffects.adventurer && adventurer) adventurer.goldSpent += amount;
 }
 

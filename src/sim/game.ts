@@ -58,7 +58,6 @@ export interface GameStats {
   partiesArrived: number;
   goldPaid: number;
   goldSpentByHeroes: number;
-  goldSpentOnProduction: number;
   employersRuined: number;
   itemsFound: number;
   itemsSold: number;

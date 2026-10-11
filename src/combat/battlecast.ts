@@ -4,7 +4,6 @@ import { Rng } from '../core/rng';
 import { combinedEffect, heroAc, isBloodied, potionHeal, skillBonus, WEAPON_CLASSES, type Hero, type HeroEconomyConfig } from '../adventurers/hero';
 import { freeze } from '../core/freeze';
 import type { EncounterSpec } from '../quests/encounters';
-import { chooseTier, count, packSize, rollTier } from '../proto';
 
 export type CombatWinner = 'party' | 'monsters' | 'retreat' | 'stalemate';
 
@@ -34,7 +33,6 @@ export interface CombatOutcome {
   xpEarned: number;
   /** Healing potions consumed from the supplied shared pack. */
   potionsDrunk: number;
-  drunk?: Record<string, number>;
 }
 
 /** House rules layered on the engine: round cap, surprise, and who spots whom. */
@@ -75,8 +73,6 @@ export const DEFAULT_COMBAT_CONFIG: CombatConfig = freeze({
 export interface CombatOptions {
   /** Healing potions available in the shared pack (defaults to none). */
   potions?: number;
-  pack?: Record<string, number>;
-  policy?: 'order' | 'fallen';
   /** A temple blessing: extra hit points for the whole company. */
   blessingHp?: number;
   /** No running from this one (a boss in its own hall). */
@@ -209,9 +205,6 @@ export function runCombat(heroes: Hero[], spec: DeepReadonly<EncounterSpec>, see
     });
   });
 
-  const healRng = opts.pack ? new Rng(rng.seed()) : undefined;
-  const pack: Record<string, number> = { ...(opts.pack ?? {}) };
-  const drunk: Record<string, number> = {};
   enc.start();
   for (const h of fighters) {
     const carried = h.maxHp - h.hp;
@@ -247,25 +240,7 @@ export function runCombat(heroes: Hero[], spec: DeepReadonly<EncounterSpec>, see
       const c = enc.creatures.find((x) => x.id === idByHero.get(h.id));
       return c?.isAlive && c.currentHp > 0 && !c.conditions.includes('unconscious');
     });
-    if (healRng) {
-      const cands = fighters
-        .map((h) => ({ h, c: enc.creatures.find((x) => x.id === idByHero.get(h.id)) }))
-        .filter(({ c }) => c?.isAlive && isBloodied({ hp: c.currentHp, maxHp: c.maxHp }) && !(c.currentHp > 0 && c.conditions.includes('unconscious')));
-      if (opts.policy === 'fallen') {
-        cands.sort((a, b) => (a.c!.currentHp <= 0 ? 0 : 1) - (b.c!.currentHp <= 0 ? 0 : 1) || a.c!.currentHp / a.c!.maxHp - b.c!.currentHp / b.c!.maxHp);
-      }
-      for (const { h, c } of cands) {
-        if (!companion || packSize(pack) === 0) break;
-        const tier = chooseTier(pack, c!.maxHp - Math.max(0, c!.currentHp))!;
-        const amount = rollTier(healRng, tier);
-        const fallen = c!.currentHp <= 0;
-        enc.heal(c!.id, amount);
-        pack[tier.id]! -= 1;
-        count(drunk, tier.id);
-        potionsDrunk += 1;
-        lines.push(fallen ? `${companion.name} gives ${h.name} a ${tier.id} healing potion (${amount}).` : `${h.name} drinks a ${tier.id} healing potion (${amount}).`);
-      }
-    } else for (const h of fighters) {
+    for (const h of fighters) {
       if (!companion || potionsDrunk >= (opts.potions ?? 0)) break;
       const c = enc.creatures.find((x) => x.id === idByHero.get(h.id));
       if (!c?.isAlive || !isBloodied({ hp: c.currentHp, maxHp: c.maxHp })) continue;
@@ -309,7 +284,6 @@ export function runCombat(heroes: Hero[], spec: DeepReadonly<EncounterSpec>, see
     heroes: results,
     xpEarned: partyWon ? spec.totalXp : 0,
     potionsDrunk,
-    ...(healRng ? { drunk } : {}),
   };
 }
 

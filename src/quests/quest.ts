@@ -1,4 +1,3 @@
-import { PROTO } from '../proto';
 import { freeze } from '../core/freeze';
 import type { DeepReadonly } from '../core/readonly';
 import type { Rng } from '../core/rng';
@@ -147,8 +146,7 @@ export function generateQuest(rng: Rng, terms: QuestTerms, generation: QuestGene
   const desperation = asset.status === 'ravaged' ? quests.ravagedPayFactor : 1;
   const base = asset.incomePerDay * quests.incomeDays + level * level * quests.levelPayFactor;
   const wanted = Math.round(base * payFactor * employer.generosity * desperation * quests.rewardScale);
-  const avail = PROTO.newRules && PROTO.escrow && employer.service === 'apothecary' ? employer.treasury - PROTO.outstanding(employer.id) : employer.treasury;
-  const reward = Math.max(quests.minimumReward, Math.min(wanted, Math.floor(avail * quests.treasuryShare)));
+  const reward = Math.max(quests.minimumReward, Math.min(wanted, Math.floor(employer.treasury * quests.treasuryShare)));
   // Relics turn up in old places, and rich employers sometimes pay in kind.
   const itemChance = (quests.relicHoldings.includes(asset.kind) ? quests.relicItemChance : quests.ordinaryItemChance) + (employer.kind === 'noble' ? quests.nobleItemChance : 0);
   const itemReward = rng.chance(itemChance) ? rollLootItem(rng, level, items) : null;
