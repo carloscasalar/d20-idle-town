@@ -53,8 +53,13 @@ Gold moving by a transfer between two holders, a source into the world, or a sin
 An adventurer at half or less of their maximum hit points.
 
 **Short rest**:
-The recovery a company takes between two encounters of an expedition.
-Implemented by `shortRest`: heals a configured fraction of maximum hit points (default 0.5), rounded up.
+The hour a company takes between two encounters of an expedition when at least one living adventurer is below their maximum hit points. Each living adventurer spends Hit Dice to recover hit points, the company decides whether to turn back, and then those still **Bloodied** drink a **Healing potion** if the company goes on. The game does not rest when everyone is unhurt.
+
+**Hit Dice**:
+An adventurer's pool of healing dice, as many as their level. Spent at a Short rest; every spent die returns at a Long rest. Gaining a level adds one die. Dying and being raised leave the pool as it was.
+
+**Long rest**:
+The rest a Company takes in town after an Expedition returns, lasting at least eight hours. It restores every living adventurer's hit points and all their Hit Dice. The game does not limit it to one per 24 hours.
 
 **Healing potion**:
 A draught from the company's shared supply that restores hit points to the adventurer who drinks it or receives it from a companion.
@@ -72,7 +77,7 @@ The squares a creature controls on the battlefield. In the 2024 rules a Huge cre
 - A **Contract** concerns one **Holding**; a **Bounty** concerns one **Lair**.
 - A **Lair** may threaten multiple **Holdings**.
 - After each encounter round that does not end the fight, before checking whether to flee, each conscious **Bloodied** adventurer drinks one **Healing potion** if the **Company** has one. A fallen adventurer at 0 hit points who is not dead is given the potion by a conscious companion, chosen first in company order. If no companion is conscious, nobody uses a potion. **Bloodied** uses the maximum hit points in that fight, including items and blessings; healing uses the game's `potionHeal` amount. The game does not check distance or spend a Bonus Action when administering a potion; D&D 2024 requires the companion to be within 5 feet and spend a Bonus Action.
-- After the healing from a **Short rest**, each living adventurer who is still **Bloodied** drinks one **Healing potion** if the **Company** has one. The default rest fraction brings every living adventurer above half, so this applies only with a smaller configured fraction.
+- At a **Short rest**, each living adventurer first spends **Hit Dice**: as many as the company's pacing allows, one at a time, stopping at maximum hit points. The pacing spreads the remaining dice over the encounters still ahead, counting the most the job could hold when their number is not known. The company then decides whether to turn back, using the hit points the dice left. If it goes on, each living adventurer who is still **Bloodied** drinks one **Healing potion** if the **Company** has one, whether or not they have dice left. An adventurer with no Hit Dice recovers nothing at the rest.
 - An encounter places every creature it asked for, on a cell where that creature's **Space** lies on the battlefield and does not overlap another creature.
 
 ## Example dialogue
@@ -81,4 +86,4 @@ The squares a creature controls on the battlefield. In the 2024 rules a Huge cre
 > **Domain expert:** "No. The company must return, collect the **Contract** reward or **Bounty**, and rest. A wipe ends the expedition in the field."
 
 > **Dev:** "Does an adventurer drink a **Healing potion** as soon as they are hurt?"
-> **Domain expert:** "Only when **Bloodied**. In an encounter conscious adventurers drink between rounds before checking whether to flee; a fallen adventurer receives a potion from a conscious companion. Between encounters they take the **Short rest** first and drink only if they are still **Bloodied** afterwards."
+> **Domain expert:** "Only when **Bloodied**. In an encounter conscious adventurers drink between rounds before checking whether to flee; a fallen adventurer receives a potion from a conscious companion. Between encounters they take the **Short rest** first, spending **Hit Dice**, and drink only if they are still **Bloodied** afterwards and the company has not turned back."
