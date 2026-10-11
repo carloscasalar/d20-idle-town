@@ -4,7 +4,9 @@ import type { CombatOptions, CombatOutcome } from '../combat/battlecast';
 import { freeze } from '../core/freeze';
 import { listNames } from '../core/names';
 import type { DeepReadonly } from '../core/readonly';
-import type { Rng } from '../core/rng';
+import { Rng } from '../core/rng';
+import { buildHero } from 'battlecast-engine';
+import { chooseTier, count, packSize, PROTO, rollTier } from '../proto';
 import { describeEncounter, scaleEncounter, type EncounterConfig, type EncounterSpec } from '../quests/encounters';
 import { learnOnArrival, readTheRoad, type JobIntelConfig, type JobKnowledge } from '../quests/job-intel';
 import { difficultyCode, type ReadonlyQuest } from '../quests/quest';
@@ -109,7 +111,7 @@ export function advanceExpedition(p: Party, context: ExpeditionContext): void {
     }
     case 'resting':
       if (--p.ticksLeft <= 0) {
-        for (const h of aliveMembers(p)) healHero(h, h.maxHp);
+        for (const h of aliveMembers(p)) { healHero(h, h.maxHp); h.hdSpent = 0; }
         p.status = 'idle';
         p.idleTicks = 0;
       }
@@ -153,6 +155,10 @@ function travel(p: Party, q: ReadonlyQuest, context: ExpeditionContext): void {
 
 function resolveFight(p: Party, q: ReadonlyQuest, context: ExpeditionContext): void {
   const { town, rng, ledger, travelTicks, combat, settleQuest, leaveLoot } = context;
+  if (p.restPending) {
+    restTick(p, q, context);
+    return;
+  }
   const fighters = aliveMembers(p);
   const spec = scaleEncounter(q.encounters[p.progress]!, fighters.length, context.companySize, context.encounters);
   const n = p.progress + 1;
@@ -160,11 +166,13 @@ function resolveFight(p: Party, q: ReadonlyQuest, context: ExpeditionContext): v
   const bossFight = profile.lastFightForbidsRetreat && p.progress === q.encounters.length - 1;
   const outcome = combat(fighters, spec, rng.seed(), {
     potions: p.potions,
+    ...(PROTO.newRules ? { pack: p.pack, policy: p.policy } : {}),
     ...(p.blessed ? { blessingHp: context.blessingHpPerLevel * partyLevel(p) } : {}),
     noRetreat: bossFight,
     ...(profile.lairDepth ? { lairDepth: { index: p.progress, total: q.encounters.length } } : {}),
   });
   p.potions = Math.max(0, p.potions - outcome.potionsDrunk);
+  if (outcome.drunk) for (const [k, n] of Object.entries(outcome.drunk)) { p.pack[k] = (p.pack[k] ?? 0) - n; count(PROTO.drunk, k, n); }
 
   for (const r of outcome.heroes) {
     const hero = p.members.find((h) => h.id === r.heroId)!;
@@ -200,6 +208,11 @@ function resolveFight(p: Party, q: ReadonlyQuest, context: ExpeditionContext): v
     }
 
     p.progress += 1;
+    if (PROTO.newRules && p.progress < q.encounters.length && aliveMembers(p).some((h) => h.hp < h.maxHp)) {
+      p.restPending = true;
+      (p as any).restFrom = fighters.length;
+      return;
+    }
     if (p.progress < q.encounters.length && shouldRetreat(p, fighters.length, context.config)) {
       log(context, 'party', `${p.name} are too battered to go on. They abandon ${q.place} and turn back.`);
       headHome(p, travelTicks);
@@ -208,7 +221,7 @@ function resolveFight(p: Party, q: ReadonlyQuest, context: ExpeditionContext): v
     if (p.progress >= q.encounters.length) {
       log(context, 'quest', `${p.name} have cleared ${q.place} and head back to ${town.name}.`);
       headHome(p, travelTicks);
-    } else {
+    } else if (!PROTO.newRules) {
       shortRest(p, context);
     }
     return;
@@ -310,4 +323,39 @@ function shouldRetreat(p: Party, startedWith: number, config: ExpeditionConfig):
   if (alive.length <= startedWith / config.retreatAliveDivisor) return true;
   const hpFraction = alive.reduce((s, h) => s + h.hp / h.maxHp, 0) / alive.length;
   return hpFraction < config.retreatHpFraction;
+}
+
+function restTick(p: Party, q: ReadonlyQuest, context: ExpeditionContext): void {
+  p.restPending = false;
+  PROTO.rests += 1;
+  const rr = new Rng(context.rng.seed());
+  const alive = aliveMembers(p);
+  const total = q.countRevealed ? q.encounters.length : Math.max(6, q.revealed);
+  const ahead = Math.max(1, total - p.progress);
+  for (const h of alive) {
+    const m = /^(\d+)d(\d+)\+(\d+)$/.exec(buildHero(h.heroClass, h.level).hpFormula)!;
+    const die = Number(m[2]);
+    const con = Number(m[3]) / Number(m[1]);
+    let quota = Math.ceil((h.level - h.hdSpent) / ahead);
+    while (quota > 0 && h.hdSpent < h.level && h.hp < h.maxHp) {
+      healHero(h, Math.max(1, rr.int(1, die) + con));
+      h.hdSpent += 1;
+      PROTO.hdRolled += 1;
+      quota -= 1;
+    }
+  }
+  if (shouldRetreat(p, (p as any).restFrom ?? alive.length, context.config)) {
+    log(context, 'party', `${p.name} are too battered to go on. They abandon ${q.place} and turn back.`);
+    headHome(p, context.travelTicks);
+    return;
+  }
+  const order = p.policy === 'fallen' ? [...alive].sort((a, b) => a.hp / a.maxHp - b.hp / b.maxHp) : alive;
+  for (const h of order) {
+    if (packSize(p.pack) === 0) break;
+    if (!isBloodied(h)) continue;
+    const tier = chooseTier(p.pack, h.maxHp - h.hp)!;
+    p.pack[tier.id]! -= 1;
+    count(PROTO.drunk, tier.id);
+    healHero(h, rollTier(rr, tier));
+  }
 }

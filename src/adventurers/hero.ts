@@ -23,6 +23,7 @@ export interface Hero {
   goldSpent: number;
   /** Equipped magic items, at most one per slot. */
   items: MagicItem[];
+  hdSpent: number;
 }
 
 /** The class chassis attacks with a weapon rather than a cantrip; +1 swords are wasted on the rest. */
@@ -129,6 +130,7 @@ export function createHero(rng: Rng, level: number, heroClass?: HeroClassName): 
     armorTier: 0,
     goldSpent: 0,
     items: [],
+    hdSpent: 0,
   };
 }
 

@@ -1,3 +1,4 @@
+import { PROTO } from '../proto';
 import type { Party } from '../adventurers/party';
 import { freeze } from '../core/freeze';
 import type { DeepReadonly } from '../core/readonly';
@@ -394,6 +395,7 @@ function payContract(work: Readonly<Quest>, company: Party, employer: Employer, 
   // Windfall and reward used to be one treasury assignment. Both finish before the reward event.
   coin.source(treasury(employer), windfall, 'windfall');
   coin.transfer(treasury(employer), purse(company), work.reward, 'reward');
+  if (PROTO.newRules && PROTO.apoCredit && employer.service === 'apothecary') (employer as any).credit = ((employer as any).credit ?? 0) + work.reward;
   employer.questsCompleted += 1;
   employer.reputation += context.config.reputationGain;
   company.questsDone += 1;

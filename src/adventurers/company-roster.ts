@@ -317,6 +317,8 @@ function mergeMembers(host: Party, donor: Party, maxCompanySize: number, coin: C
   coin.transfer(purse(donor), purse(host), donor.gold, 'merger');
   host.potions += donor.potions;
   donor.potions = 0;
+  for (const [k, n] of Object.entries(donor.pack)) host.pack[k] = (host.pack[k] ?? 0) + n;
+  donor.pack = {};
   host.stash.push(...donor.stash);
   donor.stash = [];
   host.renown = Math.max(host.renown, donor.renown);

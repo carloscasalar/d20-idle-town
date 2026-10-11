@@ -4,6 +4,7 @@ import type { MagicItem } from '../items/items';
 import { HERO_CLASS_NAMES, type HeroClassName } from 'battlecast-engine';
 import type { DeepReadonly } from '../core/readonly';
 import { createHero, type Hero } from './hero';
+import { PROTO } from '../proto';
 
 export type PartyStatus =
   | 'idle'
@@ -31,6 +32,9 @@ export interface Party {
   arrivedAt: number;
   /** Healing potions in the shared pack. */
   potions: number;
+  pack: Record<string, number>;
+  policy: 'order' | 'fallen';
+  restPending: boolean;
   /** Lifetime ledger. */
   earned: number;
   spent: number;
@@ -80,6 +84,7 @@ export function rollClasses(rng: Rng, size: number): HeroClassName[] {
 
 export function createParty(rng: Rng, level: number, size: number, tick: number, startingGoldPerLevel: number): Party {
   const members: Hero[] = rollClasses(rng, size).map((cls) => createHero(rng, level, cls));
+  const policy: 'order' | 'fallen' = PROTO.newRules ? (rng.next() * (PROTO.wOrder + PROTO.wFallen) < PROTO.wOrder ? 'order' : 'fallen') : 'order';
   return {
     id: rng.id('party'),
     name: partyName(rng),
@@ -94,6 +99,9 @@ export function createParty(rng: Rng, level: number, size: number, tick: number,
     questsFailed: 0,
     arrivedAt: tick,
     potions: 0,
+    pack: {},
+    policy,
+    restPending: false,
     earned: 0,
     spent: 0,
     stash: [],

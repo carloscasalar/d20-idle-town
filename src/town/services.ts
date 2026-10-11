@@ -5,6 +5,7 @@ import { listNames } from '../core/names';
 import { describeEffect, resalePrice, type ItemConfig, type MagicItem } from '../items/items';
 import { resolveSteps, runSteps, type Step } from '../core/steps';
 import { purse, treasury, type Coin } from './coin';
+import { assured, count, packSize, PROTO, prodCost, TIERS } from '../proto';
 import { serviceOf, type Employer, type Town } from './town';
 
 /** Prices and limits for an idle hour in town. */
@@ -88,7 +89,51 @@ export function visitTownServices(p: Party, services: TownServiceContext, steps:
   return runSteps(p, services, steps);
 }
 
+function buyPotionsNew(p: Party, context: TownServiceContext): boolean {
+  const { town, reserve, alive, pay, log, coin } = serviceVisit(p, context);
+  const apothecary = serviceOf(town, 'apothecary');
+  if (apothecary.ruined || alive.length === 0) return false;
+  const target = alive.reduce((s, h) => s + Math.ceil(h.maxHp * PROTO.cover), 0);
+  const packAssured = TIERS.reduce((s, t) => s + (p.pack[t.id] ?? 0) * assured(t), 0);
+  const packCount = packSize(p.pack);
+  if (packAssured >= target && packCount >= alive.length) return false;
+  const n = target / alive.length;
+  const resv = PROTO.reserveDays * apothecary.upkeepPerDay;
+  const offered = TIERS.map((t) => Math.max(0, Math.floor((apothecary.treasury - resv) / prodCost(t))));
+  const budget = p.gold - reserve;
+  let idx = -1;
+  TIERS.forEach((t, i) => { if (offered[i]! > 0 && assured(t) <= n / PROTO.divisor) idx = i; });
+  if (idx < 0) idx = 0;
+  let pick = -1;
+  let k = 0;
+  for (let i = idx; i >= 0; i--) {
+    const t = TIERS[i]!;
+    if (offered[i]! <= 0) continue;
+    const need = Math.max(Math.ceil(Math.max(0, target - packAssured) / assured(t)), alive.length - packCount, 1);
+    if (need <= offered[i]! && need * t.price <= budget) { pick = i; k = need; break; }
+  }
+  if (pick < 0) {
+    k = Math.min(offered[0]!, Math.floor(budget / TIERS[0]!.price));
+    if (k <= 0) return false;
+    pick = 0;
+  }
+  const t = TIERS[pick]!;
+  for (let i = 0; i < k; i++) {
+    const credit: number = PROTO.apoCredit ? ((apothecary as any).credit ?? 0) : 0;
+    const discount = Math.min(credit, Math.floor(prodCost(t) / 2));
+    if (discount > 0) (apothecary as any).credit = credit - discount;
+    coin.sink(treasury(apothecary), prodCost(t) - discount, 'production');
+    pay(p, apothecary, t.price);
+    PROTO.production += prodCost(t) - discount;
+  }
+  p.pack[t.id] = (p.pack[t.id] ?? 0) + k;
+  count(PROTO.bought, t.id, k);
+  log('shop', `${p.name} buy ${k} ${t.id} healing potion${k > 1 ? 's' : ''} from ${apothecary.name} for ${k * t.price} gp.`);
+  return true;
+}
+
 export function buyPotions(p: Party, context: TownServiceContext): boolean {
+  if (PROTO.newRules) return buyPotionsNew(p, context);
   const { town, level, reserve, alive, pay, log, heroes } = serviceVisit(p, context);
   if (p.potions < alive.length) {
     const apothecary = serviceOf(town, 'apothecary');
