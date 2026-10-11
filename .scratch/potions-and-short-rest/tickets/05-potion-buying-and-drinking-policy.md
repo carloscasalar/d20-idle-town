@@ -31,3 +31,4 @@ Decided with carloscasalar on 2026-10-11.
 ## Comments
 
 - 2026-10-11: [Town economy of potions](08-town-economy-of-potions.md) limits a purchase to the count the apothecary offers; the step-down to a cheaper tier also applies when the apothecary cannot offer enough.
+- 2026-10-11: [Retuned values prototype](09-retuned-values-prototype.md) removes the apothecary's offer limit, so the step-down to a cheaper tier "when the apothecary cannot offer enough" now only happens when the shop is ruined (nothing is offered at all); the step-down by the company's budget is unchanged.
