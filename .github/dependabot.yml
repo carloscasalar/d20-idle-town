@@ -8,11 +8,10 @@ updates:
       day: "monday"
     open-pull-requests-limit: 5
 
+    # Wait a week after a release before proposing it (supply-chain mitigation).
+    # Security updates bypass the cooldown by design.
     cooldown:
       default-days: 7
-      semver-patch-days: 7
-      semver-minor-days: 7
-      semver-major-days: 30
 
     groups:
       npm-major:
@@ -27,3 +26,9 @@ updates:
         applies-to: version-updates
         update-types:
           - "patch"
+      # Security updates are not covered by the groups above; without this
+      # each vulnerable dependency opens its own PR.
+      npm-security:
+        applies-to: security-updates
+        patterns:
+          - "*"
