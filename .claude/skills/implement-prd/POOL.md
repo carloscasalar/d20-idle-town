@@ -4,9 +4,9 @@
 
 | Role | Agent | Takes |
 | --- | --- | --- |
-| Implementer | Codex, then Cursor (the order is in `docs/agents/implementation.md`) | Every turn that writes code or tests |
+| Implementer | Codex, then Cursor, then opencode (the order is in `docs/agents/implementation.md`) | Every turn that writes code or tests |
 | Slice reviewer | `slice-reviewer` agent (default model) | An issue's implementation: each acceptance criterion with evidence, design rules, behaviour outside the issue |
-| Cheap reviewer | opencode | Bug-fix turns, tests-only turns, and re-checks of a correction that is a closed list |
+| Cheap reviewer | opencode; a Sonnet subagent for a turn opencode itself implemented | Bug-fix turns, tests-only turns, and re-checks of a correction that is a closed list |
 | Product decisions | `prd-answerer` agent (Opus) | A product question an issue does not answer |
 | Smoke tester | `smoke-tester` agent (Sonnet, built-in browser) | Running the app and comparing with the last smoke report |
 | Orchestrator | you | A diff of three files or fewer that is mechanical: read it yourself instead of spending a reviewer |

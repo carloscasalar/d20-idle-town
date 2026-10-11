@@ -51,10 +51,11 @@ Domain questions are answered by the D&D 5e 2024 rules (SRD 5.2.1). Where the ga
 | --- | --- | --- | --- | --- |
 | 1 | Codex | `scripts/agents/codex-turn.sh` | `gpt-6.1-sol`, high effort | Use $mattpocock-skills:implement. |
 | 2 | Cursor | `scripts/agents/cursor-turn.sh` | `grok-4.7-high` | Use the project skill "implement" (`.cursor/skills/implement/SKILL.md`). |
+| 3 | opencode | `scripts/agents/opencode-turn.sh` | `minimax/MiniMax-M3`, thinking | Read `.cursor/skills/implement/SKILL.md` and work the way it says. |
 
-Codex has the plugin installed. Cursor does not, so `.cursor/skills/implement/` holds a copy of that one skill (see `THIRD-PARTY-NOTICES.md`); refresh the copy when the plugin's version of it changes. The skills it calls, `tdd` and `code-review`, must be installed for the implementer.
+Take the first implementer that is not at its usage limit; when all three are, stop and report the reset times. Codex has the plugin installed. Cursor and opencode do not, so `.cursor/skills/implement/` holds a copy of that one skill (see `THIRD-PARTY-NOTICES.md`), which Cursor loads as a project skill and opencode reads as a file; refresh the copy when the plugin's version of it changes. The skills it calls, `tdd` and `code-review`, must be installed for the implementer.
 
-Cheap reviewer: opencode through `scripts/agents/opencode-turn.sh` (`minimax/MiniMax-M3`, thinking). Claude agents: `.claude/agents/` (`slice-reviewer`, `smoke-tester`, `prd-answerer`).
+Cheap reviewer: opencode through `scripts/agents/opencode-turn.sh` (`minimax/MiniMax-M3`, thinking). A turn that opencode implemented is never cheap-reviewed by opencode: a Sonnet subagent takes that review with the same prompt. Claude agents: `.claude/agents/` (`slice-reviewer`, `smoke-tester`, `prd-answerer`).
 
 ## Tracker
 
