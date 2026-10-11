@@ -47,10 +47,12 @@ Domain questions are answered by the D&D 5e 2024 rules (SRD 5.2.1). Where the ga
 
 ## The pool
 
-| Order | Implementer | Wrapper | Model | `implement` skill |
+| Order | Implementer | Wrapper | Model | Sentence that loads the `implement` skill |
 | --- | --- | --- | --- | --- |
-| 1 | Codex | `scripts/agents/codex-turn.sh` | `gpt-6.1-sol`, high effort | yes, named as `$mattpocock-skills:implement` |
-| 2 | Cursor | `scripts/agents/cursor-turn.sh` | `grok-4.7-high` | no; follows the rules instead |
+| 1 | Codex | `scripts/agents/codex-turn.sh` | `gpt-6.1-sol`, high effort | Use $mattpocock-skills:implement. |
+| 2 | Cursor | `scripts/agents/cursor-turn.sh` | `grok-4.7-high` | Use the project skill "implement" (`.cursor/skills/implement/SKILL.md`). |
+
+Codex has the plugin installed. Cursor does not, so `.cursor/skills/implement/` holds a copy of that one skill (see `THIRD-PARTY-NOTICES.md`); refresh the copy when the plugin's version of it changes. The skills it calls, `tdd` and `code-review`, must be installed for the implementer.
 
 Cheap reviewer: opencode through `scripts/agents/opencode-turn.sh` (`minimax/MiniMax-M3`, thinking). Claude agents: `.claude/agents/` (`slice-reviewer`, `smoke-tester`, `prd-answerer`).
 

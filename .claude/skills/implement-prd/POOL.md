@@ -35,7 +35,7 @@ CODEX_TURN_LOG_DIR="$run" scripts/agents/detach.sh "$run/turn-NN-fix1.result" \
 
 ## The `implement` skill
 
-Implementation turns ask for the `implement` skill of the mattpocock-skills plugin (test-first, checks, a self-review, a commit). Codex has it and loads it only when the prompt names it as `$mattpocock-skills:implement`. Cursor does not have it and follows rule 2 of [RULES.md](RULES.md), which asks for the same work. The skill's own review does not replace the review in this flow: the reviewer still checks every turn.
+Implementation turns use the `implement` skill of the mattpocock-skills plugin (test-first, checks, a self-review, a commit). An implementer loads it only when the prompt names it, each in its own way; the pool table in `docs/agents/implementation.md` has the sentence for each. An implementer with no way to load it follows rule 2 of [RULES.md](RULES.md), which asks for the same work. The skill's own review does not replace the review in this flow: the reviewer still checks every turn.
 
 ## Usage limits and dead turns
 

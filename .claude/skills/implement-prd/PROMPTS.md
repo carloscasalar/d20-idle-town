@@ -1,6 +1,6 @@
 # Prompt templates
 
-Fill the `<...>` parts. `$mattpocock-skills:implement` is how Codex is told to load that skill; it only loads when named like this, and an implementer without it falls back to the rules. Save each prompt under `<prd-folder>/run/` before sending it, so the history shows what was asked. Keep them short: the issue file and the rules carry the detail.
+Fill the `<...>` parts. Each implementer loads the `implement` skill in its own way and only when the prompt names it; the exact sentence for each is in the pool table of `docs/agents/implementation.md`. Save each prompt under `<prd-folder>/run/` before sending it, so the history shows what was asked. Keep them short: the issue file and the rules carry the detail.
 
 ## Turn (new session)
 
@@ -9,7 +9,7 @@ Fill the `<...>` parts. `$mattpocock-skills:implement` is how Codex is told to l
 
 Read `.claude/skills/implement-prd/RULES.md` before anything else. Those rules apply to this turn.
 
-Use $mattpocock-skills:implement to implement the issue `<prd-folder>/issues/<file>.md`. If you have no such skill, follow rule 2 of the rules instead; the work is the same. The issue is the contract: build what it describes and meet every acceptance criterion. Its parent PRD is `<prd-folder>/PRD.md`.
+<How this implementer loads the `implement` skill, from the pool table in docs/agents/implementation.md.> Use it to implement the issue `<prd-folder>/issues/<file>.md`. The issue is the contract: build what it describes and meet every acceptance criterion. Its parent PRD is `<prd-folder>/PRD.md`.
 
 <Only if needed: what earlier turns of this run changed that the issue could not know; reviewer notes carried forward.>
 
@@ -25,7 +25,7 @@ Read `.claude/skills/implement-prd/RULES.md` before anything else.
 
 <Where it is, how to trigger it, why it is wrong, the rule to implement.>
 
-Use $mattpocock-skills:implement if you have it. A failing test first, then the fix, in the place the decision is made today. Nothing else changes.
+<How this implementer loads the `implement` skill.> A failing test first, then the fix, in the place the decision is made today. Nothing else changes.
 
 Done means: the checks pass, the new test fails without the fix, and your report follows rule 9.
 ```
@@ -62,7 +62,7 @@ It is recorded in the issue's Comments. Continue the turn with it.
 ```markdown
 # Turn NN — handover
 
-Read `.claude/skills/implement-prd/RULES.md`, then `<the original turn prompt file>`, which is the task.
+Read `.claude/skills/implement-prd/RULES.md`, then `<the original turn prompt file>`, which is the task. <How this implementer loads the `implement` skill; the original prompt names it for another agent.>
 
 Another agent started this task and was cut off by a usage limit. Its unfinished edits are in the working tree (`git status`, `git diff`). Review them: keep what is correct, fix or remove what is not, and finish every part of the task. Treat nothing as done until you have checked it yourself.
 
