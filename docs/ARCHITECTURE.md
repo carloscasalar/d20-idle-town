@@ -399,6 +399,7 @@ checks repeatability; `simulation-regression.test.ts` additionally compares each
 | `test/job-intel.test.ts` | Hourly characterization of learning a contract or bounty |
 | `test/job-intel-module.test.ts` | Job intelligence through its own interface: each way of learning, each refusal, and a made-up step |
 | `test/job-intel-regression.test.ts` | Three seeds, 400 hours: the world with investigations removed matches the run from before inquiries changed shape |
+| `test/tune.test.ts` | Seed ranges and lists, invalid arguments, default scales, unrounded reports, inclusive baseline comparison and apothecary treasury tracking |
 | `scripts/combat-sweep.ts` | Long runs for seeds 1–150, 1,500 hours each, reporting crashes |
 | `test/party.test.ts` | Hero progression on the 5e thresholds, death and resurrection, merging, party levels |
 | `test/encounters.test.ts` | XP bands land inside the engine's own thresholds |
@@ -406,13 +407,42 @@ checks repeatability; `simulation-regression.test.ts` additionally compares each
 | `test/lairs.test.ts` | Boss selection, assault generation, skill checks, lairs inside a live game |
 | `test/deployment.test.ts` | Opening, surprise and grid placement |
 | `scripts/calibrate.ts` | Win/death rates per difficulty and level, single fresh fights |
-| `scripts/tune.ts` | Whole towns at several difficulty scales: deaths per contract, wipes |
+| `scripts/tune.ts` | Whole towns at several difficulty scales: unrounded tuning metrics, baseline deviations and tick-by-tick apothecary finances |
 | `scripts/variety.ts` | How many distinct monsters a long run throws up |
 | `scripts/assault.ts` | How often a level-matched company clears a lair |
 | `scripts/lairs.ts` | A long run, lair events only |
 
-The scripts are measurement, not assertion: they print numbers you read before
-touching `difficultyScale` or the XP bands.
+The calibration scripts print numbers to read before touching `difficultyScale`
+or the XP bands. `scripts/tune.ts` also compares the five tuning metrics (quests,
+failed, deaths per quest, wiped, raised) with `scripts/tune-baseline.json`,
+printing each percentage deviation and PASS or FAIL at an inclusive +/-15%.
+A failed comparison exits with status 1. Deaths and companies arrived are
+printed alongside the five metrics; none of these values is rounded.
+
+```bash
+SEEDS=1..80 SCALES=1,1.15,1.25,1.5,1.75 TICKS=600 pnpm dlx vite-node scripts/tune.ts
+SEEDS=1..40 SCALES=1.15 TICKS=3000 pnpm dlx vite-node scripts/tune.ts
+```
+
+`SEEDS` accepts an inclusive ascending range or a comma list such as `1,2,3`.
+Empty entries, including a trailing comma, are errors. Seeds are non-negative
+whole numbers. Defaults are seeds `1,2,3`, 600 ticks and scales
+`1,1.15,1.25,1.5,1.75`. Scales must be positive finite numbers and ticks must
+be non-negative whole numbers. Parsing and report logic live in
+`scripts/tune-report.ts`, which can be imported without running a simulation.
+
+The baseline records the measured commit, commands, per-scale metrics and the
+3,000-tick apothecary figures. Comparisons use the 600-tick baseline; a different
+tick count is reported as unavailable, so a long run is not compared to a
+short-run metric. An unrecorded scale at 600 ticks exits with status 1. When
+initially recording a baseline, a missing file is reported as unavailable.
+
+The apothecary report reads `Game.view()` at initialization and after every tick.
+Ruined and total shops are counts across seeds; lowest treasury is the minimum
+of any apothecary at any observed tick, including after ruin. Treasury at the
+end is the mean final apothecary treasury total per seed. `goldSpentOnProduction`
+is the mean final lifetime statistic per seed when available, otherwise it is
+printed as unavailable. Other services do not enter these figures.
 
 ## Extension points
 

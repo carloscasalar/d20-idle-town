@@ -56,15 +56,15 @@ The baseline is recorded by this slice, before any change to the game code. Meas
 
 ## Acceptance criteria
 
-- [ ] `SEEDS=1..80` and `SEEDS=1,2,3` both work; `SEEDS=1,2,` fails with a clear error.
-- [ ] The default scales are 1, 1.15, 1.25, 1.5, 1.75.
-- [ ] The five metrics are printed unrounded.
-- [ ] The script reproduces the table above on unchanged game code, or every difference is written in the Comments.
-- [ ] A baseline file is checked in with the per-scale values, the commit and the command, plus the long-run apothecary figures and their command.
-- [ ] A run prints each metric's deviation from the baseline and pass or fail at +/-15%.
-- [ ] The apothecary report prints apothecaries ruined, lowest treasury reached and treasury at the end, and does not fail while `goldSpentOnProduction` does not exist.
-- [ ] `git diff` shows no change under `src/`. The six regression hashes are untouched and their tests still run.
-- [ ] The whole suite is green.
+- [x] `SEEDS=1..80` and `SEEDS=1,2,3` both work; `SEEDS=1,2,` fails with a clear error.
+- [x] The default scales are 1, 1.15, 1.25, 1.5, 1.75.
+- [x] The five metrics are printed unrounded.
+- [x] The script reproduces the table above on unchanged game code, or every difference is written in the Comments.
+- [x] A baseline file is checked in with the per-scale values, the commit and the command, plus the long-run apothecary figures and their command.
+- [x] A run prints each metric's deviation from the baseline and pass or fail at +/-15%.
+- [x] The apothecary report prints apothecaries ruined, lowest treasury reached and treasury at the end, and does not fail while `goldSpentOnProduction` does not exist.
+- [x] `git diff` shows no change under `src/`. The six regression hashes are untouched and their tests still run.
+- [x] The whole suite is green.
 
 ### Tests
 
@@ -80,3 +80,67 @@ New:
 - `docs/CONFIGURATION.md`: no change.
 
 ## Comments
+
+### Turn 01 decisions
+
+- Use `scripts/tune-report.ts` for importable parsing and reporting, and
+  `scripts/tune-baseline.json` for the checked-in structured measurements.
+- Keep the existing defaults of seeds `1,2,3` and 600 ticks; use the five scales
+  required by this issue. Reject invalid or descending ranges, non-whole or
+  negative seeds, non-positive/non-finite scales and invalid tick counts. Seed
+  0 is allowed explicitly; empty entries never become seed 0. Zero ticks are
+  allowed for an initialization-only measurement.
+- Compare the five metrics at the same tick count as the tuning baseline. A
+  different tick count prints comparison unavailable; an unrecorded scale at
+  600 ticks or a failed metric comparison exits with status 1. An absent baseline
+  prints unavailable so the initial measurement can run before recording it.
+  Zero baseline metrics pass only if the new value is also zero. The +/-15%
+  edges are inclusive, allowing floating-point epsilon at the boundary.
+- Observe the initial game view and every post-step view. Sum ruined shops and
+  total shops across seeds; take the minimum treasury across all shops and
+  ticks, including ruined shops; report mean final treasury total per seed.
+  Report mean final `goldSpentOnProduction` when every seed exposes it, and
+  `unavailable` otherwise. A lifetime counter is read, not added every tick.
+- The checkout started at `51dcc00`, which adds only run-log documents to
+  `4774e43`. Per the turn instruction, record baseline commit `4774e43`.
+  `git diff ed52b20 4774e43 -- src scripts/tune.ts test` is empty: the game code,
+  original measuring script and existing tests are identical to `ed52b20`.
+- Test the parsing seam named by the issue, and the report's public interfaces
+  with fixed input views and expected output. Long baseline runs are detached,
+  with logs and exit status outside the repository. Their real output will be
+  included in the turn report.
+
+### Recorded measurements
+
+Both detached required runs finished with exit status 0. All five scales
+reproduce the issue table at its displayed precision. The original aggregation
+and seed expansion were reviewed: exactly 80 seeds, no seed 0, the same
+per-seed means and total-deaths/total-quests ratio as the original script.
+The baseline retains raw values. Every numerical difference from the printed
+table is listed below as `table -> measured`; identical values are omitted.
+
+- Scale 1.0: quests 139.11 -> 139.1125; failed 19.51 -> 19.5125; deaths 60.79 -> 60.7875; deathsPerQuest 0.437 -> 0.43696648396082305; wiped 4.99 -> 4.9875; arrived 23.1 -> 23.1375.
+- Scale 1.15: quests 113.86 -> 113.8625; failed 28.14 -> 28.1375; deaths 85.19 -> 85.1875; deathsPerQuest 0.748 -> 0.7481611592930069; wiped 7.21 -> 7.2125; arrived 30.1 -> 30.0625; raised 11.24 -> 11.2375.
+- Scale 1.25: failed 32.99 -> 32.9875; deaths 97.38 -> 97.375; deathsPerQuest 0.929 -> 0.9291507633587787; wiped 8.01 -> 8.0125; raised 11.74 -> 11.7375.
+- Scale 1.5: failed 41.06 -> 41.0625; deathsPerQuest 1.483 -> 1.4828416616496087; wiped 11.26 -> 11.2625; arrived 40.8 -> 40.7625; raised 11.76 -> 11.7625.
+- Scale 1.75: quests 61.42 -> 61.425; failed 46.63 -> 46.625; deaths 138.99 -> 138.9875; deathsPerQuest 2.263 -> 2.262718762718763; wiped 12.71 -> 12.7125; arrived 45.1 -> 45.0875; raised 11.36 -> 11.3625.
+
+The 3,000-tick run at scale 1.15 records 2 ruined apothecaries of 40
+(the same count as ticket 09), lowest treasury -1957 gp, and mean final
+treasury 3832.925 gp. `goldSpentOnProduction` is unavailable in this game
+version. Negative treasuries are existing economy behavior, recorded without
+changing the game; the later reward set-aside and retune issues handle the
+long-run acceptance. Full raw output is in
+`../run/turns/01-02-measuring-tool-and-baseline-report.md`.
+
+### Verification and review
+
+`pnpm typecheck` passed. `pnpm exec vitest run test/tune.test.ts` passed all
+29 new tests; `pnpm test` passed all 608 tests in 30 files, including all six
+unchanged regression hashes. Both independent code-review axes report no
+findings. The saved-file CLI check with seeds `1,2,3`, 600 ticks and scale 1.15
+prints all five deviations: four PASS and wiped FAIL at +15.540150202195266%,
+correctly returning exit 1 for that smaller sample. The full captured output,
+checks and acceptance-criterion coverage are in the turn report. No questions
+or new bugs; no requested implementation remains. The commit containing this
+comment contains the measuring tool, baseline, tests and documentation only.

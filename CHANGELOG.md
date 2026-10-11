@@ -8,6 +8,17 @@ follow [Semantic Versioning](https://semver.org/).
 
 Everything below is part of the first release, which has not been tagged yet.
 
+### 2026-10-12
+
+- `scripts/tune.ts` accepts seed ranges, rejects empty entries, includes scale
+  1.15 by default, prints unrounded metrics and compares each of the five tuning
+  metrics to the recorded baseline at +/-15%.
+- `scripts/tune-baseline.json` records unchanged-game measurements at commit
+  `4774e43` (game code identical to `ed52b20`), including the 3,000-tick
+  apothecary run. The tool tracks apothecary ruin and treasury every tick and
+  reports production gold when that statistic exists. Game code and all six
+  regression hashes are unchanged.
+
 ### 2026-09-10
 
 - MIT licence for the project, with battlecast-engine's MIT text and the SRD 5.2
