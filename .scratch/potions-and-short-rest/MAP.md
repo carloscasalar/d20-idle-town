@@ -22,11 +22,13 @@ A `PRD.md` in this directory that decides how the game models Hit Dice at a shor
 - [Stronger healing potions in D&D 2024](tickets/01-stronger-healing-potions.md) — four potions (2d4+2, 4d4+4, 8d4+8, 10d4+20) by rarity; only the basic one has an SRD price of its own; stronger prices follow from the rarity table.
 - [Hit Dice pool model](tickets/02-hit-dice-pool-model.md) — one pool per hero stored as dice spent (max = level, so a level-up needs no update); die size and Constitution read from the engine's `hpFormula`; reset at the end of `resting` with a test; death and resurrection leave it alone.
 - [Short rest spending policy](tickets/03-short-rest-spending-policy.md) — rest only when someone is hurt, costs one logged tick; dice spent by a swappable pacing strategy (default `ceil(D / E)`, stop at full HP), then retreat check, then potions for the still Bloodied if the company goes on; `shortRestHealFraction` removed.
+- [Potion catalogue and availability](tickets/04-potion-catalogue-and-availability.md) — all four tiers as configurable data; company pays 50 / 200 / 2,000 / 20,000 gp; apothecary makes each on demand for half that and offers a tier only while its treasury covers the cost plus a reserve; no level or town-size gating.
 
 ## Not yet specified
 
 - Concrete retuned values (potion supply per level, scales in `scripts/tune.ts`). Needs the rules above settled first and probably a throwaway prototype of the economy.
-- Interaction with town economy: the apothecary's income and ruin, and which coin movement reason potion purchases use.
+- Interaction with town economy: which coin movement reasons the production sink and the potion sale use, the numeric reserve the apothecary keeps, and how a ruined or poor apothecary affects potion supply over a long run.
+- Apothecary staffing: a tier needing a cleric on the payroll whose level can cast the matching healing spell. Waits until businesses have employees; until then treasury alone gates tiers.
 - Documentation updates to `CONTEXT.md` and `docs/CONFIGURATION.md` once the rules are fixed.
 - Whether any saved games or fixtures hold hero or party shapes that would need migrating.
 

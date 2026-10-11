@@ -62,7 +62,7 @@ An adventurer's pool of healing dice, as many as their level. Spent at a Short r
 The rest a Company takes in town after an Expedition returns, lasting at least eight hours. It restores every living adventurer's hit points and all their Hit Dice. The game does not limit it to one per 24 hours.
 
 **Healing potion**:
-A draught from the company's shared supply that restores hit points to the adventurer who drinks it or receives it from a companion.
+A draught from the company's shared supply that restores hit points to the adventurer who drinks it or receives it from a companion. It comes in four tiers (basic, greater, superior, supreme), healing 2d4+2, 4d4+4, 8d4+8 and 10d4+20. The company buys them from the apothecary at 50, 200, 2,000 and 20,000 gp; the apothecary makes each on demand for half that, out of its treasury, and offers a tier only while the treasury covers the cost plus a reserve.
 
 **Space**:
 The squares a creature controls on the battlefield. In the 2024 rules a Huge creature's space is 15 by 15 feet (three squares) and a Gargantuan creature's space is 20 by 20 feet (four squares). The battlefield is 16 squares, 80 feet, on a side.
