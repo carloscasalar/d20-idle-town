@@ -110,7 +110,9 @@ export class Board {
     private readonly config: DeepReadonly<BoardConfig>,
     private readonly kinds: WorkKinds = WORK_KINDS,
     private readonly kindTuning: DeepReadonly<WorkKindConfigs> = DEFAULT_KIND_CONFIGS,
-  ) {}
+  ) {
+    PROTO.outstanding = (id) => this.work.filter((w) => w.giverId === id && (w.status === 'open' || w.status === 'taken')).reduce((sum, w) => sum + w.reward, 0);
+  }
 
   /** Mutable escape hatches used only during Game.forTesting scenario setup. */
   replaceForScenario(work: Quest[]): void {
@@ -394,7 +396,14 @@ function payContract(work: Readonly<Quest>, company: Party, employer: Employer, 
   const { coin } = context;
   // Windfall and reward used to be one treasury assignment. Both finish before the reward event.
   coin.source(treasury(employer), windfall, 'windfall');
-  coin.transfer(treasury(employer), purse(company), work.reward, 'reward');
+  const potionsN = PROTO.newRules && PROTO.potionShare > 0 && employer.service === 'apothecary' ? Math.floor((work.reward * PROTO.potionShare) / 50) : 0;
+  if (potionsN > 0) {
+    coin.sink(treasury(employer), potionsN * 25, 'production');
+    company.pack.basic = (company.pack.basic ?? 0) + potionsN;
+    PROTO.rewardPotions += potionsN;
+    PROTO.production += potionsN * 25;
+  }
+  coin.transfer(treasury(employer), purse(company), work.reward - potionsN * 50, 'reward');
   if (PROTO.newRules && PROTO.apoCredit && employer.service === 'apothecary') (employer as any).credit = ((employer as any).credit ?? 0) + work.reward;
   employer.questsCompleted += 1;
   employer.reputation += context.config.reputationGain;

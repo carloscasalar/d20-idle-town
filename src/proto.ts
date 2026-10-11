@@ -19,12 +19,16 @@ export const rollTier = (rng: Rng, t: Tier) => roll(rng, t.dice, t.faces, t.bonu
 export const PROTO = {
   newRules: false, cover: 0.5, divisor: 2, wOrder: 50, wFallen: 50, reserveDays: 3,
   apoCredit: false,
+  escrow: false, // a posted reward is set aside: new rewards are sized from treasury minus outstanding rewards
+  potionShare: 0, // fraction of an apothecary reward paid in basic potions
+  rewardPotions: 0,
+  outstanding: ((_id: string) => 0) as (id: string) => number,
   noGate: false, // sale proceeds pay for production: offer without looking at the treasury
   apothecaryStart: undefined as number | undefined,
   bought: {} as Record<string, number>, drunk: {} as Record<string, number>,
   production: 0, rests: 0, hdRolled: 0,
 };
-export function resetCounters(): void { PROTO.bought = {}; PROTO.drunk = {}; PROTO.production = 0; PROTO.rests = 0; PROTO.hdRolled = 0; }
+export function resetCounters(): void { PROTO.bought = {}; PROTO.drunk = {}; PROTO.production = 0; PROTO.rewardPotions = 0; PROTO.rests = 0; PROTO.hdRolled = 0; }
 export const count = (rec: Record<string, number>, k: string, n = 1) => { rec[k] = (rec[k] ?? 0) + n; };
 export function chooseTier(pack: Record<string, number>, missing: number): Tier | undefined {
   const have = TIERS.filter((t) => (pack[t.id] ?? 0) > 0);
