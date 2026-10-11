@@ -10,6 +10,10 @@ The PRD's slice table blocks this slice by production only. The owner added the 
 
 [PRD: Hit Dice at the short rest, four healing potion tiers and an apothecary that makes them](../PRD.md), slice 7 of 8. Vocabulary: [CONTEXT.md](../../../CONTEXT.md) (Reward set-aside, Treasury, Contract, Board).
 
+## No questions
+
+The owner is not available while this issue is built. Do not ask and do not wait for an answer. Where this issue or the PRD leaves a choice to the implementer (key names, file locations, log wording), decide and write the decision under Comments. Where this issue gives a rule for a doubt or a failure, follow it.
+
 ## What to build
 
 The apothecary's promised rewards are kept apart from what new rewards are sized from, so paying a reward never leaves its treasury in debt.
@@ -30,12 +34,19 @@ This slice runs final check 3 with the real `scripts/tune.ts` as its own accepta
 - For reference, the prototype had 0 ruined and a lowest treasury of +152 gp. It is evidence, not a reference implementation.
 - This is a measurement over 40 seeds, not a guarantee, because upkeep can still take a treasury below zero.
 - Write the command and the report's output in the Comments of this issue.
-- If the check fails, stop and report. The knobs of ticket 07 may move (`board.difficultyScale`, encounters per job, `potionCoverFraction`, the sharing weights, `retreatHpFraction`, `startingGoldPerLevel`, the apothecary's opening treasury), but a changed value is the owner's decision, not the implementer's. The Hit Dice rules, the potion formulas, the potion prices and the Long rest do not move.
 - If issue 06 (sharing policy) is not merged when this runs, say so with the result.
+
+### If the check fails
+
+The owner decided this in advance:
+
+1. If an apothecary treasury goes below zero because of the posting threshold (see the point to confirm below), apply the fix described there and run the check again.
+2. If the check still fails, or fails for another reason, do not move any tuning value in this issue. Write the command, the output and the cause you found in the Comments, finish the slice and commit it. Issue 09 runs the check again and is the only issue allowed to retune.
 
 ## Point to confirm while implementing
 
-- With the set-aside, an employer's treasury can meet `postingThreshold` while the treasury left after the rewards owed is small or zero, and `minimumReward` (20 gp) still applies to the new reward. The tickets only say that new rewards are sized from the treasury minus the rewards owed. Build it that way. If the long-run check shows a treasury below zero from this, ask the owner whether the posting threshold should read the same reduced amount. Do not change the posting threshold on your own.
+- With the set-aside, an employer's treasury can meet `postingThreshold` while the treasury left after the rewards owed is small or zero, and `minimumReward` (20 gp) still applies to the new reward. The tickets only say that new rewards are sized from the treasury minus the rewards owed. Build it that way first.
+- The owner's decision: only if the long-run check shows an apothecary treasury below zero from this cause, make the posting threshold read the same reduced amount (the treasury minus the rewards owed) for the employers in the set-aside list, and leave it as today for every other employer. Then add a test for it, describe it in `docs/CONFIGURATION.md`, run check 3 again and write both runs in the Comments. If the check passes without it, do not change the posting threshold.
 
 ## Regression hashes
 
@@ -48,7 +59,8 @@ The six regression hash tests were skipped by issue 03. Leave them skipped. Do n
 - [ ] An employer kind in the list switches the rule on for every employer of that kind.
 - [ ] The amount set aside is released when the Contract is paid, fails or expires.
 - [ ] The list is configuration, default the apothecary alone; an entry that is neither a town service nor an employer kind is rejected.
-- [ ] Final check 3 passes, with its command and output recorded in this issue's Comments; or it failed and the owner was asked.
+- [ ] Final check 3 was run, with its command and output recorded in this issue's Comments. If it failed, the rule of "If the check fails" was followed and the cause is written there.
+- [ ] The posting threshold is unchanged unless check 3 showed an apothecary treasury below zero from it.
 - [ ] The six regression hash tests stay skipped and are not re-recorded.
 - [ ] The suite is green.
 

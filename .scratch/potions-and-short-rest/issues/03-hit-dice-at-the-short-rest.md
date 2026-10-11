@@ -8,6 +8,10 @@ Blocked-by: [02 - Measuring tool and baseline](02-measuring-tool-and-baseline.md
 
 [PRD: Hit Dice at the short rest, four healing potion tiers and an apothecary that makes them](../PRD.md), slice 2 of 8. Vocabulary: [CONTEXT.md](../../../CONTEXT.md) (Hit Dice, Short rest, Long rest, Bloodied).
 
+## No questions
+
+The owner is not available while this issue is built. Do not ask and do not wait for an answer. Where this issue or the PRD leaves a choice to the implementer (key names, file locations, log wording), decide and write the decision under Comments. Where this issue gives a rule for a doubt or a failure, follow it.
+
 ## What to build
 
 A **Short rest** stops healing a flat half of maximum hit points. Each hero has a pool of **Hit Dice**, as many as their level; the rest is one logged hour in which living heroes roll dice from that pool, the company then decides whether to turn back, and those still Bloodied drink a potion if it goes on. The pool returns at the **Long rest** in town.
@@ -56,7 +60,7 @@ This is the first slice that changes behaviour, so it breaks the six regression 
 
 ## Point to confirm while implementing
 
-- The SRD 5.2 wording of the Hit Die minimum of 1 was not found when the PRD was written (ticket 06). Confirm it against the SRD; if it differs from "never less than 1 per die", stop and ask the owner before changing the rule.
+- The SRD 5.2 wording of the Hit Die minimum of 1 was not found when the PRD was written (ticket 06). Look for it in the SRD and write in the Comments the wording found, or that it was not found. The rule does not change either way: a Hit Die heals `1dN + Constitution`, never less than 1. The clamp cannot fire with today's classes, so this has no effect on the game.
 
 ## Acceptance criteria
 

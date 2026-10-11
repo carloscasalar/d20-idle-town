@@ -8,6 +8,10 @@ Blocked-by: [04 - Tiered potions with real dice](04-tiered-potions-with-real-dic
 
 [PRD: Hit Dice at the short rest, four healing potion tiers and an apothecary that makes them](../PRD.md), slice 6 of 8. Vocabulary: [CONTEXT.md](../../../CONTEXT.md) (Healing potion, Coin movement, Treasury).
 
+## No questions
+
+The owner is not available while this issue is built. Do not ask and do not wait for an answer. Where this issue or the PRD leaves a choice to the implementer (key names, file locations, log wording), decide and write the decision under Comments. Where this issue gives a rule for a doubt or a failure, follow it.
+
 ## What to build
 
 The apothecary stops selling potions out of nothing. It makes each potion on demand, instantly, paying a production cost that leaves the world, and earns the difference between price and cost.

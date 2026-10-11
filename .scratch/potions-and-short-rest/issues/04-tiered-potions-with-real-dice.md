@@ -8,6 +8,10 @@ Blocked-by: [03 - Hit Dice at the Short rest](03-hit-dice-at-the-short-rest.md)
 
 [PRD: Hit Dice at the short rest, four healing potion tiers and an apothecary that makes them](../PRD.md), slice 3 of 8. Vocabulary: [CONTEXT.md](../../../CONTEXT.md) (Healing potion, Assured healing, Bloodied).
 
+## No questions
+
+The owner is not available while this issue is built. Do not ask and do not wait for an answer. Where this issue or the PRD leaves a choice to the implementer (key names, file locations, log wording), decide and write the decision under Comments. Where this issue gives a rule for a doubt or a failure, follow it.
+
 ## What to build
 
 The single potion that heals a third of the drinker's hit points becomes the four SRD **Healing potion** tiers, rolled with real dice from the game's own seeded generator. The company's pack holds a count per tier, and a Bloodied hero drinks the smallest tier that covers what they are missing.

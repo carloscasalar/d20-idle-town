@@ -8,6 +8,10 @@ Blocked-by: none - can start immediately
 
 [PRD: Hit Dice at the short rest, four healing potion tiers and an apothecary that makes them](../PRD.md), slice 1 of 8. Vocabulary: [CONTEXT.md](../../../CONTEXT.md).
 
+## No questions
+
+The owner is not available while this issue is built. Do not ask and do not wait for an answer. Where this issue or the PRD leaves a choice to the implementer (key names, file locations, log wording), decide and write the decision under Comments. Where this issue gives a rule for a doubt or a failure, follow it.
+
 ## What to build
 
 `scripts/tune.ts` becomes the one command that says whether the retuned game still sits where today's game does. This slice changes the script, records today's numbers in a baseline file and changes **no game code**: nothing under `src/` is touched, so every existing test, the six regression hashes included, stays green and untouched.
@@ -44,7 +48,7 @@ The baseline is recorded by this slice, before any change to the game code. Meas
    | 1.5 | 83.05 | 41.06 | 123.15 | 1.483 | 11.26 | 40.8 | 11.76 |
    | 1.75 | 61.42 | 46.63 | 138.99 | 2.263 | 12.71 | 45.1 | 11.36 |
 
-   If it does not reproduce, stop and report the difference in the Comments of this issue. Do not record a baseline that disagrees with the PRD.
+   If it does not reproduce, treat it as a mistake in the changed script and fix the script until it does. The game code must stay untouched. If after reviewing the script the values still differ, record as the baseline what the real script measures, write each difference from this table in the Comments of this issue, and finish the slice; the later issues then compare against the recorded file, not against the PRD's table.
 
 3. Record the baseline file from that run. As its commit, record the commit the run was made on, and note that its game code is identical to `ed52b20`.
 
@@ -55,7 +59,7 @@ The baseline is recorded by this slice, before any change to the game code. Meas
 - [ ] `SEEDS=1..80` and `SEEDS=1,2,3` both work; `SEEDS=1,2,` fails with a clear error.
 - [ ] The default scales are 1, 1.15, 1.25, 1.5, 1.75.
 - [ ] The five metrics are printed unrounded.
-- [ ] The script reproduces the table above on unchanged game code.
+- [ ] The script reproduces the table above on unchanged game code, or every difference is written in the Comments.
 - [ ] A baseline file is checked in with the per-scale values, the commit and the command, plus the long-run apothecary figures and their command.
 - [ ] A run prints each metric's deviation from the baseline and pass or fail at +/-15%.
 - [ ] The apothecary report prints apothecaries ruined, lowest treasury reached and treasury at the end, and does not fail while `goldSpentOnProduction` does not exist.

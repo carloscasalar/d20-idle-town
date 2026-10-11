@@ -8,6 +8,10 @@ Blocked-by: [04 - Tiered potions with real dice](04-tiered-potions-with-real-dic
 
 [PRD: Hit Dice at the short rest, four healing potion tiers and an apothecary that makes them](../PRD.md), slice 5 of 8. Vocabulary: [CONTEXT.md](../../../CONTEXT.md) (Potion sharing policy, Bloodied, Company roster).
 
+## No questions
+
+The owner is not available while this issue is built. Do not ask and do not wait for an answer. Where this issue or the PRD leaves a choice to the implementer (key names, file locations, log wording), decide and write the decision under Comments. Where this issue gives a rule for a doubt or a failure, follow it.
+
 ## What to build
 
 Companies differ in how they share a short pack. Each company has a **Potion sharing policy**, chosen once when it is constituted, that orders its Bloodied heroes when potions are handed out, between rounds in combat and at step 3 of the Short rest.
@@ -46,7 +50,7 @@ New:
 - Sharing: both orders; the default for a company with no policy; a merger keeps the host's; the weights 100 / 0 always draw company order.
 - Configuration: validation of the weights.
 
-Survive unchanged, according to the PRD: `smoke` (determinism and interleaving), `combat-space` seed 75, `lairs` seed 14, `deployment`, the seeded loops of the company roster tests, and the combat potion tests migrated by issue 04 (a company with no recorded policy uses company order). This slice adds a draw to company creation; if one of these tests breaks, stop and report instead of picking a new seed or changing its expectation.
+Survive unchanged, according to the PRD: `smoke` (determinism and interleaving), `combat-space` seed 75, `lairs` seed 14, `deployment`, the seeded loops of the company roster tests, and the combat potion tests migrated by issue 04 (a company with no recorded policy uses company order). This slice adds a draw to company creation. If one of these tests breaks, first look for a fixed place in company creation where the draw does not break it. If there is none, migrate the test keeping what it checks (a new seed or a new expectation) and write in the Comments which test changed and why.
 
 Fixture migration:
 

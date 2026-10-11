@@ -8,11 +8,15 @@ Blocked-by: [05 - Buying policy](05-buying-policy.md), [06 - Potion sharing poli
 
 [PRD: Hit Dice at the short rest, four healing potion tiers and an apothecary that makes them](../PRD.md), slice 8 of 8. Vocabulary: [CONTEXT.md](../../../CONTEXT.md).
 
+## No questions
+
+The owner is not available while this issue is built. Do not ask and do not wait for an answer. Where this issue or the PRD leaves a choice to the implementer (key names, file locations, log wording), decide and write the decision under Comments. Where this issue gives a rule for a doubt or a failure, follow it.
+
 ## What to build
 
 No new rule. This slice proves that the game with every slice merged sits where today's game does, then re-records the regression hashes once and closes the documentation.
 
-Run the checks first. Re-record the hashes only after the three checks pass, or after the owner has decided what to do about a failure: a changed value moves the trajectories again.
+Run the checks first. Re-record the hashes only after the three checks pass, with the PRD's values or with retuned ones: a changed value moves the trajectories again.
 
 ## The three final checks, with the real `scripts/tune.ts`
 
@@ -36,7 +40,18 @@ The supreme tier is expected to stay unbought at 600 ticks, and in the 3,000-tic
 
 ### If a check fails
 
-Stop and report; do not re-record the hashes. The knobs of ticket 07 may move (`board.difficultyScale`, encounters per job, `potionCoverFraction`, the sharing weights, `retreatHpFraction`, `startingGoldPerLevel`, the apothecary's opening treasury). The Hit Dice rules, the potion formulas, the potion prices and the Long rest do not move. A changed value is the owner's decision, not the implementer's.
+The PRD leaves a changed value to the owner. The owner has decided in advance that this issue retunes on its own, within these limits:
+
+- Knobs, one at a time and in this order: `heroes.startingGoldPerLevel`, `potionCoverFraction`, the sharing weights, `expedition.retreatHpFraction`, the apothecary's opening treasury, the encounters per job. Move to the next knob only when the current one cannot bring the failing metrics inside the band.
+- `board.difficultyScale` is not moved: the checks measure at fixed scales, so its default does not change them.
+- The Hit Dice rules, the potion formulas, the potion prices and the Long rest do not move. If issue 08 changed the posting threshold, that stays as issue 08 left it.
+- Which value to try is your choice, guided by which metric is outside the band and in which direction. The sweep tables in [../assets/09-sweep-results.md](../assets/09-sweep-results.md) are evidence for the direction of each knob, not a reference.
+- An attempt is one set of values. It passes only if the three checks pass with that same set. At most 8 attempts after the first failed run.
+- Write a table in the Comments with every attempt: the values, the three results and the worst deviation.
+
+If an attempt passes: keep its values as the new defaults, update the tests that assert the old defaults, `docs/CONFIGURATION.md` and `CHANGELOG.md` (each changed value and the reason, from the measurements), and go on to re-record the hashes.
+
+If no attempt passes after 8: restore the values the earlier issues left (the PRD's), leave the six regression hash tests skipped, do not re-record them, write the table of attempts in the Comments, set this issue's `Status:` to `ready-for-human` and finish. Still do the documentation pass below for everything except the hashes.
 
 ## Point to confirm while implementing
 
@@ -56,7 +71,8 @@ Issue 03 skipped six tests; no slice since has recorded them. After the checks p
 - [ ] Check 1 passes at scales 1.15 and 1.5, with command and output in the Comments.
 - [ ] Check 2 passes, with the three deaths-per-quest values in the Comments.
 - [ ] Check 3 passes, with command and output in the Comments.
-- [ ] Or: a check failed, nothing was re-recorded, and the owner was asked.
+- [ ] If a check failed with the PRD's values: the retune rule of "If a check fails" was followed and the table of attempts is in the Comments.
+- [ ] Or, after 8 failed attempts: the PRD's values are restored, the hashes stay skipped, and this issue's `Status:` is `ready-for-human`. The criteria below about the hashes then do not apply.
 - [ ] The six regression hashes are re-recorded once, both tests are re-enabled and no skip remains.
 - [ ] `CHANGELOG.md` notes the re-recorded hashes.
 - [ ] `docs/ARCHITECTURE.md`, `docs/CONFIGURATION.md` and `CONTEXT.md` match the code.
@@ -69,7 +85,7 @@ Issue 03 skipped six tests; no slice since has recorded them. After the checks p
 
 ## Configuration and documents
 
-- Configuration keys: none added or removed. Defaults change only if the owner decides so after a failed check.
+- Configuration keys: none added or removed. Defaults change only through the retune rule of "If a check fails".
 - `CHANGELOG.md`: the re-recorded regression hashes; check that the feature as a whole reads correctly from the entries the earlier slices added.
 - `docs/ARCHITECTURE.md`: a last pass over the test table and the "Determinism and seeding" section (the rest seed, the combat potion sub-seed, the policy draw, the dice module, the ban on the engine's dice). Each earlier slice added its own lines; fix what is missing or contradictory.
 - `docs/CONFIGURATION.md`: a last read against the code: the new keys and tables, the removed keys, the `heroes` prose, `startingGoldPerLevel` 50 (without the "cannot afford the potion" reason), `retreatHpFraction` after the Hit Dice, the production-time deviation.
