@@ -46,7 +46,7 @@ New:
 - Sharing: both orders; the default for a company with no policy; a merger keeps the host's; the weights 100 / 0 always draw company order.
 - Configuration: validation of the weights.
 
-Survive unchanged: the combat potion tests migrated by issue 04 (a company with no recorded policy uses company order), `smoke`, and the seeded loops of the company roster tests (they assert determinism, which the fixed draw keeps).
+Survive unchanged, according to the PRD: `smoke` (determinism and interleaving), `combat-space` seed 75, `lairs` seed 14, `deployment`, the seeded loops of the company roster tests, and the combat potion tests migrated by issue 04 (a company with no recorded policy uses company order). This slice adds a draw to company creation; if one of these tests breaks, stop and report instead of picking a new seed or changing its expectation.
 
 Fixture migration:
 

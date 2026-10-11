@@ -18,7 +18,7 @@ The script gains (PRD section "`scripts/tune.ts`"):
 - Default scales `1, 1.15, 1.25, 1.5, 1.75`.
 - Unrounded output for the five metrics: quests, failed, deaths per quest, wiped, raised (deaths and arrived are printed too, as the baseline table has them).
 - A baseline file checked into the repository holding the per-scale values, the commit they were measured on and the command. The script compares a run against it, prints each metric's deviation and says pass or fail at +/-15%.
-- An apothecary report, read from the game view on every tick: apothecaries ruined, the lowest treasury reached, the treasury at the end, and `goldSpentOnProduction` once it exists. That statistic does not exist until [issue 07](07-apothecary-production.md); the report must work without it now and show it when it appears.
+- An apothecary report, read from the game view on every tick: apothecaries ruined, the lowest treasury reached, the treasury at the end, and `goldSpentOnProduction` once it exists. The view already exposes each employer's `service`, `treasury` and `ruined`, so the report needs no game code. That statistic does not exist until [issue 07](07-apothecary-production.md); the report must work without it now and show it when it appears.
 
 The argument parsing must live where a test can import it without running the simulation.
 
@@ -46,7 +46,7 @@ The baseline is recorded by this slice, before any change to the game code. Meas
 
    If it does not reproduce, stop and report the difference in the Comments of this issue. Do not record a baseline that disagrees with the PRD.
 
-3. Record the baseline file from that run.
+3. Record the baseline file from that run. As its commit, record the commit the run was made on, and note that its game code is identical to `ed52b20`.
 
 4. Record today's long-run apothecary figures with the script: 3,000 ticks, seeds 1 to 40, scale 1.15: apothecaries ruined, lowest treasury reached, treasury at the end. Ticket 09 measured 2 ruined of 40; record what the script measures, in the baseline file, with its command. Final check 3 ([issue 08](08-reward-set-aside.md), [issue 09](09-retune-confirmation.md)) compares against these figures.
 
