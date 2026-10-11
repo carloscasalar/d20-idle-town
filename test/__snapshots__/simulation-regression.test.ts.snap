@@ -1,0 +1,7 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`preserves state and event history at every tick for seed 7 1`] = `"737bf97579d6174982168af7900114b88374256872457826b1fad551471049a6"`;
+
+exports[`preserves state and event history at every tick for seed 42 1`] = `"7524af69cfb9315c179a21baeccdca8bd40c7bb392cbce7ed691a19f5c284f9d"`;
+
+exports[`preserves state and event history at every tick for seed 20260907 1`] = `"498d8e44e32dccff5b7e79e7ccca46da592c3e907000d01812e473c9c00fa7b9"`;

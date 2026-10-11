@@ -63,3 +63,9 @@ export function townName(rng: Rng): string {
 export function partyName(rng: Rng): string {
   return `${rng.pick(PARTY_A)} ${rng.pick(PARTY_B)} ${rng.pick(PARTY_C)}`;
 }
+
+/** "A", "A and B", "A, B and C". */
+export function listNames(names: string[]): string {
+  if (names.length <= 1) return names.join('');
+  return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+}

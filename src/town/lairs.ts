@@ -1,4 +1,5 @@
 import { calculateDifficulty, type MonsterData } from 'battlecast-engine';
+import { freeze } from '../core/freeze';
 import { heroName } from '../core/names';
 import type { Rng } from '../core/rng';
 import type { MagicItem } from '../items/items';
@@ -53,8 +54,6 @@ const KINDS: Record<ThemeId, LairKind> = {
 
 const DRAGON_NAMES = ['Vermithrax', 'Ashkarra', 'Nyrlaxeth', 'Old Greyscale', 'Karzûl the Patient', 'Ilthiriax', 'Morrgath'];
 
-let lairCounter = 0;
-
 function fill(rng: Rng, template: string): string {
   return template
     .replace('{name}', rng.pick(LANDMARKS))
@@ -62,29 +61,51 @@ function fill(rng: Rng, template: string): string {
     .replace('{dragon}', rng.pick(DRAGON_NAMES));
 }
 
-/** The strongest monster of the theme that a party of four at this level could face alone in a "high" fight. */
-export function pickBoss(theme: ThemeId, level: number): MonsterData {
+/** How a lair starts, how strong it can become, and how often it raids. */
+export interface LairConfig {
+  /** Cap on strength. The Board receives this when a raid goes unanswered. */
+  strengthCap: number;
+  initialStrength: number;
+  hoardGoldPerLevel: number;
+  raidCooldown: [number, number];
+  minRaidInterval: number;
+  baseRaidInterval: number;
+  raidIntervalPerStrength: number;
+}
+
+export const DEFAULT_LAIR_CONFIG: LairConfig = freeze({
+  strengthCap: 10,
+  initialStrength: 1,
+  hoardGoldPerLevel: 100,
+  raidCooldown: [24, 72],
+  minRaidInterval: 36,
+  baseRaidInterval: 96,
+  raidIntervalPerStrength: 6,
+});
+
+/** The strongest monster of the theme that a company of `companySize` at this level could face alone in a "high" fight. */
+export function pickBoss(theme: ThemeId, level: number, companySize: number): MonsterData {
   const roster = themeMonsters(theme);
-  const cap = calculateDifficulty(4, level, 0).thresholds.high;
+  const cap = calculateDifficulty(companySize, level, 0).thresholds.high;
   const fits = roster.filter((m) => m.xp <= cap).sort((a, b) => b.xp - a.xp);
   return fits[0] ?? roster.sort((a, b) => a.xp - b.xp)[0]!;
 }
 
-export function createLair(rng: Rng, theme: ThemeId, level: number, tick: number): Lair {
+export function createLair(rng: Rng, theme: ThemeId, level: number, tick: number, companySize: number, rules: LairConfig): Lair {
   const kind = KINDS[theme];
   return {
-    id: `lair-${++lairCounter}`,
+    id: rng.id('lair'),
     name: fill(rng, rng.pick(kind.names)),
     place: fill(rng, rng.pick(kind.places)),
     theme,
-    boss: pickBoss(theme, level).name,
+    boss: pickBoss(theme, level, companySize).name,
     level,
-    strength: 1,
-    hoard: { gold: 100 * level, items: [] },
+    strength: rules.initialStrength,
+    hoard: { gold: rules.hoardGoldPerLevel * level, items: [] },
     status: 'active',
     raids: 0,
     raidsWon: 0,
-    raidCooldown: rng.int(24, 72),
+    raidCooldown: rng.int(...rules.raidCooldown),
     questId: null,
     spawnedAt: tick,
     clearedAt: null,
@@ -94,11 +115,9 @@ export function createLair(rng: Rng, theme: ThemeId, level: number, tick: number
 /** Themes that make sense as a standing lair near a town. */
 export const LAIR_THEMES: ThemeId[] = ['bandits', 'goblins', 'undead', 'cultists', 'giants', 'dragons', 'fiends', 'sea', 'fey', 'monstrosities'];
 
-export const MAX_STRENGTH = 10;
-
 /** Hours between raids: a fresh lair strikes every four days or so, a strong one every day and a half. */
-export function raidInterval(l: Lair): number {
-  return Math.max(36, 96 - Math.min(MAX_STRENGTH, l.strength) * 6);
+export function raidInterval(lair: Lair, rules: LairConfig): number {
+  return Math.max(rules.minRaidInterval, rules.baseRaidInterval - Math.min(rules.strengthCap, lair.strength) * rules.raidIntervalPerStrength);
 }
 
 export function describeLair(l: Lair): string {

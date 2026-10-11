@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { Rng } from '../src/core/rng';
 import { buildEncounter, DIFFICULTIES, xpBand } from '../src/quests/encounters';
 import { THEME_IDS, themeMonsters } from '../src/quests/themes';
+import { DEFAULT_ENCOUNTER_CONFIG } from '../src/quests/encounters';
 
 describe('themes', () => {
   it('every theme resolves to real SRD monsters', () => {
@@ -18,8 +19,8 @@ describe('buildEncounter', () => {
     for (const level of [1, 2, 3, 4, 5, 6, 8, 10]) {
       for (const difficulty of DIFFICULTIES) {
         for (const theme of THEME_IDS) {
-          const spec = buildEncounter(rng, theme, 4, level, difficulty);
-          const band = xpBand(4, level, difficulty);
+          const spec = buildEncounter(rng, theme, 4, level, difficulty, 1, DEFAULT_ENCOUNTER_CONFIG);
+          const band = xpBand(4, level, difficulty, 1, DEFAULT_ENCOUNTER_CONFIG);
           total++;
           if (spec.totalXp < band.min || spec.totalXp > band.max) outside++;
           expect(spec.monsters.length).toBeGreaterThan(0);
@@ -35,9 +36,9 @@ describe('buildEncounter', () => {
   it('bands are ordered and sit at or below the DMG "High" line', () => {
     for (const level of [1, 5, 10]) {
       const t = calculateDifficulty(4, level, 0).thresholds;
-      const easy = xpBand(4, level, 'easy');
-      const mid = xpBand(4, level, 'intermediate');
-      const hard = xpBand(4, level, 'hard');
+      const easy = xpBand(4, level, 'easy', 1, DEFAULT_ENCOUNTER_CONFIG);
+      const mid = xpBand(4, level, 'intermediate', 1, DEFAULT_ENCOUNTER_CONFIG);
+      const hard = xpBand(4, level, 'hard', 1, DEFAULT_ENCOUNTER_CONFIG);
       expect(easy.max).toBeLessThan(mid.min);
       expect(mid.max).toBeLessThan(hard.min);
       expect(hard.max).toBeLessThan(t.high);

@@ -1,9 +1,12 @@
 /** Deterministic PRNG (mulberry32). Same seed => same world, same fights. */
 export class Rng {
   private s: number;
+  private readonly idSequences = new Map<string, number>();
 
   constructor(seed: number) {
     this.s = seed >>> 0;
+    // Keep allocator bookkeeping out of the serialized simulation state.
+    Object.defineProperty(this, 'idSequences', { enumerable: false });
   }
 
   next(): number {
@@ -49,6 +52,18 @@ export class Rng {
   /** A fresh seed derived from this stream, for sub-generators (e.g. one combat). */
   seed(): number {
     return Math.floor(this.next() * 0xffffffff) >>> 0;
+  }
+
+  /** Allocate a deterministic, run-scoped identifier without consuming a random value. */
+  id(kind: string): string {
+    const next = (this.idSequences.get(kind) ?? 0) + 1;
+    this.idSequences.set(kind, next);
+    return `${kind}-${next}`;
+  }
+
+  /** A stable, serializable view of the counters that affect future IDs. */
+  idState(): Readonly<Record<string, number>> {
+    return Object.fromEntries([...this.idSequences].sort(([a], [b]) => a.localeCompare(b)));
   }
 }
 

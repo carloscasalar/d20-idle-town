@@ -1,3 +1,5 @@
+import { freeze } from '../core/freeze';
+import type { DeepReadonly } from '../core/readonly';
 import type { Rng } from '../core/rng';
 
 export type ItemSlot = 'weapon' | 'armor' | 'accessory';
@@ -54,30 +56,28 @@ export const ITEM_CATALOGUE: ItemTemplate[] = [
   { name: 'Ring of Protection', slot: 'accessory', rarity: 'rare', price: 3800, effect: { ac: 1, hp: 10 }, sources: ['enchanter'] },
 ];
 
-let itemCounter = 0;
-
-export function instantiate(template: ItemTemplate): MagicItem {
-  return { ...template, id: `item-${++itemCounter}` };
+export function instantiate(rng: Rng, template: ItemTemplate): MagicItem {
+  return { ...template, id: rng.id('item') };
 }
 
 /** Roll an item a shop could stock. Rare items are a one-in-four affair. */
-export function rollStockItem(rng: Rng, source: ItemSource): MagicItem | null {
+export function rollStockItem(rng: Rng, source: ItemSource, items: ItemConfig): MagicItem | null {
   const pool = ITEM_CATALOGUE.filter((t) => t.sources.includes(source));
   if (pool.length === 0) return null;
-  const rarity: ItemRarity = rng.chance(0.25) ? 'rare' : 'uncommon';
+  const rarity: ItemRarity = rng.chance(items.stockRareChance) ? 'rare' : 'uncommon';
   const byRarity = pool.filter((t) => t.rarity === rarity);
-  return instantiate(rng.pick(byRarity.length > 0 ? byRarity : pool));
+  return instantiate(rng, rng.pick(byRarity.length > 0 ? byRarity : pool));
 }
 
 /** Roll an item found on a job: anything in the catalogue, rarity weighted by contract level. */
-export function rollLootItem(rng: Rng, level: number): MagicItem {
-  const rareChance = Math.min(0.5, 0.05 + level * 0.04);
+export function rollLootItem(rng: Rng, level: number, items: ItemConfig): MagicItem {
+  const rareChance = Math.min(items.lootRareCap, items.lootRareBase + level * items.lootRarePerLevel);
   const rarity: ItemRarity = rng.chance(rareChance) ? 'rare' : 'uncommon';
   const byRarity = ITEM_CATALOGUE.filter((t) => t.rarity === rarity);
-  return instantiate(rng.pick(byRarity));
+  return instantiate(rng, rng.pick(byRarity));
 }
 
-export function describeEffect(e: ItemEffect): string {
+export function describeEffect(e: DeepReadonly<ItemEffect>): string {
   const parts: string[] = [];
   if (e.weaponBonus) parts.push(`+${e.weaponBonus} to hit and damage`);
   if (e.ac) parts.push(`AC +${e.ac}`);
@@ -87,7 +87,28 @@ export function describeEffect(e: ItemEffect): string {
   return parts.join(', ');
 }
 
+/** How shops buy gear back, and how rare a found or stocked item is. The catalogue stays a content table. */
+export interface ItemConfig {
+  resaleDivisor: number;
+  /** Chance a shop stocks a rare item rather than an uncommon one. */
+  stockRareChance: number;
+  /** A found item starts this likely to be rare. */
+  lootRareBase: number;
+  /** Added to that chance for each level of the job. */
+  lootRarePerLevel: number;
+  /** The chance of a rare find never rises above this. */
+  lootRareCap: number;
+}
+
+export const DEFAULT_ITEM_CONFIG: ItemConfig = freeze({
+  resaleDivisor: 2,
+  stockRareChance: 0.25,
+  lootRareBase: 0.05,
+  lootRarePerLevel: 0.04,
+  lootRareCap: 0.5,
+});
+
 /** What a shop pays when adventurers sell an item back. */
-export function resalePrice(item: MagicItem): number {
-  return Math.floor(item.price / 2);
+export function resalePrice(item: MagicItem, items: ItemConfig): number {
+  return Math.floor(item.price / items.resaleDivisor);
 }
