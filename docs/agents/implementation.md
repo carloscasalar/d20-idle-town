@@ -47,10 +47,10 @@ Domain questions are answered by the D&D 5e 2024 rules (SRD 5.2.1). Where the ga
 
 ## The pool
 
-| Order | Implementer | Wrapper | Model |
-| --- | --- | --- | --- |
-| 1 | Codex | `scripts/agents/codex-turn.sh` | `gpt-6.1-sol`, high effort |
-| 2 | Cursor | `scripts/agents/cursor-turn.sh` | `grok-4.7-high` |
+| Order | Implementer | Wrapper | Model | `implement` skill |
+| --- | --- | --- | --- | --- |
+| 1 | Codex | `scripts/agents/codex-turn.sh` | `gpt-6.1-sol`, high effort | yes, named as `$mattpocock-skills:implement` |
+| 2 | Cursor | `scripts/agents/cursor-turn.sh` | `grok-4.7-high` | no; follows the rules instead |
 
 Cheap reviewer: opencode through `scripts/agents/opencode-turn.sh` (`minimax/MiniMax-M3`, thinking). Claude agents: `.claude/agents/` (`slice-reviewer`, `smoke-tester`, `prd-answerer`).
 

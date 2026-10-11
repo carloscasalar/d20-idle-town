@@ -33,6 +33,10 @@ CODEX_TURN_LOG_DIR="$run" scripts/agents/detach.sh "$run/turn-NN-fix1.result" \
 - **New task, new session; corrections resume the session** that did the work, so it keeps its context.
 - **In zsh, write `${var}:` with braces** in commands; `$var:r` and `$var:c` are modifiers and silently mangle the value.
 
+## The `implement` skill
+
+Implementation turns ask for the `implement` skill of the mattpocock-skills plugin (test-first, checks, a self-review, a commit). Codex has it and loads it only when the prompt names it as `$mattpocock-skills:implement`. Cursor does not have it and follows rule 2 of [RULES.md](RULES.md), which asks for the same work. The skill's own review does not replace the review in this flow: the reviewer still checks every turn.
+
 ## Usage limits and dead turns
 
 - **`LIMIT` in the result:** switch to the next implementer in the pool. If the working tree has unfinished edits, send the handover prompt in a new session; if it is clean, send the original prompt. When the whole pool is at its limit, stop and report the reset time.
