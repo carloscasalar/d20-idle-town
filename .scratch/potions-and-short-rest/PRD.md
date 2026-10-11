@@ -60,7 +60,7 @@ Potions
 30. As a player, I want the combat log to show the potion and its roll, so that I can see what a drink did.
 31. As a player, I want companies to differ in how they share a short pack (company order, or fallen first and then the most hurt), so that companies have character.
 32. As a player, I want a merged company to keep the host's policy, so that a merger has a clear outcome.
-33. As a player, I want a level 1 company to start with enough gold for a basic potion, so that it can buy one before its first reward.
+33. As a balancer, I want a new company to start with 50 gp per level, so that the retuned game sits closest to today's difficulty.
 34. As a player, I accept that the supreme potion is not bought in a 600-hour game, so that the top tier arrives as the game grows instead of by a special rule.
 
 Dice and seeds
@@ -163,7 +163,7 @@ Retune and checks
 ### Reward set-aside
 
 - A rule of any employer: the gold promised in the rewards of its Contracts that are posted and not yet paid, failed or expired (`open` or `taken`) is kept out of the treasury that a new reward is sized from (the amount `treasuryShare` applies to).
-- Which employers set their rewards aside is a configuration list, validated against the catalogue it names. Default: the apothecary only. Extending the rule to another employer is adding it to the list.
+- Which employers set their rewards aside is a configuration list. An entry is either a town service (for example `apothecary`, the one employer that runs it) or an employer kind (for example `noble`, every employer of that kind); validation rejects a name that is in neither catalogue. Default: `apothecary` alone. Extending the rule to another employer is adding it to the list.
 - The amount is a property of the employer's outstanding work. Whether it is stored or computed from the Board's list is the implementer's choice; the Board stays the only thing that links an employer to its work.
 - Upkeep is unchanged and can still take a treasury below zero.
 
@@ -180,6 +180,8 @@ Disappears, with validation and documentation:
 - `expedition.shortRestHealFraction`.
 - `heroes.potionBase`, `heroes.potionPerLevel`, `heroes.potionHealMinimum`, `heroes.potionHealDivisor`, and the price and heal functions that read them.
 
+Never built: the apothecary reserve and `reserveDays` of tickets 04 and 08. They existed only in the tickets, ticket 09 removed them, and no key or rule for them is added.
+
 Changes default:
 - `heroes.startingGoldPerLevel`: 20 to 50.
 
@@ -187,7 +189,7 @@ Unchanged, confirmed by ticket 09: `board.difficultyScale` 1.15, `expedition.ret
 
 Not configuration: the tier divisor `N / 2`, the pacing strategy, the `production` reason's effects.
 
-The key names not written above, and the section each new key lives in, are the implementer's choice, following the rule of `docs/CONFIGURATION.md` that a value lives in the section of the module that owns it. Validation covers: every formula parses, prices and production costs are not negative, production ticks are whole numbers, the weight list is not empty or all zero, the set-aside list names known employers, and unknown or missing fields as today.
+The key names not written above, and the section each new key lives in, are the implementer's choice, following the rule of `docs/CONFIGURATION.md` that a value lives in the section of the module that owns it. Validation covers: every formula parses, prices and production costs are not negative, production ticks are whole numbers, the weight list is not empty or all zero, every entry of the set-aside list is a known town service or employer kind, and unknown or missing fields as today.
 
 ### Documentation the implementation updates
 
@@ -223,7 +225,7 @@ A good test here states behaviour through a module's public interface (a rest he
 - Sharing: both orders; the default for a company with no policy; a merger keeps the host's; the weights 100 / 0 always draw company order.
 - Engine stream: the same fight with potions rolled low or high has an identical engine log until the first drink.
 - Coin: `production` sinks from the treasury, moves `spent` and `goldSpentOnProduction` only; the sink precedes the sale; the treasury identity still holds.
-- Set-aside: a new reward is sized from the treasury minus the rewards owed; an employer outside the list is sized as today; the amount is released when the Contract is paid, fails or expires.
+- Set-aside: a new reward is sized from the treasury minus the rewards owed; an employer outside the list is sized as today; an employer kind in the list switches on every employer of that kind; the amount is released when the Contract is paid, fails or expires.
 - Configuration: validation of every new key; the removed keys are rejected as unknown.
 - `tune.ts` argument parsing: a range, a list, and a trailing comma rejected.
 
@@ -291,25 +293,26 @@ The supreme tier is expected to stay unbought at 600 ticks, and in the 3,000-tic
 
 ### Suggested vertical slices for `to-issues`
 
-Each slice ends with the suite green (the six regression hashes skipped from slice 2 to slice 7) and with its documentation updated.
+Each slice ends with the suite green (the six regression hashes skipped from slice 2 until slice 8 re-records them) and with its documentation updated.
 
 | # | Slice | Delivers | Blocked by |
 |---|---|---|---|
 | 1 | Measuring tool and baseline | `tune.ts` with the seed range, scale 1.15, unrounded output, baseline file and comparison, and the apothecary report. Reproduces the table above on unchanged game code and records today's long-run apothecary figures. No game code changes. | none |
 | 2 | Hit Dice at the Short rest | The dice module; `hitDiceSpent`; the hit point formula parser; the rest as its own logged tick with pacing, retreat check and the potion step (still the old potion); one seed per rest; reset at the Long rest; `shortRestHealFraction` removed. Skips the six regression hashes. | 1 |
-| 3 | Tiered potions with real dice | The catalogue in configuration; the pack as a map through combat, expedition, merger, view and UI; the drinking selection; potions rolled from the combat sub-seed and the rest seed; the old potion price and heal keys removed; `startingGoldPerLevel` 50 (the cheapest potion now costs 50 gp). Buying stays as today for this slice: basic only, up to one per living hero, at the catalogue price. Migrates the `potions` fixtures and the combat potion tests. | 2 |
+| 3 | Tiered potions with real dice | The catalogue in configuration; the pack as a map through combat, expedition, merger, view and UI; the drinking selection; potions rolled from the combat sub-seed and the rest seed; the old potion price and heal keys removed; `startingGoldPerLevel` 50. Buying stays as today for this slice: basic only, up to one per living hero, at the catalogue price. Migrates the `potions` fixtures and the combat potion tests. | 2 |
 | 4 | Buying policy | The stock target with `potionCoverFraction`, the tier choice, the step-down by budget, one purchase and one log line per visit. | 3 |
 | 5 | Potion sharing policy | The policies object on the company, the two orders, the seeded draw with its weights, the merger rule, the fixture migration for policies. | 3 |
 | 6 | Apothecary production | The per-tier production cost; the `production` reason; `goldSpentOnProduction` (and in the `tune.ts` report); the production ticks table at zero with the documented deviation. | 3 |
-| 7 | Reward set-aside | The rule for any employer, the configuration list with the apothecary alone, reward sizing from the treasury minus the rewards owed. | 6 |
+| 7 | Reward set-aside | The rule for any employer, the configuration list with the apothecary alone, reward sizing from the treasury minus the rewards owed. Runs final check 3 (the long-run apothecary report) as its own acceptance. | 6 |
 | 8 | Retune confirmation | The three final checks with the real `tune.ts`; the six regression hashes re-recorded once and re-enabled; `CHANGELOG.md`; the test table and seeding section of `docs/ARCHITECTURE.md`; a last read of `docs/CONFIGURATION.md` and `CONTEXT.md` against the code. | 4, 5, 6, 7 |
 
-Slices 4, 5 and 6 are independent of one another. Slice 7 follows 6 only so that its long-run check runs with production in place.
+Slices 4, 5 and 6 are independent of one another. Slice 7 follows 6 so that the long-run apothecary check it runs has production in place.
 
 ### Points to confirm while implementing
 
 - The SRD 5.2 wording of the Hit Die minimum of 1 (ticket 06).
 - With the set-aside, an employer's treasury can meet `postingThreshold` while the treasury left after the rewards owed is small or zero, and `minimumReward` (20 gp) still applies to the new reward. The tickets only say that new rewards are sized from the treasury minus the rewards owed. If the long-run check shows a treasury below zero from this, ask the owner whether the posting threshold should read the same reduced amount.
+- Ticket 09 gives as the reason for `startingGoldPerLevel` 50 that a level 1 company with 20 gp could not buy the 50 gp potion. In the game code the potion budget is the purse minus one resurrection (190 gp at level 1), so a new company buys no potion before its first reward at 50 gp either. The value stays 50 because the sweep measured it as the closest fit; only the stated reason does not hold.
 - The scale shape of the final rules was measured in the prototype only with the offer gate of ticket 08 still in place; check 2 covers it.
 
 ### How far the prototype's numbers can be trusted
