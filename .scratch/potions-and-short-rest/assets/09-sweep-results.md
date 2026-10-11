@@ -1,6 +1,6 @@
 # Ticket 09: sweep results
 
-Raw output of the throwaway prototype. Deviations are percentages against the baseline measured on `ed52b20` (see the ticket for how). `dpq` is deaths per quest. `worst` is the largest absolute deviation of the five metrics; the acceptance is `worst <= 15`.
+Raw output of the throwaway prototype. Deviations are percentages against the baseline measured on `ed52b20` (see the ticket for how). `dpq` is deaths per quest. `worst` is the largest absolute deviation of the five metrics; the acceptance is `worst <= 15`. Rows named "apothecary credit rule" in the first two sections combine the discarded credit rule with the offer gate of ticket 08; the final round at the end of the file has the rules that were kept.
 
 ## Seeds 1 to 80
 
@@ -83,3 +83,37 @@ Raw output of the throwaway prototype. Deviations are percentages against the ba
 | purse 50 + apothecary credit rule | 3000 ticks, 20 seeds | 7 of 20 | 11229 | 29053 | not recorded |
 
 Apothecary accounting over 3000 ticks, 20 seeds: today earned 90,572 and spent 87,819 (ruined 0 of 20); new rules with purse 50 earned 94,217 and spent 93,974 of which 41,578 was production (ruined 12 of 20); with the credit rule earned 124,403, spent 114,483 of which 29,053 was production (ruined 7 of 20).
+
+## Apothecary rules, final round (seeds 1 to 160, 600 ticks)
+
+Average of seeds 1-80 and 81-160, each cell the deviation from the baseline measured on the same seeds. All variants use `startingGoldPerLevel` 50. "gate" is the offer rule of ticket 08 (a tier is offered only while the treasury covers its production cost plus the reserve).
+
+| variant | scale | quests | failed | dpq | wiped | raised | worst | apothecaries ruined | apothecary end (gp) |
+|---|---|---|---|---|---|---|---|---|---|
+| no gate | 1.15 | -5.1 | -8.8 | +6.4 | +8.6 | -4.5 | 8.8 | 0 of 160 | 3396 |
+| no gate + escrow of promised rewards | 1.15 | -5.0 | -9.1 | +6.1 | +8.6 | -4.3 | 9.1 | 0 of 160 | 3444 |
+| no gate + escrow + half of apothecary rewards paid in basic potions | 1.15 | -4.9 | -10.6 | +2.8 | -0.4 | -4.5 | 10.6 | 0 of 160 | 3642 |
+| no gate + credit rule (discarded) | 1.15 | -5.1 | -8.8 | +5.7 | +7.1 | -3.7 | 8.8 | 0 of 160 | 6751 |
+| no gate | 1.5 | -6.1 | -10.9 | +2.5 | -2.9 | +2.3 | 10.9 | 0 of 160 | 3612 |
+| no gate + escrow of promised rewards | 1.5 | -6.6 | -10.6 | +3.4 | -2.3 | +1.5 | 10.6 | 0 of 160 | 3735 |
+| no gate + escrow + half of apothecary rewards paid in basic potions | 1.5 | -4.2 | -12.4 | -1.9 | -4.2 | -5.1 | 12.4 | 0 of 160 | 3958 |
+| no gate + credit rule (discarded) | 1.5 | -6.4 | -10.7 | +3.1 | -2.9 | +2.4 | 10.7 | 0 of 160 | 6374 |
+
+## Long runs, 3000 ticks, scale 1.15, purse 50 (seeds 1 to 40 unless noted)
+
+| apothecary rule | apothecaries ruined | lowest treasury reached (mean over seeds, gp) | treasury at the end (gp) | notes |
+|---|---|---|---|---|
+| today's code (baseline) | 2 of 40 | -52 (seeds 21-40) | 3604 (21-40); 4062 (1-20) | ticket 08 measured 2 of 30 |
+| offer gate of ticket 08 | 21 of 40 | -59 to 3 | 985 to 1552 | 12 of 20 on seeds 1-20, 9 of 20 on 21-40 |
+| gate removed | 1 of 40 | -99 | 2299 |  |
+| gate removed + escrow | 0 of 40 | 394 | 2506 |  |
+| gate removed + half of apothecary rewards in potions | 1 of 40 | 255 | 2775 | 692 reward potions per run |
+| gate removed + escrow + half in potions | 0 of 40 | 509 | 2594 | 685 reward potions per run |
+| gate removed + credit rule (discarded) | 1 of 20 (seeds 1-20) and 1 of 20 (21-40) | 121 to 330 | 7277 to 12167 |  |
+
+## What happened to the apothecary in seed 1 (3000 ticks)
+
+Today: sales (`service`) 79,060 gp; holdings 6,213 income + 11,652 windfall; paid out 87,513 in rewards, 4,750 upkeep and 1,064 forfeits; never ruined, treasury 4,924 at the end.
+
+Ticket 08 rule with purse 50: at tick 690 a reward of 2,844 gp was paid with 1,724 gp in the treasury, leaving -1,120. A shop in debt offers no potion under the gate, so it had no sales; holdings income (71/day) barely covered upkeep (38/day), and three days later (tick 744) it was ruined with sales of 26,600 gp over the run.
+
