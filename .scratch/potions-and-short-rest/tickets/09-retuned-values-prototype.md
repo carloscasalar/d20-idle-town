@@ -22,4 +22,5 @@ The prototype is judged against the acceptance of [07](07-balance-targets.md): a
 
 - From [03](03-short-rest-spending-policy.md): a Short rest costs one tick per gap, and `retreatHpFraction` is evaluated after the Hit Dice are spent.
 - From [06](06-healing-rolls-and-seeded-run-stability.md): healing rolls are real dice; the model must roll, not average.
+- From [08](08-town-economy-of-potions.md): the apothecary offers `floor((treasury - reserve) / cost)` potions per tier, so the supreme tier also needs more than 10,000 gp in its treasury; the reserve is `reserveDays x upkeepPerDay` with `reserveDays` 3 by default (a first guess, free to move); production is instant; the baseline apothecary treasury averaged about 5,500 gp after 600 ticks. Measure through the apothecary's treasury and the production statistic `goldSpentOnProduction`.
 - The prices, healing formulas and Hit Dice rules do not move ([07](07-balance-targets.md)).

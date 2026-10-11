@@ -22,3 +22,6 @@ Which potions does the game offer, at what price, and who can buy them?
 - **Deferred requirement:** a tier also needs a cleric on the apothecary's payroll, of a level able to cast the matching healing spell. Businesses have no employees yet, so for now treasury alone gates tiers; the requirement waits in the map's fog.
 - **Which tier a company buys, and how many** is left to [Potion buying and drinking policy](05-potion-buying-and-drinking-policy.md).
 
+## Comments
+
+- 2026-10-11: [Town economy of potions](08-town-economy-of-potions.md) refines the availability rule: the apothecary offers `floor((treasury - reserve) / cost)` potions per tier, and the reserve is three days of its own upkeep.

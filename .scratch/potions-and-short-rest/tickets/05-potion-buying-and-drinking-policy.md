@@ -27,3 +27,7 @@ Decided with carloscasalar on 2026-10-11.
 - **Balance knobs.** `potionCoverFraction` and the policy weights join the movable knobs of [07](07-balance-targets.md); the reserve stays unchanged unless the retune needs it.
 - **Passed on.** Real dice or assured values when potions are drunk, the extra RNG draw for the policy at company creation, and the effect on seeded runs: ticket [Healing rolls and seeded-run stability](06-healing-rolls-and-seeded-run-stability.md).
 - **Glossary.** Healing potion, Assured healing and Potion sharing policy in `CONTEXT.md`; the two relationship lines about drinking rewritten.
+
+## Comments
+
+- 2026-10-11: [Town economy of potions](08-town-economy-of-potions.md) limits a purchase to the count the apothecary offers; the step-down to a cheaper tier also applies when the apothecary cannot offer enough.
