@@ -29,12 +29,9 @@ A `PRD.md` in this directory that decides how the game models Hit Dice at a shor
 
 ## Not yet specified
 
-- Concrete retuned values (`potionCoverFraction`, sharing policy weights, potion supply per level, `difficultyScale`, `retreatHpFraction`, encounters per job, starting purse). The targets and allowed knobs are settled ([07](tickets/07-balance-targets.md)); what remains is choosing the values. Needs the rules above settled first and probably a throwaway prototype of the economy.
-- Interaction with town economy: which coin movement reasons the production sink and the potion sale use, the numeric reserve the apothecary keeps, and how a ruined or poor apothecary affects potion supply over a long run.
 - Apothecary staffing: a tier needing a cleric on the payroll whose level can cast the matching healing spell. Waits until businesses have employees; until then treasury alone gates tiers.
 - Documentation updates to `CONTEXT.md` and `docs/CONFIGURATION.md` once the rules are fixed.
 - Test fixtures that hold party shapes (`potions` becomes a map, companies gain a policies object). The game has no save files; only tests need migrating. The regression-hash policy is settled in [Healing rolls and seeded-run stability](tickets/06-healing-rolls-and-seeded-run-stability.md).
-- Whether the buying rule should reach the supreme tier: at the defaults only a company averaging about 200 maximum hit points buys it ([05](tickets/05-potion-buying-and-drinking-policy.md)). Settle during the retune, with the tier divisor as a candidate knob.
 
 ## Out of scope
 
