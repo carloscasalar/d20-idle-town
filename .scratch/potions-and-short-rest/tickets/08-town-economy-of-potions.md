@@ -33,4 +33,7 @@ Decided with carloscasalar on 2026-10-11. Facts measured on `main` for this tick
 - **Documentation.** The correction to `healing-potion-tiers.md` (its "Magic Item Crafting Cost" line gives the table values before the consumables halving; the raw material cost is half) is in the map's fog under documentation updates. The production costs of [04](04-potion-catalogue-and-availability.md) match the SRD raw materials exactly.
 - **Glossary.** Healing potion's supply sentence rewritten and Apothecary reserve added in `CONTEXT.md`.
 
+## Comments
+
 - 2026-10-11: [Retuned values prototype](09-retuned-values-prototype.md) supersedes two rules here. The offer `floor((treasury - reserve) / cost)` and the reserve (`reserveDays`) are removed: a shop in debt could not sell, so it could not recover, and 21 of 40 apothecaries were ruined in 3,000 ticks (2 of 40 today). The apothecary now offers every tier while it is not ruined. Rewards: no longer "no special rule"; a posted reward is set aside, so the treasury never goes negative paying it.
+- 2026-10-12: scope of the set-aside, decided by the owner: it is a rule for every employer, switched on for the apothecary only, and built so that extending it to the others is a small change. Which employers set their rewards aside is a configuration list (the apothecary alone by default), and the 3,000-tick apothecary check is a mode of `scripts/tune.ts`; both decided while writing the PRD.

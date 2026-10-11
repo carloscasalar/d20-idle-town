@@ -25,3 +25,4 @@ Which potions does the game offer, at what price, and who can buy them?
 ## Comments
 
 - 2026-10-11: [Town economy of potions](08-town-economy-of-potions.md) refines the availability rule: the apothecary offers `floor((treasury - reserve) / cost)` potions per tier, and the reserve is three days of its own upkeep.
+- 2026-10-12: [Retuned values prototype](09-retuned-values-prototype.md) supersedes the availability rule above and the refinement of 08: the treasury gate, the reserve and `reserveDays` are removed. A tier is on offer whenever the apothecary is not ruined. Catalogue, prices, production cost and "made on demand, no shelf" stand. The production cost is a configuration value per tier (25 / 100 / 1,000 / 10,000 gp by default), decided by the owner while writing the PRD.
