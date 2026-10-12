@@ -38,7 +38,7 @@ services using narrow contexts. No domain module imports Game.
    └──────┬─────┘ └──────┬─────┘ └───┬────────┘ └───┬────────┘
           │              │           │              │
           │       ┌──────▼───────────▼──────────────▼──┐
-          └───────►             src/core               │  Rng, XP table, names
+          └───────►             src/core               │  Rng, dice, XP, names
                   └────────────────────────────────────┘
 
    ┌────────────┐
@@ -62,7 +62,8 @@ falls back to `Math.random()`. Every game-side die uses this core module.
 
 | File | What it holds |
 | --- | --- |
-| `rng.ts` | `Rng`, a mulberry32 PRNG. `int`, `chance`, `pick`, `weighted`, `shuffle`, and `seed()` which forks a child seed for one combat. It also allocates namespaced IDs from counters owned by that RNG, without consuming random values. `hashString` turns a `?seed=` URL string into a number. |
+| `rng.ts` | `Rng`, a mulberry32 PRNG. `int`, `chance`, `pick`, `weighted`, `shuffle`, and `seed()` which forks a child seed. The world takes one per combat and one per actual Short rest; the combat adapter takes one more from its own generator for potion rolls. It also allocates namespaced IDs from counters owned by that RNG, without consuming random values. `hashString` turns a `?seed=` URL string into a number. |
+| `dice.ts` | Parses `NdM+K` (also unmodified dice and a negative bonus), rolls from an explicit `int(min, max)` source, and derives Assured healing. Game code uses this instead of the engine's `rollDice`. |
 | `xp.ts` | The 5e XP-to-level table, `levelForXp`, `xpToNextLevel`. |
 | `names.ts` | Syllable-based generators for heroes, nobles, merchants, factions, deities, towns and companies. |
 
@@ -92,6 +93,13 @@ RNG argument. Interleaving two worlds cannot change either world's IDs.
   and describes the pack for the log. The game view copies that pack in catalogue
   order; the party card joins the view and does not import the catalogue. Combat, the Short rest
   and the apothecary ask it; none of them owns a second price or heal formula.
+- **`policies.ts`** — the Potion sharing policy (`company-order` or
+  `most-hurt`) and the one weighted draw at company creation. Combat and the
+  Short rest ask it for the order of Bloodied heroes. A missing policy is
+  company order.
+- **`hit-dice.ts`** — die size and Constitution from the engine's `hpFormula`,
+  and a pure calculation of Hit Dice spent at a Short rest. The caller writes
+  the hero.
 - **`party.ts`** — a `Party` is members, shared gold, the potion pack, stash, renown,
   guild membership and a `PartyStatus`. Four to six strong. `rollClasses` fills
   the four classic roles (front line, support, skirmisher, arcane).
@@ -232,7 +240,7 @@ enchanter buys back.
    items become `acOverride`, `hpOverride`, `speedOverride`,
    `additionalResistances`; a +1 weapon is rebuilt from the class's own main
    attack with the bonus folded into attack and damage.
-4. Runs the engine's `Encounter` to a conclusion or a round cap. Between unfinished rounds, before checking whether to flee, a Bloodied hero drinks one potion from the supplied pack: the smallest tier whose assured healing covers the hit points they are missing, or the strongest tier in the pack. A fallen hero counts their fight maximum, blessings and items included, and receives the potion from the first conscious companion in company order. If nobody is conscious, no potion is used. The adapter rolls the formula itself and passes the total to `heal`.
+4. Runs the engine's `Encounter` to a conclusion or a round cap. Between unfinished rounds, before checking whether to flee, the company's Potion sharing policy orders its Bloodied heroes and each drinks one potion from the supplied pack: the smallest tier whose assured healing covers the hit points they are missing, or the strongest tier in the pack. A fallen hero counts their fight maximum, blessings and items included, and receives the potion from the first conscious companion in company order. If nobody is conscious, no potion is used. The adapter rolls the formula on `src/core/dice.ts` and passes the total to `heal`. The engine does not roll the potion.
 5. Maps the result back to a `CombatOutcome`: winner (`party | monsters |
    retreat | stalemate`), rounds, per-hero HP / alive / kills, XP earned, potions
    drunk, and the engine's narration plus potion-drinking lines.
@@ -372,8 +380,8 @@ The profile's `encounterCountSource` selects the configured upper bound when the
 count is unknown (Contract counts, or Bounty upper bound plus the boss), never
 below what job intelligence has revealed. A known count uses the exact total.
 The rest logs rolls, checks retreat using the resulting HP, then gives each
-still-Bloodied living hero one rolled Healing potion in company order if the
-company continues. Those potion rolls use the same local generator as the Hit
+still-Bloodied living hero one rolled Healing potion, in the company's Potion
+sharing policy order, if the company continues. Those potion rolls use the same local generator as the Hit
 Dice, after every Hit Die. An unhurt company checks losses in the combat tick and skips
 the rest. Level-up adds a remaining die without changing `hitDiceSpent`; death
 and resurrection preserve the pool. The town Long rest resets living heroes'
@@ -436,12 +444,17 @@ fight badly hurt abandons the contract and walks home.
   how many potions are drunk never alter that world-stream cost. An unhurt
   company consumes no rest seed. Trajectories change with these new seeds but
   reproduce themselves.
-- Each fight takes one child seed from the world, then the adapter takes one
-  further `seed()` from its own generator after placement and after every
-  setup draw. Potion rolls use that child, or the dice source on the combat
-  options when a test supplies one. The engine receives a number from `heal`
-  and does not roll the potion, so a low roll and a high roll leave the same
-  engine log until the first drink.
+- Each fight takes one child seed from the world. After the opening, deployment
+  and placement draws, the adapter takes one further `seed()` from that child
+  for potion rolls. Those rolls use a generator made from that seed, or the
+  dice source on the combat options when a test supplies one. The engine
+  receives a number from `heal` and does not roll the potion, so a low roll and a high roll leave the
+  same engine log until the first drink.
+- Potion rolls and Hit Dice go through `src/core/dice.ts`, which parses `NdM+K`
+  (also unmodified dice and a negative bonus) and rolls from an explicit
+  `int(min, max)` source. Game code does not call
+  the engine's `rollDice`. Outside the engine's `withRng`, that function falls
+  back to `Math.random()`.
 - Constituting a company draws its Potion sharing policy once, from the same
   generator, after that company's classes and heroes are chosen and before its
   name. The draw is one weighted roll whatever the weights are, so later world
@@ -456,11 +469,11 @@ Practical consequence: any change to the *order* of rolls in `step()` changes
 every seeded expectation downstream, including the smoke test. That is
 intentional — it is how a whole-world regression gets noticed. The smoke test
 checks repeatability. The three whole-world hashes and three stripped-world
-hashes are temporarily skipped until issue 09 of the potions and Short rest
-effort re-records them once. Until then, smoke, combat-space seed 75, lairs
-seed 14, deployment and the company roster seeded loops are the regression
-guard. The combat potion tests on seeds 1 and 2 keep those fights, with a
-scripted 2d4+2 of 8.
+hashes were re-recorded once after Hit Dice, healing potions, sharing,
+production and reward set-aside, and those six tests are enabled. Smoke,
+combat-space seed 75, lairs seed 14, deployment, the company roster seeded
+loops and these hashes are the regression guard. The combat potion tests on
+seeds 1 and 2 keep those fights, with a scripted 2d4+2 of 8.
 
 ## Tests and calibration
 
@@ -470,6 +483,7 @@ scripted 2d4+2 of 8.
 | `test/potions.test.ts` | Smallest covering tier, strongest fallback, a fallen hero's maximum, pack wording |
 | `test/apothecary-production.test.ts` | Exact per-potion sink/sale order and balances, one receipt after all pairs, independent configured costs, instant nonzero ticks, every tier from a treasury in debt, permanent ruin, game-view statistics and tuning report |
 | `test/coin.test.ts` | Coin reasons and holder accounting, including production moving only spent and lifetime production spending |
+| `test/coin-movements.test.ts` | Service purchases, paid rounds, resurrection, homecoming, retirement, income, expiry, windfall and purse movements, including a 400-hour bookkeeping run |
 | `test/game-config.test.ts` | Configuration validation, including required Reward set-aside lists, known service/kind names, empty-list disabling, required production costs and ticks, default zero ticks and invalid production values |
 | `test/potion-buying.test.ts` | Stock target, tier choice, budget step-down, resurrection reserve, one tier per visit, ruined and empty catalogues, `potionCoverFraction` |
 | `test/potion-sharing.test.ts` | Both sharing orders in combat and at the Short rest, no recorded policy, one draw per company, host policies on a merger, weight validation |
@@ -477,19 +491,25 @@ scripted 2d4+2 of 8.
 | `test/hit-dice.test.ts` | Engine HP parser, minimum healing, pure spending, quota, full-HP stopping, exhausted heroes, level-up, death and resurrection |
 | `test/expedition.test.ts` | Separate Short rest hour, dice/retreat/potion order, shared local rolls including rest potions, world seed isolation, encounter bounds, Long rest in every lodging case |
 | `test/combat-potions.test.ts` | Between-round drinking, scripted 2d4+2, engine log stable until the first drink, and one world seed per fight however many potion dice are rolled |
+| `test/combat-space.test.ts` | A Gargantuan creature's space on the battlefield |
 | `test/smoke.test.ts` | A deterministic 400-hour run: no crashes, and the world produces contracts, deaths and coin |
 | `test/town-services.test.ts` | Public hourly ticks: purchase priorities, reserve thresholds, ledgers, stock, equipment allocation, guild renewal, blessings and retirement ordering |
 | `test/game-access.test.ts` | State boundary: scenario setup expires before the game runs, and event subscribers receive immutable data |
 | `test/game-view.test.ts` | Immutable renderer snapshots: party states, linked board data, town economy, lairs, counters and chronicle |
 | `test/simulation-regression.test.ts` | Three seeds, 400 hours each: SHA-256 references over every tick’s domain state, RNG state and event history |
+| `test/simulation-state.test.ts` | `regressionState()` reads domain facts and does not retain event history |
 | `test/company-roster.test.ts` | Existing hourly characterization of arrivals, recruiting, merging, disbanding and retirement |
 | `test/company-roster-interface.test.ts` | Direct roster operations, configuration, deeply read-only queries and synchronous event state |
+| `test/company-roster-ownership.test.ts` | Refusals of merge, burial and disbanding for companies outside the roster |
 | `test/town-service-steps.test.ts` | Caller-supplied service order with a made-up step between potions and armour |
 | `test/configured-steps.test.ts` | A configured service order the game follows, and names the validator rejects |
 | `test/registered-kind.test.ts` | A made-up kind posted, taken, fought and settled from its table entry |
 | `test/job-intel.test.ts` | Hourly characterization of learning a contract or bounty |
 | `test/job-intel-module.test.ts` | Job intelligence through its own interface: each way of learning, each refusal, and a made-up step |
-| `test/job-intel-regression.test.ts` | Three seeds, 400 hours: the world with investigations removed matches the run from before inquiries changed shape |
+| `test/job-intel-regression.test.ts` | Three seeds, 400 hours: with investigations removed, the world matches the re-recorded baseline |
+| `test/board.test.ts` | Board invariants, configuration, registered kinds, ownership and expedition hand-off |
+| `test/contract-lifecycle.test.ts` | Posting, levels, raids, bounties, choice, expiry, success, failure and lair respawn |
+| `test/contract-ruin.test.ts` | Employer ruin releases open contracts without changing holding status |
 | `test/tune.test.ts` | Seed ranges and lists, invalid arguments, default scales, unrounded reports, inclusive baseline comparison, apothecary treasury tracking and production spending from a real configured game purchase |
 | `scripts/combat-sweep.ts` | Long runs for seeds 1–150, 1,500 hours each, reporting crashes |
 | `test/party.test.ts` | Hero progression on the 5e thresholds, death and resurrection, merging, party levels |

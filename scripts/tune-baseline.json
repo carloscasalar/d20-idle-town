@@ -6,7 +6,7 @@
     "apothecaryRuined": "Total ruined apothecaries across seeds.",
     "lowestTreasuryReached": "Minimum treasury of any apothecary in the initial view and every post-step view, including ruined shops.",
     "treasuryAtEnd": "Mean final apothecary treasury total per seed.",
-    "goldSpentOnProduction": "Mean final lifetime statistic per seed when available; absent in this baseline because the game does not expose it yet."
+    "goldSpentOnProduction": "Mean final lifetime statistic per seed when the game exposes it. The game exposes it now. These measured results omit it because they were recorded before that statistic existed."
   },
   "tuning": {
     "command": "SEEDS=1..80 SCALES=1,1.15,1.25,1.5,1.75 TICKS=600 pnpm dlx vite-node scripts/tune.ts",

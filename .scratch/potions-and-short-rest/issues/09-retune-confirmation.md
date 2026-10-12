@@ -92,3 +92,65 @@ Issue 03 skipped six tests; no slice since has recorded them. After the checks p
 - `CONTEXT.md` already holds the vocabulary (Hit Dice, Long rest, Short rest, Healing potion, Assured healing, Potion sharing policy, Reward set-aside). Check it still matches; change it only if the code ended up different.
 
 ## Comments
+
+The three checks passed on the first run, with the values issues 02 to 08 left. No knob moved, so there is no table of attempts. The scale-shape command in this issue omits `TICKS`; the script default is 600, and the command below sets it so the run is the 600-tick shape in the baseline table. The supreme tier was not given a rule to make it reachable. `scripts/tune-baseline.json` keeps every measured value; only the aggregation note for `goldSpentOnProduction` was corrected, because the game now exposes that statistic and these results were recorded before it did. The six hashes were recorded after these checks, on game code `23c5c2b` (`src/` is unchanged since that commit). The job-intel regression title now says "baseline world": "pre-change world" described the hashes this slice replaced.
+
+Check 2 deaths per quest, seeds 1 to 10, 600 ticks: scale 1 is 0.42208774583963693, scale 1.25 is 0.9464459591041869, scale 1.75 is 2.2915980230642505. The figure rises as the scale rises.
+
+### Check 1
+
+`SEEDS=1..80 SCALES=1.15,1.5 TICKS=600 pnpm dlx vite-node scripts/tune.ts`
+
+Exit 0.
+
+```text
+tuning: seeds 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68,69,70,71,72,73,74,75,76,77,78,79,80  ticks 600  tolerance +/-15%
+scale 1.15: quests 109.55  failed 25.0375  deaths 82.6875 (0.7547923322683706/quest)  wiped 7.4625 of 29.4375  raised 10.325
+apothecary: ruined 0 of 80  lowest treasury reached 237  treasury at end (mean) 3057.675  goldSpentOnProduction 8772.5
+baseline quests: deviation -3.7874629487320233% PASS
+baseline failed: deviation -11.01732563305197% PASS
+baseline deathsPerQuest: deviation 0.8863294883725374% PASS
+baseline wiped: deviation 3.466204506065858% PASS
+baseline raised: deviation -8.120133481646285% PASS
+baseline comparison: PASS
+scale 1.5: quests 79.9625  failed 37.45  deaths 119.2875 (1.4917930279818665/quest)  wiped 10.6375 of 38.9125  raised 11.95
+apothecary: ruined 0 of 80  lowest treasury reached 238  treasury at end (mean) 3480.9625  goldSpentOnProduction 7213.125
+baseline quests: deviation -3.7176399759181114% PASS
+baseline failed: deviation -8.79756468797564% PASS
+baseline deathsPerQuest: deviation 0.6036629913877464% PASS
+baseline wiped: deviation -5.549389567147614% PASS
+baseline raised: deviation 1.5940488841657812% PASS
+baseline comparison: PASS
+```
+
+### Check 2
+
+`SEEDS=1..10 SCALES=1,1.25,1.75 TICKS=600 pnpm dlx vite-node scripts/tune.ts`
+
+Exit 0. The script prints "comparison unavailable" because the seed sample is not 1..80. Deaths per quest: 0.42208774583963693, then 0.9464459591041869, then 2.2915980230642505.
+
+```text
+tuning: seeds 1,2,3,4,5,6,7,8,9,10  ticks 600  tolerance +/-15%
+scale 1: quests 132.2  failed 15.4  deaths 55.8 (0.42208774583963693/quest)  wiped 5.2 of 21.4  raised 10.3
+apothecary: ruined 0 of 10  lowest treasury reached 353  treasury at end (mean) 2807.4  goldSpentOnProduction 8827.5
+baseline comparison: unavailable (seeds differ from baseline's 1..80)
+scale 1.25: quests 102.7  failed 29.6  deaths 97.2 (0.9464459591041869/quest)  wiped 8.8 of 32.6  raised 10.9
+apothecary: ruined 0 of 10  lowest treasury reached 316  treasury at end (mean) 3276.4  goldSpentOnProduction 8292.5
+baseline comparison: unavailable (seeds differ from baseline's 1..80)
+scale 1.75: quests 60.7  failed 44.3  deaths 139.1 (2.2915980230642505/quest)  wiped 13 of 45  raised 12.4
+apothecary: ruined 0 of 10  lowest treasury reached 549  treasury at end (mean) 2724.9  goldSpentOnProduction 5652.5
+baseline comparison: unavailable (seeds differ from baseline's 1..80)
+```
+
+### Check 3
+
+`TICKS=3000 SEEDS=1..40 SCALES=1.15 pnpm dlx vite-node scripts/tune.ts`
+
+Exit 0. The script prints "comparison unavailable" at 3,000 ticks. Read against `apothecaryLongRun` in `scripts/tune-baseline.json` (2 of 40 ruined, lowest treasury -1,957 gp): ruined 0 of 40, and the lowest treasury reached is 198 gp, which is not below zero.
+
+```text
+tuning: seeds 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40  ticks 3000  tolerance +/-15%
+scale 1.15: quests 479.025  failed 111.325  deaths 378.825 (0.7908251135118208/quest)  wiped 32.075 of 111.6  raised 45.925
+apothecary: ruined 0 of 40  lowest treasury reached 198  treasury at end (mean) 2439.85  goldSpentOnProduction 54749.375
+baseline comparison: unavailable (TICKS=3000; baseline has 600 ticks)
+```
