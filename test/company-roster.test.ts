@@ -1,4 +1,5 @@
 import { CompanyRoster } from '../src/adventurers/company-roster';
+import { DEFAULT_POLICIES_CONFIG } from '../src/adventurers/policies';
 import { describe, expect, it } from 'vitest';
 import { HERO_CLASS_NAMES } from 'battlecast-engine';
 import { createHero, killHero, type Hero } from '../src/adventurers/hero';
@@ -22,7 +23,7 @@ import { DEFAULT_HOLDING_CONFIG } from '../src/town/assets';
 import { DEFAULT_COMPANY_ROSTER_CONFIG } from '../src/adventurers/company-roster';
 
 function rosterFor(...companies: Party[]): CompanyRoster {
-  const roster = new CompanyRoster(DEFAULT_COMPANY_ROSTER_CONFIG, DEFAULT_HERO_ECONOMY, DEFAULT_TOWN_CONFIG, DEFAULT_HOLDING_CONFIG);
+  const roster = new CompanyRoster(DEFAULT_COMPANY_ROSTER_CONFIG, DEFAULT_HERO_ECONOMY, DEFAULT_TOWN_CONFIG, DEFAULT_HOLDING_CONFIG, DEFAULT_POLICIES_CONFIG);
   roster.replaceForScenario(companies);
   return roster;
 }

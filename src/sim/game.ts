@@ -268,7 +268,7 @@ export class Game {
     this.board = new Board(this.config.board, WORK_KINDS, this.config.kinds);
     this.rng = new Rng(this.config.seed);
     this.town = generateTown(this.rng, this.config.town, this.config.holdings);
-    this.roster = new CompanyRoster(this.config.roster, this.config.heroes, this.config.town, this.config.holdings);
+    this.roster = new CompanyRoster(this.config.roster, this.config.heroes, this.config.town, this.config.holdings, this.config.policies);
     this.coin = openCoin(this.stats);
     const temple = serviceOf(this.town, 'temple');
     this.log('town', `Welcome to ${this.town.name}. Adventurers gather at ${this.town.tavernName}; the ${temple.name} keeps its doors open for the fallen.`);

@@ -277,6 +277,19 @@ A formula that does not parse is rejected.
 | superior | 8d4+8 | 2,000 | 32 |
 | supreme | 10d4+20 | 20,000 | 50 |
 
+## `policies`
+
+How a new company shares a short pack. Defined in `src/adventurers/policies.ts`.
+The company roster draws one policy when the company is constituted, with a
+single weighted roll, and stores it on the company. A merger keeps the host's
+policies. A company with no recorded policy is served in company order.
+
+| Field | Default | Meaning |
+| --- | --- | --- |
+| `potionSharing` | company order 50, most hurt 50 | Weighted list. `company-order` serves Bloodied heroes in company order. `most-hurt` serves fallen heroes at 0 hit points first, then the lowest hit point fraction. Weights 100 and 0 on those two entries always draw company order |
+
+The list must not be empty, and the weights must not all be zero.
+
 ## `town`
 
 Who lives in town and what the shops hold. Defined in `src/town/town.ts`.

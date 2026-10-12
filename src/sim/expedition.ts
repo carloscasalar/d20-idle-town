@@ -1,5 +1,6 @@
 import { describeHero, gainXp, healHero, isBloodied, killHero, resurrectionCost, type Hero, type HeroEconomyConfig } from '../adventurers/hero';
 import { aliveMembers, deadMembers, partyLevel, type Party } from '../adventurers/party';
+import { potionSharingOf } from '../adventurers/policies';
 import { choosePotion, describePack, potionDrinkText, spendPotions, takePotion, type PotionConfig } from '../adventurers/potions';
 import { pacedHitDice, spendHitDice } from '../adventurers/hit-dice';
 import { rollDice, type DiceSource } from '../core/dice';
@@ -173,6 +174,7 @@ function resolveFight(p: Party, q: ReadonlyQuest, context: ExpeditionContext): v
   const bossFight = profile.lastFightForbidsRetreat && p.progress === q.encounters.length - 1;
   const outcome = combat(fighters, spec, rng.seed(), {
     potions: p.potions,
+    ...(p.policies?.potionSharing ? { potionSharing: p.policies.potionSharing } : {}),
     ...(p.blessed ? { blessingHp: context.blessingHpPerLevel * partyLevel(p) } : {}),
     noRetreat: bossFight,
     ...(profile.lairDepth ? { lairDepth: { index: p.progress, total: q.encounters.length } } : {}),
@@ -286,8 +288,8 @@ function shortRest(p: Party, q: ReadonlyQuest, context: ExpeditionContext): void
   log(context, 'party', `${p.name} take a Short rest (1 hour).${details.length ? ` ${details.join(' ')}` : ''}`);
   if (turnBack(p, q, startedWith, context)) return;
   const drinks: string[] = [];
-  for (const h of aliveMembers(p)) {
-    if (!isBloodied(h)) continue;
+  const bloodied = aliveMembers(p).filter((h) => isBloodied(h));
+  for (const h of potionSharingOf(p.policies?.potionSharing).order(bloodied)) {
     const tier = choosePotion(p.potions, context.potions.tiers, { hp: h.hp, maxHp: h.maxHp, fallen: false });
     if (!tier) break;
     const roll = rollDice(tier.formula, source);

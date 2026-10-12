@@ -66,3 +66,12 @@ Fixture migration:
 - `CHANGELOG.md`: the Potion sharing policy.
 
 ## Comments
+
+Decisions left to this slice:
+
+- The two orders are `company-order` and `most-hurt`. They live behind `PotionSharing` in `src/adventurers/policies.ts`. `most-hurt` serves heroes at 0 hit points first, then the lowest `hp / maxHp`, and keeps company order when those are equal.
+- The weights are `policies.potionSharing`, a weighted list of `{ policy, weight }` owned by that module. The default is company order 50, most hurt 50. The company roster receives the section and passes the list into `createParty`.
+- The draw is the last random step of `createParty`, after classes, heroes and the company name: one `rng.weighted` call. A company with no `policies` is served in company order. The expedition forwards a recorded policy on the combat options; the Short rest reads it from the company. Log lines are unchanged.
+- `createParty` defaults the weight list to that module default, so a direct call still draws. The roster always passes the configured list.
+- `test/lairs.test.ts` ("every town starts with lairs and their raids reach the board") no longer requires a lair bounty to still be open at hour 600 of seed 5. The new draw moves later world events, and that bounty has left the board by then. The test still requires the town to start with lairs, raids during the 600 hours, and a lair bounty on the open board at some hour (seed 5 posts one by hour 3). The named survivors — smoke, combat-space seed 75, lairs seed 14, deployment, the company roster seeded loops, and the combat potion tests — did not need a new seed or a new expectation.
+- `test/expedition.test.ts` ("passes a blessing and the no-retreat rule into the final lair fight") now also expects the company's recorded sharing policy on the combat options, because the expedition forwards it. Blessing, no retreat, lair depth and the empty pack are unchanged.

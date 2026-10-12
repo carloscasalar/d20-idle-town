@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { CompanyRoster, DEFAULT_COMPANY_ROSTER_CONFIG, type CompanyRosterConfig, type RosterEvent, type RosterContext } from '../src/adventurers/company-roster';
+import { DEFAULT_POLICIES_CONFIG } from '../src/adventurers/policies';
 import { aliveMembers, createParty, type Party, type ReadonlyParty } from '../src/adventurers/party';
 import { killHero, resurrectionCost } from '../src/adventurers/hero';
 import { Rng } from '../src/core/rng';
@@ -16,7 +17,7 @@ import { DEFAULT_HOLDING_CONFIG } from '../src/town/assets';
 function setup(config: Partial<CompanyRosterConfig> = {}) {
   const rng = new Rng(8);
   const town = generateTown(rng, DEFAULT_TOWN_CONFIG, DEFAULT_HOLDING_CONFIG);
-  const roster = new CompanyRoster({ ...DEFAULT_COMPANY_ROSTER_CONFIG, ...config }, DEFAULT_HERO_ECONOMY, DEFAULT_TOWN_CONFIG, DEFAULT_HOLDING_CONFIG);
+  const roster = new CompanyRoster({ ...DEFAULT_COMPANY_ROSTER_CONFIG, ...config }, DEFAULT_HERO_ECONOMY, DEFAULT_TOWN_CONFIG, DEFAULT_HOLDING_CONFIG, DEFAULT_POLICIES_CONFIG);
   const events: RosterEvent[] = [];
   const context: RosterContext = {
     town, rng, tick: 1,

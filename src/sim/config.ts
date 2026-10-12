@@ -1,5 +1,6 @@
 import { DEFAULT_COMPANY_ROSTER_CONFIG, type CompanyRosterConfig } from '../adventurers/company-roster';
 import { DEFAULT_HERO_ECONOMY, type HeroEconomyConfig } from '../adventurers/hero';
+import { DEFAULT_POLICIES_CONFIG, type PoliciesConfig } from '../adventurers/policies';
 import { DEFAULT_POTION_CONFIG, type PotionConfig } from '../adventurers/potions';
 import { parseDice } from '../core/dice';
 import { freeze } from '../core/freeze';
@@ -37,6 +38,7 @@ export interface GameConfig {
   encounters: EncounterConfig;
   heroes: HeroEconomyConfig;
   potions: PotionConfig;
+  policies: PoliciesConfig;
   town: TownConfig;
   holdings: HoldingConfig;
   items: ItemConfig;
@@ -57,6 +59,7 @@ export const DEFAULT_CONFIG: GameConfig = freeze({
   encounters: DEFAULT_ENCOUNTER_CONFIG,
   heroes: DEFAULT_HERO_ECONOMY,
   potions: DEFAULT_POTION_CONFIG,
+  policies: DEFAULT_POLICIES_CONFIG,
   town: DEFAULT_TOWN_CONFIG,
   holdings: DEFAULT_HOLDING_CONFIG,
   items: DEFAULT_ITEM_CONFIG,
@@ -335,6 +338,23 @@ const potionsSpec: Spec = {
   },
 };
 
+const policiesSpec: Spec = {
+  kind: 'section',
+  fields: {
+    potionSharing: {
+      kind: 'list',
+      weights: true,
+      item: {
+        kind: 'section',
+        fields: {
+          policy: { kind: 'enum', values: ['company-order', 'most-hurt'] },
+          weight: count,
+        },
+      },
+    },
+  },
+};
+
 const SPEC: Spec = {
   kind: 'section',
   fields: {
@@ -350,6 +370,7 @@ const SPEC: Spec = {
     encounters: encountersSpec,
     heroes: heroesSpec,
     potions: potionsSpec,
+    policies: policiesSpec,
     town: townSpec,
     holdings: sectionField(GAME_SPEC, 'holdings'),
     items: itemsSpec,

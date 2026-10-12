@@ -10,6 +10,12 @@ Everything below is part of the first release, which has not been tagged yet.
 
 ### 2026-10-12
 
+- A company draws a Potion sharing policy once, when it is constituted:
+  company order, or fallen heroes first and then the lowest hit point
+  fraction. The weights are `policies.potionSharing`, default 50 / 50. A
+  merger keeps the host's policies. A company with no recorded policy is
+  served in company order.
+
 - A company restocks at the apothecary until the pack can cover half of each
   living hero's maximum hit points (`services.potionCoverFraction`, default
   0.5), with at least one potion per living hero, favouring the lower tiers.

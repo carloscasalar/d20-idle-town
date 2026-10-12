@@ -417,6 +417,13 @@ fight badly hurt abandons the contract and walks home.
   options when a test supplies one. The engine receives a number from `heal`
   and does not roll the potion, so a low roll and a high roll leave the same
   engine log until the first drink.
+- Constituting a company draws its Potion sharing policy once, from the same
+  generator, after that company's classes, heroes and name are chosen. The
+  draw is one weighted roll whatever the weights are, so later world draws
+  move by that one step and a seed still reproduces itself. The company keeps
+  the result on a policies object. Combat and the Short rest ask that policy
+  only for the order in which Bloodied heroes are served. A company with no
+  recorded policy is served in company order. A merger keeps the host's policies.
 - The engine is itself deterministic under a seed, so `seed + tick order` fixes
   the entire run.
 
@@ -436,6 +443,7 @@ scripted 2d4+2 of 8.
 | --- | --- |
 | `test/potions.test.ts` | Smallest covering tier, strongest fallback, a fallen hero's maximum, pack wording |
 | `test/potion-buying.test.ts` | Stock target, tier choice, budget step-down, resurrection reserve, one tier per visit, ruined and empty catalogues, `potionCoverFraction` |
+| `test/potion-sharing.test.ts` | Both sharing orders in combat and at the Short rest, no recorded policy, one draw per company, host policies on a merger, weight validation |
 | `test/dice.test.ts` | Formula parsing, scripted and seeded rolls, bounds, invalid formulas, derived Assured healing |
 | `test/hit-dice.test.ts` | Engine HP parser, minimum healing, pure spending, quota, full-HP stopping, exhausted heroes, level-up, death and resurrection |
 | `test/expedition.test.ts` | Separate Short rest hour, dice/retreat/potion order, shared local rolls including rest potions, world seed isolation, encounter bounds, Long rest in every lodging case |

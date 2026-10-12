@@ -1,4 +1,5 @@
 import { CompanyRoster, DEFAULT_COMPANY_ROSTER_CONFIG } from '../src/adventurers/company-roster';
+import { DEFAULT_POLICIES_CONFIG } from '../src/adventurers/policies';
 import { describe, expect, it } from 'vitest';
 import { createHero, gainXp, killHero, resurrectHero, resurrectionCost } from '../src/adventurers/hero';
 import { aliveMembers, createParty, partyLevel } from '../src/adventurers/party';
@@ -45,7 +46,7 @@ describe('party merging', () => {
     killHero(donor.members[0]!);
     host.gold = 10;
     donor.gold = 5;
-    const roster = new CompanyRoster(DEFAULT_COMPANY_ROSTER_CONFIG, DEFAULT_HERO_ECONOMY, DEFAULT_TOWN_CONFIG, DEFAULT_HOLDING_CONFIG);
+    const roster = new CompanyRoster(DEFAULT_COMPANY_ROSTER_CONFIG, DEFAULT_HERO_ECONOMY, DEFAULT_TOWN_CONFIG, DEFAULT_HOLDING_CONFIG, DEFAULT_POLICIES_CONFIG);
     roster.replaceForScenario([host, donor]);
     const leftover = roster.merge(host, donor, { coin: openCoin({ goldPaid: 0, goldSpentByHeroes: 0 }) });
     expect(roster.isReady(host)).toBe(true);

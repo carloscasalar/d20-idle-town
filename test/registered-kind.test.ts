@@ -27,6 +27,7 @@ import { DEFAULT_ENCOUNTER_CONFIG } from '../src/quests/encounters';
 import { DEFAULT_ITEM_CONFIG } from '../src/items/items';
 import { DEFAULT_COMPANY_ROSTER_CONFIG } from '../src/adventurers/company-roster';
 import { CompanyRoster } from '../src/adventurers/company-roster';
+import { DEFAULT_POLICIES_CONFIG } from '../src/adventurers/policies';
 
 const encounter: EncounterSpec = {
   difficulty: 'easy',
@@ -129,7 +130,7 @@ describe('a registered kind of work', () => {
     expect(company.questId).toBe(work.id);
 
     const combat = vi.fn<CombatResolver>(() => outcome(company));
-    const roster = new CompanyRoster(DEFAULT_COMPANY_ROSTER_CONFIG, DEFAULT_HERO_ECONOMY, DEFAULT_TOWN_CONFIG, DEFAULT_HOLDING_CONFIG);
+    const roster = new CompanyRoster(DEFAULT_COMPANY_ROSTER_CONFIG, DEFAULT_HERO_ECONOMY, DEFAULT_TOWN_CONFIG, DEFAULT_HOLDING_CONFIG, DEFAULT_POLICIES_CONFIG);
     roster.replaceForScenario([company]);
     const expedition: ExpeditionContext = {
       quest: work,

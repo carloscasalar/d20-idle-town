@@ -1,4 +1,5 @@
 import { CompanyRoster, DEFAULT_COMPANY_ROSTER_CONFIG } from '../src/adventurers/company-roster';
+import { DEFAULT_POLICIES_CONFIG } from '../src/adventurers/policies';
 import assert from 'node:assert/strict';
 import { describe, expect, it } from 'vitest';
 import { createHero, killHero } from '../src/adventurers/hero';
@@ -362,7 +363,7 @@ describe('homecoming payments', () => {
     const ledger = { heroesDied: 0, partiesWiped: 0 };
     const statistics = { goldPaid: 0, goldSpentByHeroes: 0 };
     const reports: string[] = [];
-    const roster = new CompanyRoster(DEFAULT_COMPANY_ROSTER_CONFIG, DEFAULT_HERO_ECONOMY, DEFAULT_TOWN_CONFIG, DEFAULT_HOLDING_CONFIG);
+    const roster = new CompanyRoster(DEFAULT_COMPANY_ROSTER_CONFIG, DEFAULT_HERO_ECONOMY, DEFAULT_TOWN_CONFIG, DEFAULT_HOLDING_CONFIG, DEFAULT_POLICIES_CONFIG);
     roster.replaceForScenario([p]);
     const board = new Board(DEFAULT_BOARD_CONFIG);
     board.replaceForScenario([q]);

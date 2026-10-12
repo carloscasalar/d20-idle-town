@@ -4,6 +4,7 @@ import type { MagicItem } from '../items/items';
 import { HERO_CLASS_NAMES, type HeroClassName } from 'battlecast-engine';
 import type { DeepReadonly } from '../core/readonly';
 import { createHero, type Hero } from './hero';
+import { DEFAULT_POLICIES_CONFIG, drawPotionSharing, type CompanyPolicies, type PotionSharingWeight } from './policies';
 import type { PotionPack } from './potions';
 
 export type PartyStatus =
@@ -35,6 +36,8 @@ export interface Party {
   arrivedAt: number;
   /** Healing potions in the shared pack, counted per tier. */
   potions: PotionPack;
+  /** Sharing and, later, other company choices. Absent means company order. */
+  policies?: CompanyPolicies;
   /** Lifetime ledger. */
   earned: number;
   spent: number;
@@ -82,11 +85,19 @@ export function rollClasses(rng: Rng, size: number): HeroClassName[] {
   return chosen;
 }
 
-export function createParty(rng: Rng, level: number, size: number, tick: number, startingGoldPerLevel: number): Party {
+export function createParty(
+  rng: Rng,
+  level: number,
+  size: number,
+  tick: number,
+  startingGoldPerLevel: number,
+  sharingWeights: readonly PotionSharingWeight[] = DEFAULT_POLICIES_CONFIG.potionSharing,
+): Party {
   const members: Hero[] = rollClasses(rng, size).map((cls) => createHero(rng, level, cls));
+  const name = partyName(rng);
   return {
     id: rng.id('party'),
-    name: partyName(rng),
+    name,
     members,
     gold: startingGoldPerLevel * level,
     status: 'idle',
@@ -98,6 +109,7 @@ export function createParty(rng: Rng, level: number, size: number, tick: number,
     questsFailed: 0,
     arrivedAt: tick,
     potions: {},
+    policies: { potionSharing: drawPotionSharing(rng, sharingWeights) },
     earned: 0,
     spent: 0,
     stash: [],

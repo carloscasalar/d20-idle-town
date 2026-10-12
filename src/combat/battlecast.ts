@@ -2,6 +2,7 @@ import { buildHero, Encounter, EncounterError, getFootprintSize, getMonsterByNam
 import type { DeepReadonly } from '../core/readonly';
 import { Rng } from '../core/rng';
 import { combinedEffect, heroAc, isBloodied, skillBonus, WEAPON_CLASSES, type Hero, type HeroEconomyConfig } from '../adventurers/hero';
+import { potionSharingOf, type PotionSharingPolicy } from '../adventurers/policies';
 import { choosePotion, potionDrinkText, takePotion, type PotionConfig, type PotionPack } from '../adventurers/potions';
 import { rollDice, type DiceSource } from '../core/dice';
 import { freeze } from '../core/freeze';
@@ -75,6 +76,8 @@ export const DEFAULT_COMBAT_CONFIG: CombatConfig = freeze({
 export interface CombatOptions {
   /** Healing potions available in the shared pack (defaults to none). */
   potions?: PotionPack;
+  /** Who is served first when the pack is short. Absent means company order. */
+  potionSharing?: PotionSharingPolicy;
   /** Potion rolls. Production draws a child generator after placement; tests script this. */
   dice?: DiceSource;
   /** A temple blessing: extra hit points for the whole company. */
@@ -246,11 +249,16 @@ export function runCombat(heroes: Hero[], spec: DeepReadonly<EncounterSpec>, see
       const c = enc.creatures.find((x) => x.id === idByHero.get(h.id));
       return c?.isAlive && c.currentHp > 0 && !c.conditions.includes('unconscious');
     });
+    const bloodied = [];
     for (const h of fighters) {
-      if (!companion) break;
       const c = enc.creatures.find((x) => x.id === idByHero.get(h.id));
       if (!c?.isAlive || !isBloodied({ hp: c.currentHp, maxHp: c.maxHp })) continue;
       if (c.currentHp > 0 && c.conditions.includes('unconscious')) continue;
+      bloodied.push({ hero: h, creature: c, hp: c.currentHp, maxHp: c.maxHp });
+    }
+    for (const drinker of potionSharingOf(opts.potionSharing).order(bloodied)) {
+      if (!companion) break;
+      const { hero: h, creature: c } = drinker;
       const fallen = c.currentHp <= 0;
       const tier = choosePotion(pack, catalogue.tiers, { hp: c.currentHp, maxHp: c.maxHp, fallen });
       if (!tier) break;

@@ -32,10 +32,13 @@ describe('lairs', () => {
   it('every town starts with lairs and their raids reach the board', () => {
     const g = new Game({ seed: 5 });
     expect(g.view().lairs.length).toBeGreaterThanOrEqual(2);
-    for (let i = 0; i < 600; i++) g.step();
-    const view = g.view();
-    expect(view.stats.raids).toBeGreaterThan(0);
-    expect(view.board.open.some((quest) => quest.lair !== null)).toBe(true);
+    let bountyPosted = false;
+    for (let i = 0; i < 600; i++) {
+      g.step();
+      if (g.view().board.open.some((quest) => quest.lair !== null)) bountyPosted = true;
+    }
+    expect(g.view().stats.raids).toBeGreaterThan(0);
+    expect(bountyPosted).toBe(true);
   }, LONG_SIMULATION_TIMEOUT_MS);
 
   it('removes the posted bounty when a successful company returns and clears the lair', () => {

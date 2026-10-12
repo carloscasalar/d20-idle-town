@@ -1,4 +1,5 @@
 import { CompanyRoster, DEFAULT_COMPANY_ROSTER_CONFIG } from '../src/adventurers/company-roster';
+import { DEFAULT_POLICIES_CONFIG } from '../src/adventurers/policies';
 import { describe, expect, it, vi } from 'vitest';
 import { fixedHp, killHero, resurrectionCost } from '../src/adventurers/hero';
 import { aliveMembers, createParty, partyLevel, type Party } from '../src/adventurers/party';
@@ -70,7 +71,7 @@ function setup(level = 1) {
   const combat = vi.fn<CombatResolver>(() => outcome(party, 'party'));
   const settleQuest = vi.fn<ExpeditionContext['settleQuest']>((_quest, _party, success) => { calls.push(`settle:${success}`); });
   const leaveLoot = vi.fn<ExpeditionContext['leaveLoot']>((_quest, _party, fallen) => { calls.push(`loot:${fallen.length}`); });
-  const roster = new CompanyRoster(DEFAULT_COMPANY_ROSTER_CONFIG, DEFAULT_HERO_ECONOMY, DEFAULT_TOWN_CONFIG, DEFAULT_HOLDING_CONFIG);
+  const roster = new CompanyRoster(DEFAULT_COMPANY_ROSTER_CONFIG, DEFAULT_HERO_ECONOMY, DEFAULT_TOWN_CONFIG, DEFAULT_HOLDING_CONFIG, DEFAULT_POLICIES_CONFIG);
   roster.replaceForScenario([party]);
   const board = new Board(DEFAULT_BOARD_CONFIG);
   board.replaceForScenario([quest]);
@@ -240,7 +241,10 @@ describe('an expedition hour', () => {
 
     advanceExpedition(party, context);
 
-    expect(options).toEqual({ blessingHp: 3, noRetreat: true, lairDepth: { index: 1, total: 2 }, potions: {} });
+    expect(options).toEqual({
+      blessingHp: 3, noRetreat: true, lairDepth: { index: 1, total: 2 }, potions: {},
+      ...(party.policies?.potionSharing ? { potionSharing: party.policies.potionSharing } : {}),
+    });
   });
 
   it('leaves fallen gear on retreat and defers settlement until homecoming', () => {
