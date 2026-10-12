@@ -12,4 +12,8 @@ The validation of a potion tier in `src/sim/config.ts` accepts a selling price t
 
 Reject it at configuration time: a tier's `price` is a whole number, as `productionCost` already is. A test in `test/game-config.test.ts` next to the production cost validation.
 
+## Same class, found by the review of issue 04
+
+A healing formula whose total can be negative, such as `1d4-20`, also passes validation (the dice module accepts negative bonuses because a Hit Die needs them). A potion tier's formula should not be able to heal less than 1; reject it at configuration time as well.
+
 ## Comments
