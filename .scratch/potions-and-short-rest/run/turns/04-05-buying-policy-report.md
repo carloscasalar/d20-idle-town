@@ -53,3 +53,53 @@ Questions: none.
 Bugs: none left open.
 
 Not done: the party card was not opened in a browser. No UI code changed; the card still reads the pack the view already orders. No push; the orchestrator pushes.
+
+## Correction 1
+
+Two tests were added to `test/potion-buying.test.ts`. No production code and no existing expected value changed.
+
+A 33 HP hero alone has need `ceil(33 × 0.5) = 17`. Half of that is 8.5, so the tier is basic (assured 8) and the count is `ceil(17 / 8) = 3`, which is 150 gp. `floor` would make the need 16 and the count 2. The test expects `{ basic: 3 }`, gold `RESERVE + 850`, and one line for 150 gp.
+
+The step-down catalogue is `weak` 1d2+2 (assured 4, 10 gp), `mid` 2d4+2 (assured 8, 100 gp), `odd` 4d4+4 (assured 16, 50 gp), one 40 HP hero, purse reserve + 299 gp. Need is 20 and the cap is 10, so the chosen tier is `mid`. Three mid cost 300 gp, which the purse cannot pay. `odd` is cheaper than `mid` but stronger (16 > 8), so the written filter skips it. Five `weak` cost 50 gp and fit. That is the result the Comments describe, so the test pins `{ weak: 5 }`, gold `RESERVE + 249`, and one line for 50 gp. Without the filter the step would buy two `odd` (100 gp), which also fits.
+
+Each mutation was applied, the new test failed, and the mutation was undone.
+
+`Math.ceil` changed to `Math.floor` on the need:
+
+```
+FAIL  test/potion-buying.test.ts > buying potions through the potions step > buys three basic for a 33 HP hero alone
+AssertionError: expected { basic: 2 } to deeply equal { basic: 3 }
+
+- Expected
++ Received
+
+  {
+-   "basic": 3,
++   "basic": 2,
+  }
+```
+
+The strength filter removed from the step-down:
+
+```
+FAIL  test/potion-buying.test.ts > buying potions through the potions step > steps down to five weak when the stronger cheaper tier is above the chosen one
+AssertionError: expected { odd: 2 } to deeply equal { weak: 5 }
+
+- Expected
++ Received
+
+  {
+-   "weak": 5,
++   "odd": 2,
+  }
+```
+
+Check results:
+
+| Command or check | Result |
+| --- | --- |
+| `pnpm typecheck` | Pass. |
+| `pnpm test` | Pass: 32 files passed, 2 skipped; 700 tests passed, 6 skipped (706). |
+| Regression hashes, seeded loops, smoke, combat-space seed 75, lairs seed 14, deployment | Not in this diff. `src/town/services.ts` is unchanged. |
+
+Questions: none. Bugs: none. Not done: nothing left from this correction.

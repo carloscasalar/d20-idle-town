@@ -96,6 +96,15 @@ describe('buying potions through the potions step', () => {
     expect(events).toEqual([receipt(party.name, 2, 'basic', 100)]);
   });
 
+  it('buys three basic for a 33 HP hero alone', () => {
+    const { party, bought, events } = visit({ heroes: [{ maxHp: 33 }], gold: RESERVE + 1000 });
+    expect(bought).toBe(true);
+    expect(party.potions).toEqual({ basic: 3 });
+    expect(party.gold).toBe(RESERVE + 850);
+    expect(party.spent).toBe(150);
+    expect(events).toEqual([receipt(party.name, 3, 'basic', 150)]);
+  });
+
   it('buys nothing when the pack already covers half of each living hero and holds one potion each', () => {
     const covered = visit({ heroes: [{ maxHp: 32 }], gold: RESERVE + 1000, pack: { greater: 1 } });
     expect(covered.bought).toBe(false);
@@ -258,6 +267,20 @@ describe('buying potions through the potions step', () => {
     expect(party.potions).toEqual({ earlier: 1 });
     expect(party.gold).toBe(RESERVE + 960);
     expect(events).toEqual([receipt(party.name, 1, 'earlier', 40)]);
+  });
+
+  it('steps down to five weak when the stronger cheaper tier is above the chosen one', () => {
+    const tiers: PotionTier[] = [
+      { name: 'weak', formula: '1d2+2', price: 10 },
+      { name: 'mid', formula: '2d4+2', price: 100 },
+      { name: 'odd', formula: '4d4+4', price: 50 },
+    ];
+    const { party, bought, events } = visit({ heroes: [{ maxHp: 40 }], gold: RESERVE + 299, tiers });
+    expect(bought).toBe(true);
+    expect(party.potions).toEqual({ weak: 5 });
+    expect(party.gold).toBe(RESERVE + 249);
+    expect(party.spent).toBe(50);
+    expect(events).toEqual([receipt(party.name, 5, 'weak', 50)]);
   });
 
   it('steps down the healing ladder to the next cheaper tier whose count the purse can pay', () => {
