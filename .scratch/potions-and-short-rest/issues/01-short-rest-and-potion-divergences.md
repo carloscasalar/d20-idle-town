@@ -1,6 +1,6 @@
 # Short rest and healing potion divergences from D&D 2024
 
-Status: needs-triage
+Status: done
 
 ## Remaining divergences and ideal behaviour
 
@@ -81,3 +81,12 @@ administration narration changes the regression trajectories.
 | `scale 1.75: quests 63  failed 45  deaths 146 (2.31/quest)  wiped 15.7 of 44  raised 13` | `scale 1.75: quests 63  failed 45  deaths 146 (2.31/quest)  wiped 15.7 of 44  raised 13` |
 
 ## Comments
+
+### Closed by the owner's decision (2026-10-12)
+
+This issue was the starting material of the [PRD](../PRD.md), which is implemented in full (issues 02 to 09).
+
+- Divergence 1 (Short Rest recovery) is resolved by [issue 03](03-hit-dice-at-the-short-rest.md): commits `04d8b91`, `d970272`.
+- Divergence 2 (potion strength and price) is resolved by [issue 04](04-tiered-potions-with-real-dice.md): commits `2b1c3fc`, `b9e3260`, `59530a0`.
+- The deferred difficulty retuning is closed by [issue 09](09-retune-confirmation.md): the three final checks passed with no value moved.
+- Divergences 3 and 4 (the Bonus Action and the 5-foot distance for drinking or giving a potion) stay as the accepted approximation "between rounds, at no action cost". The PRD puts them out of scope because the combat engine cannot model either; they reopen only as a new effort if the engine changes.
