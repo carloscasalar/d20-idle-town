@@ -642,9 +642,11 @@ export class Game {
   /** The guild keeps a standing contract on every lair once someone in town could plausibly take it. */
   private postAssaults(): void {
     const guild = serviceOf(this.town, 'guild');
-    if (guild.ruined || guild.treasury < this.config.world.postingThreshold) return;
+    if (guild.ruined || this.config.kinds.assault.rewardPerLevel <= 0) return;
     for (const lair of this.activeLairs) {
+      if (this.board.rewardTreasury(guild) < this.config.world.postingThreshold) return;
       if (lair.questId) continue;
+      if (this.board.bountyRewardCap(guild, this.config.quests) <= 0) continue;
       const strongest = Math.max(0, ...this.activeParties.map(partyLevel));
       if (strongest < lair.level - this.config.kinds.assault.levelGap) continue;
       this.board.postBounty(lair, this.boardContext());

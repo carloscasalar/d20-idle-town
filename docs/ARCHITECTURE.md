@@ -211,7 +211,7 @@ enchanter buys back.
   `generateQuest` prices a contract from the holding's income, the difficulty
   mix, the employer's generosity and desperation, limited by `treasuryShare`
   of the required `QuestTerms.rewardTreasury` supplied by the Board before
-  applying `minimumReward`. `generateAssault` builds the standing bounty on a lair.
+  applying `minimumReward`. `generateAssault` builds the standing bounty on a lair from the Board-supplied `AssaultFunding.rewardTreasury` cap. Standalone callers can still supply whole-treasury funding.
 - **`job-intel.ts`** — job intelligence. It is the only writer, after a job is
   created, of the two public facts (whether the encounter count is known, and
   how many encounters are revealed) and of what each company has tried: a free
@@ -307,15 +307,26 @@ those operations live in job intelligence, and knowledge only grows. `recordsFor
 `replaceForScenario` are test-only, used by scenario setup; regression serialization uses `all()`.
 
 The Board's `rewardTreasury(employer)` reads that employer's current treasury
-and, for an entry in `board.rewardSetAsideFor`, subtracts rewards on its `open`
-and `taken` Contracts. A service entry reaches its operator; a kind entry
-reaches every employer of that kind. Only the apothecary is enabled by default.
-The Board supplies this amount to Contract generation via `WorkContext`.
-No duplicate employer-to-work link or stored balance is introduced: paying,
-failing or expiring a Contract releases the amount through terminal status.
-Posting moves no gold; minimum rewards and upkeep retain their existing
-rules. Game still compares posting thresholds with the full treasury; the
-40-seed, 3,000-hour acceptance run stayed above zero without a threshold change.
+and, for an entry in `board.rewardSetAsideFor`, subtracts rewards on all its
+`open` and `taken` work, Contracts and Bounties. A service entry reaches its
+operator; a kind entry reaches every employer of that kind. Only the apothecary
+is enabled by default. `WorkContext` supplies this query to Contract generation.
+`bountyRewardCap(employer, quests)` applies the rounded-down treasury share for
+listed employers and uses exactly the whole treasury otherwise; Bounty creation
+passes this cap to `generateAssault`, which also limits it by the per-level
+reward. No minimum applies to Bounties. Board creation rejects a nonpositive
+Bounty reward before generation or posting.
+
+No duplicate employer-to-work link or stored balance is introduced: terminal
+status releases the amount on payment, failure or Contract expiry. Posting moves
+no gold; Contract minimum rewards and upkeep retain their existing rules.
+Game checks a listed guild's Bounty threshold against `rewardTreasury` for each
+lair, so earlier postings in the same hour can defer later ones. It skips any
+Bounty that cannot pay a positive reward before drawing randomness. An unlisted
+guild keeps its whole-treasury threshold. Contract thresholds, both hourly and
+raids, still read the whole treasury. The default apothecary-only list never
+reaches Bounty posting; the default random draws and regression hashes remain
+unchanged.
 
 The ordering of `step()` is the game:
 
@@ -482,7 +493,7 @@ seeds 1 and 2 keep those fights, with a scripted 2d4+2 of 8.
 
 | Path | What it covers |
 | --- | --- |
-| `test/reward-set-aside.test.ts` | Board and hourly-game reward sizing with exact treasuries, open/taken obligations, three endings, every configured merchant, service/kind isolation, empty and missing lists, Contract-only accounting and unchanged upkeep |
+| `test/reward-set-aside.test.ts` | Board and hourly-game reward sizing with exact treasuries, open/taken obligations, Contract and Bounty endings, every configured merchant, service/kind isolation, empty and missing lists, mixed work accounting, fractional Bounty caps without a minimum, hourly threshold deferral, whole-treasury unlisted guilds, zero-reward rejection and unchanged upkeep |
 | `test/potions.test.ts` | Smallest covering tier, strongest fallback, a fallen hero's maximum, pack wording |
 | `test/apothecary-production.test.ts` | Exact per-potion sink/sale order and balances, one receipt after all pairs, independent configured costs, instant nonzero ticks, every tier from a treasury in debt, permanent ruin, game-view statistics and tuning report |
 | `test/coin.test.ts` | Coin reasons and holder accounting, including production moving only spent and lifetime production spending |

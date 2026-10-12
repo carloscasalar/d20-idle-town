@@ -80,16 +80,89 @@ describe('Reward set-aside through the Board', () => {
     expect(employer.treasury).toBe(1000);
   });
 
-  it('sets aside Contracts only, even when a configured employer also posts a Bounty', () => {
-    const { board, context, post } = scene(['guild']);
+  it('sizes a guild Contract after its open and taken Contracts and Bounties', () => {
+    const { board, company, context, post } = scene(['guild']);
     const guild = serviceOf(context.town, 'guild');
     Object.assign(guild, { treasury: 1000, generosity: 100 });
+    const lairs = [1, 1].map((level) => createLair(context.rng, 'goblins', level, 0, 4, DEFAULT_CONFIG.lairs));
+    context.lairs = lairs;
+    const takenBounty = board.postBounty(lairs[0]!, context);
+    expect(takenBounty.reward).toBe(150);
+    board.take(company, takenBounty, context);
+    const openBounty = board.postBounty(lairs[1]!, context);
+    expect(openBounty.reward).toBe(150);
+    const takenContract = post(guild);
+    expect(takenContract.reward).toBe(560);
+    const otherCompany = createParty(context.rng, 5, 4, 0, 50, DEFAULT_CONFIG.policies.potionSharing);
+    board.take(otherCompany, takenContract, context);
+    const openContract = post(guild);
+    expect(openContract.reward).toBe(112);
+    expect(post(guild).reward).toBe(22);
+    expect(guild.treasury).toBe(1000);
+  });
+
+  it.each([
+    { treasury: 1003, contract: 802, level: 2, bounty: 160 },
+    { treasury: 1000, contract: 800, level: 1, bounty: 150 },
+    { treasury: 26, contract: 20, level: 1, bounty: 4 },
+  ])('sizes a listed guild Bounty with treasury $treasury after a Contract, without a minimum', ({ treasury, contract, level, bounty }) => {
+    const { board, context, post } = scene(['guild']);
+    const guild = serviceOf(context.town, 'guild');
+    Object.assign(guild, { treasury, generosity: 100 });
+    expect(post(guild).reward).toBe(contract);
+    const lair = createLair(context.rng, 'goblins', level, 0, 4, DEFAULT_CONFIG.lairs);
+    context.lairs = [lair];
+    expect(board.postBounty(lair, context).reward).toBe(bounty);
+    expect(guild.treasury).toBe(treasury);
+  });
+
+  it.each([0, -10, 1])('refuses a Board Bounty whose treasury %s cannot fund a positive reward', (treasury) => {
+    const { board, context } = scene(['guild']);
+    const guild = serviceOf(context.town, 'guild');
+    guild.treasury = treasury;
     const lair = createLair(context.rng, 'goblins', 1, 0, 4, DEFAULT_CONFIG.lairs);
     context.lairs = [lair];
-    expect(board.postBounty(lair, context).reward).toBe(150);
-    expect(post(guild).reward).toBe(800);
-    expect(post(guild).reward).toBe(160);
-    expect(guild.treasury).toBe(1000);
+    expect(() => board.postBounty(lair, context)).toThrow('A Bounty needs a positive reward.');
+    expect(board.all()).toHaveLength(0);
+    expect(lair.questId).toBeNull();
+    expect(guild.questsPosted).toBe(0);
+  });
+
+  it.each([
+    { ending: 'paid', treasury: 850, contract: 560, received: 150 },
+    { ending: 'failed', treasury: 1000, contract: 680, received: 0 },
+  ] as const)('releases a $ending Bounty while another Bounty stays owed', ({ ending, treasury, contract, received }) => {
+    const { board, company, context, post } = scene(['guild']);
+    const guild = serviceOf(context.town, 'guild');
+    Object.assign(guild, { treasury: 1000, generosity: 100 });
+    const lairs = [1, 1].map((level) => createLair(context.rng, 'goblins', level, 0, 4, DEFAULT_CONFIG.lairs));
+    context.lairs = lairs;
+    const first = board.postBounty(lairs[0]!, context);
+    const second = board.postBounty(lairs[1]!, context);
+    expect([first.reward, second.reward]).toEqual([150, 150]);
+    board.take(company, first, context);
+    const purseBefore = company.gold;
+    board.settle(first, company, ending === 'paid', context);
+    expect(first.status).toBe(ending === 'paid' ? 'done' : 'failed');
+    expect(second.status).toBe('open');
+    expect(company.gold).toBe(purseBefore + received);
+    expect(guild.treasury).toBe(treasury);
+    expect(post(guild).reward).toBe(contract);
+  });
+
+  it('keeps an unlisted guild’s Bounties and Contracts sized from its whole treasury', () => {
+    const { board, company, context, post } = scene();
+    const guild = serviceOf(context.town, 'guild');
+    Object.assign(guild, { treasury: 101, generosity: 100 });
+    const lairs = [1, 1].map((level) => createLair(context.rng, 'goblins', level, 0, 4, DEFAULT_CONFIG.lairs));
+    context.lairs = lairs;
+    const first = board.postBounty(lairs[0]!, context);
+    expect(first.reward).toBe(101);
+    board.take(company, first, context);
+    expect(board.postBounty(lairs[1]!, context).reward).toBe(101);
+    expect(post(guild).reward).toBe(80);
+    expect(post(guild).reward).toBe(80);
+    expect(guild.treasury).toBe(101);
   });
 
   it.each([
@@ -141,6 +214,40 @@ describe('Reward set-aside through the Board', () => {
 });
 
 describe('Reward set-aside in the hourly game', () => {
+  it('waits for the listed guild’s available treasury, then posts at the threshold next hour', () => {
+    const game = bountyPostingScene(['guild'], 524);
+    game.step();
+    expect(bountyRewards(game)).toEqual([]);
+    game.step();
+    expect(bountyRewards(game)).toEqual([20]);
+    expect(game.view().town.employers.find((employer) => employer.service === 'guild')!.treasury).toBe(525);
+  });
+
+  it('checks an unlisted guild’s whole treasury even when its rewards owed exceed it', () => {
+    const game = bountyPostingScene([], 25);
+    game.step();
+    expect(bountyRewards(game)).toEqual([25]);
+  });
+
+  it.each([
+    { list: ['guild'], treasuryShare: 0, rewardPerLevel: 150 },
+    { list: ['guild'], treasuryShare: 0.01, rewardPerLevel: 150 },
+    { list: ['guild'], treasuryShare: 0.8, rewardPerLevel: 0 },
+    { list: [], treasuryShare: 0.8, rewardPerLevel: 0 },
+  ] as const)('never posts a zero reward with list $list, share $treasuryShare and per-level reward $rewardPerLevel', ({ list, treasuryShare, rewardPerLevel }) => {
+    const game = bountyPostingScene([...list], 525, treasuryShare, rewardPerLevel);
+    game.step();
+    expect(bountyRewards(game)).toEqual([]);
+    expect(game.view().lairs[0]!.bountyPosted).toBe(false);
+  });
+
+  it('checks the available treasury again after posting each Bounty in the same hour', () => {
+    const game = bountyPostingScene(['guild'], 550, 0.8, 150, 2);
+    game.step();
+    expect(bountyRewards(game)).toEqual([40]);
+    expect(game.view().lairs.map((lair) => lair.bountyPosted)).toEqual([true, false]);
+  });
+
   it('leaves upkeep able to take the apothecary below zero', () => {
     const game = Game.forTesting({ roster: { maxCompanies: 0 }, world: { maxOpenQuests: 0 } }, (scenario) => {
       scenario.tick = 23;
@@ -179,3 +286,39 @@ describe('Reward set-aside in the hourly game', () => {
     expect(game.view().town.employers.find((employer) => employer.service === 'apothecary')!.treasury).toBe(treasury);
   });
 });
+
+function bountyRewards(game: Game): number[] {
+  const { open, taken } = game.view().board;
+  return [...open, ...taken].filter((work) => work.kind === 'assault').map((work) => work.reward);
+}
+
+function bountyPostingScene(list: BoardConfig['rewardSetAsideFor'], treasury: number, treasuryShare = 0.8, rewardPerLevel = 150, lairCount = 1) {
+  return Game.forTesting({
+    seed: 7, board: { rewardSetAsideFor: list }, world: { maxOpenQuests: 0 },
+    roster: { maxCompanies: 1 }, quests: { treasuryShare }, kinds: { assault: { rewardPerLevel } },
+  }, (scenario) => {
+    const rng = new Rng(7);
+    scenario.tick = 22;
+    const guild = serviceOf(scenario.town, 'guild');
+    Object.assign(guild, { treasury, upkeepPerDay: 0 });
+    const holding = createAsset(rng, 'herb-garden', guild.id, DEFAULT_CONFIG.holdings);
+    holding.incomePerDay = 1;
+    guild.assets = [holding];
+    const owed = generateQuest(rng, {
+      employer: guild, rewardTreasury: 1000, asset: holding, theme: 'goblins', level: 1, partySize: 4, tick: 22,
+    }, DEFAULT_CONFIG);
+    owed.reward = 500;
+    holding.questId = owed.id;
+    const lairs = Array.from({ length: lairCount }, () => {
+      const lair = createLair(rng, 'goblins', 1, 0, 4, DEFAULT_CONFIG.lairs);
+      lair.raidCooldown = 10_000;
+      return lair;
+    });
+    const company = createParty(rng, 1, 4, 0, 50, DEFAULT_CONFIG.policies.potionSharing);
+    company.status = 'resting';
+    company.ticksLeft = 100;
+    scenario.parties = [company];
+    scenario.quests = [owed];
+    scenario.lairs = lairs;
+  });
+}

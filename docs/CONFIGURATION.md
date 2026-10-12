@@ -72,7 +72,7 @@ Tunables that belong to one kind of work, keyed by that kind's id. Defined in
 | `levelGap` | 1 | A bounty is posted once some company is within this many levels of the lair |
 | `encounters` | [3, 5] | Fights before the boss, inclusive, plus the boss |
 | `difficultyWeights` | easy 2, intermediate 4, hard 2 | Weight of each difficulty on a bounty |
-| `rewardPerLevel` | 150 | Guild gold per lair level, limited by the guild's treasury |
+| `rewardPerLevel` | 150 | Guild gold per lair level, capped by the whole treasury or, for a listed guild, its treasury share after rewards owed |
 
 ## `board`
 
@@ -80,7 +80,7 @@ The Board. Defined in `src/sim/board.ts`.
 
 | Field | Default | Meaning |
 | --- | --- | --- |
-| `rewardSetAsideFor` | [apothecary] | Employers whose outstanding Contract rewards are kept out of new reward sizing; town service or employer kind names |
+| `rewardSetAsideFor` | [apothecary] | Employers whose outstanding Contract and Bounty rewards are kept out of new reward sizing; town service or employer kind names |
 | `windfallDays` | 4 | Days of holding income recovered when a Contract succeeds |
 | `lootingDays` | 2 | Days of holding income lost when an unanswered Contract expires |
 | `failureRenownLoss` | 1 | Renown lost when work fails |
@@ -101,13 +101,18 @@ apothecary is enabled by default and measured for balance; the other employers
 remain untested for balance and can still go into debt.
 
 The Board computes the amount from that employer's `open` and `taken`
-Contracts. New rewards apply `quests.treasuryShare` to treasury minus that
-amount; `quests.minimumReward` still applies. Payment (`done`), failure and
-expiry (`failed`) release the amount. No gold moves when posting, and upkeep
-can still take the treasury below zero. Posting thresholds still read the
-full treasury, including for listed employers. At low available treasury, `minimumReward` can exceed the available
-amount; the measured 40-seed, 3,000-hour acceptance run stayed above zero
-(lowest +198 gp, no ruined apothecary), so the threshold rule is unchanged.
+Contracts and Bounties. Both new rewards apply `quests.treasuryShare` to treasury
+minus that amount, rounded down. A Contract still applies `quests.minimumReward`,
+which can exceed the remainder; a Bounty caps `kinds.assault.rewardPerLevel`
+times the lair's level by that share, without a minimum. Payment (`done`),
+failure and expiry (`failed`) release the amount. No gold moves when posting,
+and upkeep can still take the treasury below zero. Contract posting thresholds
+(hourly and raids) still read the full treasury. A listed guild's Bounty posting
+threshold reads the remainder, checked again for each lair in the hour; posting
+waits until it meets `world.postingThreshold`. No Bounty is posted for zero or
+less, even with a zero share or per-level reward. Outside the list, Bounties
+use the whole treasury for both sizing and the threshold, without a share;
+Contracts keep their existing whole-treasury sizing.
 
 ## `roster`
 
@@ -226,8 +231,8 @@ How a Contract or Bounty is sized and paid. Defined in `src/quests/quest.ts`.
 | `incomeDays` | 2 | Days of holding income in the base reward |
 | `levelPayFactor` | 10 | Added as level × level × this |
 | `rewardScale` | 0.6 | Scale applied after generosity and desperation |
-| `minimumReward` | 20 | Lowest reward, in gold |
-| `treasuryShare` | 0.8 | Most of the employer's reward-sizing treasury a reward may take, after any configured Reward set-aside |
+| `minimumReward` | 20 | Lowest Contract reward, in gold; does not apply to Bounties |
+| `treasuryShare` | 0.8 | Most of the reward-sizing treasury a Contract or listed employer’s Bounty may take, rounded down after any Reward set-aside |
 | `relicHoldings` | archive, catacombs, shrine, cemetery | Holdings that can pay with a relic |
 | `relicItemChance` | 0.12 | Chance of an item reward from those holdings |
 | `ordinaryItemChance` | 0.04 | Chance of an item reward from any other holding |
@@ -421,7 +426,7 @@ Defined in `src/sim/game-rules.ts`.
 | Field | Default | Meaning |
 | --- | --- | --- |
 | `maxOpenQuests` | 8 | Open jobs the Board will hold |
-| `postingThreshold` | 25 | Treasury an employer needs before posting a contract, and before a lair will raid one of their holdings. The guild also needs it before posting a bounty. |
+| `postingThreshold` | 25 | Treasury an employer needs before posting a contract, and before a lair will raid one of their holdings. For a listed guild, a Bounty needs this much treasury after outstanding rewards; otherwise it reads the whole treasury. |
 | `postingCooldown` | [12, 30] | Hours an employer waits after posting |
 | `ruinDays` | 3 | Days in debt before an employer is ruined |
 | `idleLevelWeight` | 3 | Weight of an idle or resting company's level when choosing what to post |

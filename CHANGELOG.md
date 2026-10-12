@@ -10,6 +10,14 @@ Everything below is part of the first release, which has not been tagged yet.
 
 ### 2026-10-12
 
+- Reward set-aside now counts open and taken Bounties alongside Contracts.
+  A listed guild sizes Bounties from the rounded-down treasury share after
+  rewards owed, with no minimum, and waits until that remainder meets the
+  posting threshold. Payment and failure release the amount; zero or negative
+  Bounty rewards are never posted. Contract thresholds keep reading the whole
+  treasury. Unlisted guilds and the apothecary-only default remain unchanged,
+  including the default random draws and regression hashes.
+
 - A potion tier's selling price must be a whole number of gold, and its
   formula's lowest total must be at least 1. Each die counts as at least 1,
   plus the bonus, worked out without rolling. The dice module still accepts a

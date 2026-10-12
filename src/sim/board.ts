@@ -53,6 +53,7 @@ export interface WorkPosting {
 
 export interface WorkContext extends BoardContext {
   rewardTreasury: (employer: Employer) => number;
+  bountyRewardCap: (employer: Employer) => number;
   config: DeepReadonly<BoardConfig>;
   kindTuning: DeepReadonly<WorkKindConfigs>;
   profileOf: (kind: QuestKind) => WorkProfile;
@@ -135,15 +136,25 @@ export class Board {
     return Object.freeze(this.work.filter((work) => work.status === 'taken'));
   }
 
-  /** Treasury available for sizing a new Contract reward; no gold is moved. */
+  /** Treasury available for sizing new work rewards; no gold is moved. */
   rewardTreasury(employer: Employer): number {
-    const enabled = this.config.rewardSetAsideFor.some((name) => name === employer.service || name === employer.kind);
-    if (!enabled) return employer.treasury;
+    if (!this.setsAsideRewards(employer)) return employer.treasury;
     const owed = this.work.reduce((total, work) => total + (
-      work.kind === contractProfile.id && work.giverId === employer.id && (work.status === 'open' || work.status === 'taken')
+      work.giverId === employer.id && (work.status === 'open' || work.status === 'taken')
         ? work.reward : 0
     ), 0);
     return employer.treasury - owed;
+  }
+
+  /** Listed Bounties use the Contract treasury share, without its minimum. */
+  bountyRewardCap(employer: Employer, quests: QuestConfig): number {
+    return this.setsAsideRewards(employer)
+      ? Math.floor(this.rewardTreasury(employer) * quests.treasuryShare)
+      : employer.treasury;
+  }
+
+  private setsAsideRewards(employer: Employer): boolean {
+    return this.config.rewardSetAsideFor.some((name) => name === employer.service || name === employer.kind);
   }
 
   byId(id: string | null): ReadonlyQuest | undefined {
@@ -255,6 +266,7 @@ export class Board {
       config: this.config,
       kindTuning: this.kindTuning,
       rewardTreasury: (employer) => this.rewardTreasury(employer),
+      bountyRewardCap: (employer) => this.bountyRewardCap(employer, context.quests),
       profileOf: (kind) => this.profile(kind),
       breakLair: (lair, company, work, context) => this.breakLair(lair, company, work, context),
     };
@@ -360,7 +372,11 @@ function postContract(quest: ReadonlyQuest, { employer, holding, lair: origin }:
 function createBounty(kind: QuestKind, { employer, lair }: WorkPosting, context: WorkContext): Quest {
   if (!lair) throw new Error('A Bounty needs a lair.');
   if (lair.questId !== null) throw new Error(`Cannot post a bounty on ${lair.name}: it already has one.`);
-  const work = generateAssault(context.rng, lair, employer, context.companySize, context.tick, context.config.difficultyScale, generationOf(context));
+  const rewardTreasury = context.bountyRewardCap(employer);
+  if (Math.min(rewardTreasury, context.kindTuning.assault.rewardPerLevel * lair.level) <= 0) {
+    throw new Error('A Bounty needs a positive reward.');
+  }
+  const work = generateAssault(context.rng, lair, { id: employer.id, rewardTreasury }, context.companySize, context.tick, context.config.difficultyScale, generationOf(context));
   return { ...work, kind };
 }
 
