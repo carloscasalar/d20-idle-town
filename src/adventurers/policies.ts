@@ -2,7 +2,7 @@ import { assuredHealing } from '../core/dice';
 import { freeze } from '../core/freeze';
 import type { Rng } from '../core/rng';
 import { isBloodied } from './hero';
-import { potionCount, type PotionPack, type PotionTier } from './potions';
+import { potionCount, takePotion, type PotionPack, type PotionTier } from './potions';
 
 /** How a company orders Bloodied heroes when the pack is short. */
 export type PotionSharingPolicy = 'company-order' | 'most-hurt';
@@ -47,7 +47,7 @@ const SHARING: Record<PotionSharingPolicy, PotionSharing> = {
 };
 
 /** A company with no recorded policy is served in company order. */
-export function potionSharingOf(policy: PotionSharingPolicy | undefined): PotionSharing {
+function potionSharingOf(policy: PotionSharingPolicy | undefined): PotionSharing {
   return policy === undefined ? SHARING['company-order'] : SHARING[policy];
 }
 
@@ -110,7 +110,7 @@ export function planDrinkingRound(
     const missing = adventurer.hp <= 0 ? adventurer.maxHp : adventurer.maxHp - adventurer.hp;
     const tier = chooseTier(stock, catalogue, missing);
     if (!tier) break;
-    holdOneLess(stock, tier.name);
+    takePotion(stock, tier.name);
     plan.push({
       id: adventurer.id,
       name: adventurer.name,
@@ -128,11 +128,4 @@ function chooseTier(pack: PotionPack, catalogue: readonly PotionTier[], missing:
   const byStrength = [...stocked].sort((a, b) =>
     assuredHealing(a.formula) - assuredHealing(b.formula) || catalogue.indexOf(a) - catalogue.indexOf(b));
   return byStrength.find((tier) => assuredHealing(tier.formula) >= missing) ?? byStrength[byStrength.length - 1];
-}
-
-/** The plan's scratch pack, following the same rule as taking one potion. */
-function holdOneLess(pack: PotionPack, name: string): void {
-  const left = potionCount(pack, name) - 1;
-  if (left > 0) pack[name] = left;
-  else delete pack[name];
 }

@@ -37,7 +37,8 @@ export function givePotions(pack: PotionPack, name: string, count: number): void
   pack[name] = potionCount(pack, name) + count;
 }
 
-function takePotion(pack: PotionPack, name: string): void {
+/** One less of that tier. The key is removed at zero. */
+export function takePotion(pack: PotionPack, name: string): void {
   const left = potionCount(pack, name) - 1;
   if (left > 0) pack[name] = left;
   else delete pack[name];

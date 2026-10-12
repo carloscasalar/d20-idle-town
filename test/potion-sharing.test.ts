@@ -324,15 +324,15 @@ describe('the plan is applied in a fight and at a Short rest', () => {
   });
 
   it('applies the plan at a Short rest', () => {
-    const rested = rest('company-order');
+    const rested = rest('most-hurt');
 
     expect(rested.hp).toEqual([
-      { name: 'Ann', hp: 10, alive: true },
+      { name: 'Ann', hp: 5, alive: true },
       { name: 'Bev', hp: 14, alive: true },
-      { name: 'Cid', hp: 0, alive: true },
+      { name: 'Cid', hp: 8, alive: true },
     ]);
     expect(rested.potions).toEqual({});
-    expect(rested.breath).toBe('The Bold Foxes catch their breath. Ann drinks a basic healing potion (2d4+2: 8). Bev drinks a basic healing potion (2d4+2: 8). 0 potions left.');
+    expect(rested.breath).toBe('The Bold Foxes catch their breath. Cid drinks a basic healing potion (2d4+2: 8). Bev drinks a basic healing potion (2d4+2: 8). 0 potions left.');
   });
 });
 

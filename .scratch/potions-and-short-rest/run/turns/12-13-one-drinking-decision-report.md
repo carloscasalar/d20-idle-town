@@ -77,3 +77,31 @@ Questions: none.
 Bugs: none.
 
 Not done: nothing. No push; the orchestrator pushes.
+
+## Correction 1
+
+The Short rest test now uses most-hurt, so `shortRest` has to pass the Company's policies. `potionSharingOf` is private. The plan runs its copy of the pack down with `takePotion`, and that is the only new export.
+
+`test/potion-sharing.test.ts`, "applies the plan at a Short rest", calls `rest('most-hurt')`. The expected values are Ann 5, Bev 14, Cid alive at 8, pack `{}`, and `The Bold Foxes catch their breath. Cid drinks a basic healing potion (2d4+2: 8). Bev drinks a basic healing potion (2d4+2: 8). 0 potions left.` Passing `undefined` instead of `p.policies` in `shortRest` fails that test: Ann is healed to 10 and Cid stays at 0. That probe was reverted. `shortRest` still passes `p.policies`.
+
+`potionSharingOf` is no longer exported. `docs/ARCHITECTURE-INTERFACES.md` lists `drawPotionSharing` and `planDrinkingRound` for `src/adventurers/policies.ts`, and says a missing policy is company order on the plan. `takePotion(pack, name)` is exported from `src/adventurers/potions.ts` and the same document lists it. `holdOneLess` is gone. `planDrinkingRound` calls `takePotion` on its copy.
+
+No other test changed. Behaviour is unchanged. The regression snapshots and `scripts/tune-baseline.json` are not in the diff.
+
+| Command or check | Result |
+| --- | --- |
+| `pnpm typecheck` | Pass. |
+| `pnpm test` | Pass: 38 files, 784 tests. |
+| Regression snapshots and `scripts/tune-baseline.json` | No diff. |
+
+| Correction | Coverage |
+| --- | --- |
+| The Short rest application test requires most-hurt, so a missing policy fails it | "applies the plan at a Short rest", with the values above. |
+| `potionSharingOf` is not exported, and the interface document matches | It is a private function. The policies row no longer lists it. |
+| The plan runs its copy down through one pack operation, and only that operation is newly exported | `takePotion`. The plan calls it. `drinkPotion` calls it too. |
+
+Questions: none.
+
+Bugs: none.
+
+Not done: nothing. No push; the orchestrator pushes.
