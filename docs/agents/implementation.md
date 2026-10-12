@@ -24,14 +24,14 @@ Every random draw comes from one seeded generator in a fixed order, so a new dra
 The guard covers three seeds. Once per issue that changes the rules of the game, the reviewer runs:
 
 ```bash
-FROM=1 TO=150 HOURS=1500 pnpm exec vite-node scripts/combat-sweep.ts
+FROM=1 TO=150 HOURS=1500 pnpm dlx vite-node scripts/combat-sweep.ts
 ```
 
 It must finish with no crash.
 
 ## Balance
 
-`pnpm exec vite-node scripts/tune.ts` prints deaths, wipes and failures per difficulty scale. An issue that moves difficulty says which baseline to compare with; the tuning values change only when an issue says so.
+`pnpm dlx vite-node scripts/tune.ts` prints deaths, wipes and failures per difficulty scale. An issue that moves difficulty says which baseline to compare with; the tuning values change only when an issue says so.
 
 ## Smoke check
 
