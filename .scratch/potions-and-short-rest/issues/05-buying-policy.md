@@ -1,6 +1,6 @@
 # Buying policy
 
-Status: ready-for-agent
+Status: done
 
 Blocked-by: [04 - Tiered potions with real dice](04-tiered-potions-with-real-dice.md)
 
@@ -74,3 +74,9 @@ Decisions left to this slice:
 - A price of 0 is free, so the step does not divide the purse by zero. The purchase still keeps the reserve, because the purse does not move.
 - The shop line stays `${company} buy ${count} ${tier} healing potion(s) from ${apothecary} for ${cost} gp.` One line, and no adventurer is named on the `service` movement.
 - `scripts/assault.ts` looks up the tier named `basic` in the default catalogue itself, so it still typechecks after `basicTier` is removed. The script's drinking is unchanged.
+
+### Closed by the orchestrator (2026-10-12)
+
+Commits `e80c126` (the feature) and `3952642` (correction 1, tests only), both by Cursor. Review: the slice reviewer found the behaviour correct, worked the examples and five cases of its own through the step, confirmed the four fixture edits as forced, ran the long sweep (`no crashes in seeds 1-150 for 1500 hours`), and failed the first round on two surviving mutations (`floor` in the need; the strength filter of the step-down). The correction pinned both; the orchestrator confirmed the `floor` mutation now fails. 700 tests green, 6 skipped.
+
+Reviewer notes, not corrected: buying reads the hero's own `maxHp`, so blessing hit points are excluded, unlike Bloodied; a pack key outside the catalogue counts toward the one-potion-per-hero floor but adds no healing.

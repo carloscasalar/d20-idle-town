@@ -13,6 +13,8 @@ Branch `feature/potions-healing`. Run started 2026-10-12 at checkpoint `4774e43`
 | 03 | 04 tiered potions with real dice | feature | Cursor | `2b1c3fc` | FAIL: wiring unproven by tests, an impossible die face, stale interfaces doc, unforced change in `scripts/assault.ts`; long sweep clean |
 | 03 fix 1 | 04 | correction | Cursor (same session) | `b9e3260` | FAIL (opencode): one mutation of six survives, and the report claimed it failed |
 | 03 fix 2 | 04 | tests only | Cursor (same session) | `59530a0` | PASS (orchestrator mutation re-check); issue done |
+| 04 | 05 buying policy | feature | Cursor | `e80c126` | FAIL: two mutations survive (`floor` in the need, step-down strength filter); behaviour correct; long sweep clean |
+| 04 fix 1 | 05 | tests only | Cursor (same session) | `3952642` | PASS (orchestrator mutation re-check); issue done |
 
 ## Lessons
 
