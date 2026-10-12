@@ -1,6 +1,6 @@
 # Potion sharing policy
 
-Status: ready-for-agent
+Status: done
 
 Blocked-by: [04 - Tiered potions with real dice](04-tiered-potions-with-real-dice.md)
 
@@ -75,3 +75,9 @@ Decisions left to this slice:
 - `createParty` takes the weight list as a required argument. The roster passes the configured list into both the normal arrival and the stranded band. A direct call, including `scripts/assault.ts`, passes the list itself.
 - Drawing before the company name leaves `test/lairs.test.ts` as it was in `27539f5`, including a lair bounty still open at hour 600 of seed 5. The named survivors did not need a new seed or a new expectation.
 - `test/expedition.test.ts` ("passes a blessing and the no-retreat rule into the final lair fight") expects a literal combat-options object, including the policy that company was drawn with. A second case sets `most-hurt` and expects `potionSharing: 'most-hurt'`. Blessing, no retreat, lair depth and the empty pack are unchanged.
+
+### Closed by the orchestrator (2026-10-12)
+
+Commits `1024ac1` (the feature) and `cd06396` (correction 1), both by Cursor. Review: the slice reviewer found both orders working in combat and at the rest, the merger and the default right, the validation strict and the long sweep clean (`no crashes in seeds 1-150 for 1500 hours`); it failed the first round on a weakened `test/lairs.test.ts` (the draw now sits after the heroes and before the company name, and that test is back to its expectations), a default value for the weights in `createParty`, two unproven wirings (a stranded band's weights; a `most-hurt` company reaching the fight), a stale `docs/ARCHITECTURE-INTERFACES.md` and a selection by fixed name. The orchestrator read the correction (call sites gain the weights argument; no expected value changed) and confirmed both wiring mutations now fail a test. 709 tests green, 6 skipped.
+
+Reviewer notes, not corrected: "fallen first" is implied by the lowest hit point fraction and no test pins a tie (the sort is stable); duplicate policy entries in the weights are accepted.
