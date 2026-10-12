@@ -1,0 +1,6 @@
+lair L5 vs party L5: cleared 35%  reached boss 60%  deaths/attempt 2.20
+lair L5 vs party L6: cleared 48%  reached boss 63%  deaths/attempt 1.55
+lair L6 vs party L6: cleared 40%  reached boss 60%  deaths/attempt 1.88
+lair L6 vs party L7: cleared 40%  reached boss 75%  deaths/attempt 1.95
+lair L8 vs party L8: cleared 20%  reached boss 30%  deaths/attempt 2.33
+lair L8 vs party L9: cleared 25%  reached boss 40%  deaths/attempt 2.27
