@@ -1,11 +1,11 @@
 import { HERO_CLASS_NAMES } from 'battlecast-engine';
 import { DEFAULT_COMPANY_ROSTER_CONFIG } from '../src/adventurers/company-roster';
-import { createHero } from '../src/adventurers/hero';
-import { runCombat } from '../src/combat/battlecast';
+import { DEFAULT_HERO_ECONOMY, createHero } from '../src/adventurers/hero';
+import { DEFAULT_POTION_CONFIG } from '../src/adventurers/potions';
+import { DEFAULT_COMBAT_CONFIG, runCombat } from '../src/combat/battlecast';
 import { Rng } from '../src/core/rng';
 import { buildEncounter, DEFAULT_ENCOUNTER_CONFIG, DIFFICULTIES, xpBand } from '../src/quests/encounters';
 import { THEME_IDS } from '../src/quests/themes';
-import { COMBAT_RULES } from '../test/helpers/supplied-config';
 
 const levels = (process.env.LEVELS ?? '1,2,3,5,8').split(',').map(Number);
 const trials = Number(process.env.TRIALS ?? 40);
@@ -17,7 +17,7 @@ for (const level of levels) {
     for (let t = 0; t < trials; t++) {
       const heroes = Array.from({ length: DEFAULT_COMPANY_ROSTER_CONFIG.companySize }, () => createHero(rng, level, rng.pick(HERO_CLASS_NAMES)));
       const spec = buildEncounter(rng, rng.pick(THEME_IDS), DEFAULT_COMPANY_ROSTER_CONFIG.companySize, level, difficulty, 1, DEFAULT_ENCOUNTER_CONFIG);
-      const out = runCombat(heroes, spec, rng.seed(), { ...COMBAT_RULES });
+      const out = runCombat(heroes, spec, rng.seed(), { rules: DEFAULT_COMBAT_CONFIG, heroes: DEFAULT_HERO_ECONOMY, catalogue: DEFAULT_POTION_CONFIG });
       if (out.winner === 'party') wins++;
       const d = out.heroes.filter((h) => !h.alive).length;
       deaths += d;

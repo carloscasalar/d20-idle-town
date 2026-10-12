@@ -1,20 +1,6 @@
-Issue 14 is not implemented. The game already shows the three endings and whether the last fight was reached, and a trial can keep other companies out. A company placed at the wanted level with the arrival purse never takes the bounty, and the issue does not say what purse to give them. No file under `src/`, `test/`, or `scripts/` was changed.
+`scripts/assault.ts` now plays each trial in the game. One company and one lair are placed through `Game.forTesting`, and the script steps until that lair is broken, the company is back with the bounty failed, or the company is wiped. The purse is `resurrectionCost(level, heroes) + heroes.startingGoldPerLevel * level` from `src/adventurers/hero.ts`. The pack is left empty for the town to fill, and `services.steps` is left at its default. `roster.maxCompanies` is 1. `world.maxOpenQuests` is 0, with a comment that bounty posting does not read that limit. A trial that has not taken the bounty after 1,000 hours throws; so does one whose expedition has not ended, or one that another company enters. The last fight is read from the combat event `Encounter n/n`. Cleared, wiped, and the failed return are read from `Game.view()` (`lairsCleared`, `partiesWiped`, `questsFailed`, `heroesDied`).
 
-What a trial can already read, from `Game.forTesting`, `Game.step()`, `Game.view()`, and `Game.onEvent()`:
-
-- The lair is broken when `view.stats.lairsCleared` is 1 and that lair's `status` is `cleared`. The company is then resting.
-- The company is back without breaking it when it is still in `view.parties`, `questsFailed` is 1, `partiesWiped` is 0, and the lair is still `active`. Settlement happens on the return, so this is the company in town.
-- The company is wiped when `view.stats.partiesWiped` is 1. It leaves `view.parties`. Deaths are `view.stats.heroesDied`.
-- The last fight is the boss. Each fight publishes a combat event `Encounter n/m`. Reaching the boss is the event where `n` and `m` are equal. The boss's name can also appear in an earlier fight, so the name is the wrong signal. On one level-5 trial the third of four fights was a lone Mind Flayer and the fourth, the one that wiped the company, was the Mind Flayer with guards.
-- Other companies stay out with `roster.maxCompanies: 1` and one company already placed. Over 400 hours that counter `partiesArrived` stayed 0.
-
-`world.maxOpenQuests: 0` is how the stepped trials kept contracts and raids off the board. Bounty posting does not read that limit, so the guild still posts the one lair's bounty. With the default, an hour whose appetite roll fails can send the company out on a contract instead.
-
-The purse, stepped at level 5 with `board.difficultyScale` 1.25:
-
-- Arrival gold is `startingGoldPerLevel * level` from `src/adventurers/hero.ts`, 250 gp. The resurrection gate in `Game` is `resurrectionCost`, 1,150 gp at level 5 (1,590 at 6, 2,710 at 8, 3,390 at 9). For 400 hours the bounty stayed open, the company stayed at "looking at the board", and no fight happened.
-- A purse set to exactly that resurrection cost takes the bounty. The apothecary sells nothing, because town purchases keep the resurrection cost back. The same twelve seeds then showed all three endings: lair cleared, returned with the lair still active, and wiped. The pack stayed empty.
-- A purse of that cost plus 20,000 gp buys first. On the seed that had cleared with an empty pack, the company bought 11 basic healing potions and the rest of a town kit, then marched, and still cleared. A larger purse can also buy magic items that appear while the appetite roll is still failing. The issue does not name this amount.
+`scripts/calibrate.ts` takes `DEFAULT_COMBAT_CONFIG`, `DEFAULT_HERO_ECONOMY`, and `DEFAULT_POTION_CONFIG` from the modules that define them. `README.md` and the scripts table in `docs/ARCHITECTURE.md` describe the measurement as one company against one lair's bounty.
 
 Check results:
 
@@ -22,35 +8,84 @@ Check results:
 | --- | --- |
 | `pnpm typecheck` | Pass. |
 | `pnpm test` | Pass: 38 files, 784 tests. |
-| `TRIALS=5 pnpm dlx vite-node scripts/assault.ts` | Not run. `scripts/assault.ts` is unchanged. |
-| Two runs with the same `SEED` and `TRIALS` | Not run. |
-| `pnpm dlx vite-node scripts/calibrate.ts` | Not run. The import from `test/helpers/supplied-config` is still there. |
+| `TRIALS=5 pnpm dlx vite-node scripts/assault.ts` | Pass. Six lines, below. Two runs with that command (default `SEED` 7) printed the same lines. |
+| `TRIALS=40 pnpm dlx vite-node scripts/assault.ts` | Pass. Six lines, below. Default `SEED` 7 and `SCALE` 1.25. |
+| `pnpm dlx vite-node scripts/calibrate.ts` | Pass. Output matches `.scratch/potions-and-short-rest/run/measurements/calibrate-before.txt`. |
+| Search for `test/` in the imports of `scripts/` | Nothing. |
 
-The regression guard did not change. No file under `src/` or `test/` was edited, so the hash tests were not re-recorded.
+The regression guard did not change. No file under `src/` or `test/` was edited, and the hash tests passed without re-recording.
+
+`TRIALS=5` (both runs):
+
+```
+lair L5 vs party L5: cleared 40%  reached boss 60%  deaths/attempt 2.20
+lair L5 vs party L6: cleared 80%  reached boss 80%  deaths/attempt 0.40
+lair L6 vs party L6: cleared 20%  reached boss 40%  deaths/attempt 2.00
+lair L6 vs party L7: cleared 20%  reached boss 60%  deaths/attempt 2.60
+lair L8 vs party L8: cleared 60%  reached boss 60%  deaths/attempt 0.80
+lair L8 vs party L9: cleared 40%  reached boss 100%  deaths/attempt 2.40
+```
+
+`TRIALS=40` before, from `.scratch/potions-and-short-rest/run/measurements/assault-before-trials-40.txt`:
+
+```
+lair L5 vs party L5: cleared 35%  reached boss 60%  deaths/attempt 2.20
+lair L5 vs party L6: cleared 48%  reached boss 63%  deaths/attempt 1.55
+lair L6 vs party L6: cleared 40%  reached boss 60%  deaths/attempt 1.88
+lair L6 vs party L7: cleared 40%  reached boss 75%  deaths/attempt 1.95
+lair L8 vs party L8: cleared 20%  reached boss 30%  deaths/attempt 2.33
+lair L8 vs party L9: cleared 25%  reached boss 40%  deaths/attempt 2.27
+```
+
+`TRIALS=40` after:
+
+```
+lair L5 vs party L5: cleared 50%  reached boss 55%  deaths/attempt 1.73
+lair L5 vs party L6: cleared 48%  reached boss 70%  deaths/attempt 1.77
+lair L6 vs party L6: cleared 33%  reached boss 60%  deaths/attempt 2.45
+lair L6 vs party L7: cleared 35%  reached boss 50%  deaths/attempt 2.13
+lair L8 vs party L8: cleared 25%  reached boss 50%  deaths/attempt 2.52
+lair L8 vs party L9: cleared 35%  reached boss 60%  deaths/attempt 2.40
+```
+
+`scripts/calibrate.ts` with no environment:
+
+```
+L1 easy         band 100-170  win 95%  deaths/fight 0.23  tpk 5%  rounds 2.6
+L1 intermediate band 200-299  win 90%  deaths/fight 0.38  tpk 3%  rounds 3.5
+L1 hard         band 300-350  win 83%  deaths/fight 0.45  tpk 3%  rounds 3.5
+L2 easy         band 200-340  win 95%  deaths/fight 0.17  tpk 3%  rounds 3.1
+L2 intermediate band 400-599  win 88%  deaths/fight 0.47  tpk 5%  rounds 4.3
+L2 hard         band 600-700  win 85%  deaths/fight 0.40  tpk 0%  rounds 4.5
+L3 easy         band 300-510  win 98%  deaths/fight 0.05  tpk 0%  rounds 3.0
+L3 intermediate band 600-899  win 100%  deaths/fight 0.07  tpk 0%  rounds 4.0
+L3 hard         band 900-1250  win 80%  deaths/fight 0.60  tpk 3%  rounds 5.9
+L5 easy         band 1000-1700  win 100%  deaths/fight 0.10  tpk 0%  rounds 3.3
+L5 intermediate band 2000-2999  win 85%  deaths/fight 0.47  tpk 5%  rounds 5.2
+L5 hard         band 3000-3700  win 88%  deaths/fight 0.38  tpk 3%  rounds 6.3
+L8 easy         band 2000-3400  win 100%  deaths/fight 0.05  tpk 0%  rounds 5.2
+L8 intermediate band 4000-6799  win 83%  deaths/fight 0.53  tpk 5%  rounds 5.1
+L8 hard         band 6800-7600  win 60%  deaths/fight 1.02  tpk 5%  rounds 5.2
+```
 
 Acceptance coverage:
 
 | Criterion | Coverage and result |
 | --- | --- |
-| `TRIALS=5 pnpm dlx vite-node scripts/assault.ts` runs to the end and prints six lines | Not met. The script still runs its own fights. It cannot be pointed at the game until the purse is chosen, because the arrival purse never starts the expedition. |
-| Two runs with the same `SEED` and `TRIALS` print the same lines | Not met. No new script run. |
-| `scripts/assault.ts` does not import `runCombat`, `healHero`, `takePotion` or `rollDice`, and has no hit point arithmetic | Not met. The file still imports `runCombat` and `healHero`. |
-| A search for `test/` in the imports of `scripts/` finds nothing | Not met. `scripts/assault.ts` and `scripts/calibrate.ts` still import `test/helpers/supplied-config`. |
-| `scripts/calibrate.ts` prints the same output as before | Not shown. The before output is `.scratch/potions-and-short-rest/run/measurements/calibrate-before.txt`. |
-| The report gives the script's output before and after for `TRIALS=40` | Before, from `.scratch/potions-and-short-rest/run/measurements/assault-before-trials-40.txt`: lair L5 vs party L5 cleared 35%, reached boss 60%, deaths/attempt 2.20; L5 vs L6 cleared 48%, 63%, 1.55; L6 vs L6 cleared 40%, 60%, 1.88; L6 vs L7 cleared 40%, 75%, 1.95; L8 vs L8 cleared 20%, 30%, 2.33; L8 vs L9 cleared 25%, 40%, 2.27. After: not run. |
-| `README.md` and the scripts table of `docs/ARCHITECTURE.md` still describe what the script measures | Unchanged. Both still say how often a level-matched company clears a lair. |
-| No file under `src/` or `test/` changes; the regression hash tests pass without re-recording | Held. The suite passed, including the hash tests, on the unchanged tree. |
+| `TRIALS=5 pnpm dlx vite-node scripts/assault.ts` runs to the end and prints six lines with cleared, reached boss and deaths per attempt | The command above. Six lines, each with those three figures. |
+| Two runs with the same `SEED` and `TRIALS` print the same lines | The same command run twice, default `SEED` 7 and `TRIALS=5`. The two outputs matched. |
+| `scripts/assault.ts` does not import `runCombat`, `healHero`, `takePotion` or `rollDice`, and has no hit point arithmetic | The file imports none of those names and does not read hit points. |
+| A search for `test/` in the imports of `scripts/` finds nothing | Search of `scripts/` found no such import. `scripts/calibrate.ts` now uses the combat, hero, and potion module defaults. |
+| `scripts/calibrate.ts` prints the same output as before | `pnpm dlx vite-node scripts/calibrate.ts` matches the before file. The output is shown above. |
+| The report gives the script's output before and after for `TRIALS=40` | Both blocks are above. The figures moved. |
+| `README.md` and the scripts table of `docs/ARCHITECTURE.md` still describe what the script measures | The run comment and the `scripts/assault.ts` row now say one company against one lair's bounty, including cleared, reached the boss, and deaths per attempt in the table. |
+| No file under `src/` or `test/` changes; the regression hash tests pass without re-recording | `git diff` of `src/` and `test/` is empty. `pnpm test` passed, including the hash tests. |
 | `pnpm typecheck` and `pnpm test` are green | Both pass. |
 
-Questions:
+The issue asks for no tests of the script, so the runs above are the coverage.
 
-1. What purse does the one company of the trial carry?
-   - The arrival purse, `heroes.startingGoldPerLevel` times level. The expedition does not start.
-   - Exactly `resurrectionCost` for that level. The company can take the bounty, and the town sells it nothing.
-   - Some purse above that cost, so the town restocks potions and the other services before the company marches. The amount has to be named, because it changes what they buy and when they leave.
-
-2. Is `world.maxOpenQuests: 0` the right way to keep the trial on that lair's bounty? Contract and raid posting stop, and the bounty is still posted. The other reading leaves the default, and the company can take a contract.
+Questions: none.
 
 Bugs: none.
 
-Not done: the assault script, the calibrate import, and the two documents. The purse in question 1 decides whether a trial ever fights. No push.
+Not done: nothing. No push.

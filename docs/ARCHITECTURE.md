@@ -542,7 +542,7 @@ seeds 1 and 2 keep those fights, with a scripted 2d4+2 of 8.
 | `scripts/calibrate.ts` | Win/death rates per difficulty and level, single fresh fights |
 | `scripts/tune.ts` | Whole towns at several difficulty scales: unrounded tuning metrics, baseline deviations and tick-by-tick apothecary finances |
 | `scripts/variety.ts` | How many distinct monsters a long run throws up |
-| `scripts/assault.ts` | How often a level-matched company clears a lair |
+| `scripts/assault.ts` | One company against one lair's bounty: share cleared, share that reached the boss, deaths per attempt |
 | `scripts/lairs.ts` | A long run, lair events only |
 
 The calibration scripts print numbers to read before touching `difficultyScale`
