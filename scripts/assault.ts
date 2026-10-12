@@ -1,4 +1,4 @@
-import { healHero, isBloodied } from '../src/adventurers/hero';
+import { healHero } from '../src/adventurers/hero';
 import { rollDice } from '../src/core/dice';
 import { basicTier, DEFAULT_POTION_CONFIG, potionCount, takePotion } from '../src/adventurers/potions';
 import { DEFAULT_COMPANY_ROSTER_CONFIG } from '../src/adventurers/company-roster';
@@ -40,11 +40,12 @@ for (const level of [5, 6, 8]) {
         if (out.winner !== 'party') { ok = false; break; }
         const alive = aliveMembers(party);
         if (alive.length <= fighters.length / 2) { ok = false; break; }
+        const potionDice = new Rng(i + 1);
         for (const h of alive) {
           healHero(h, Math.ceil(h.maxHp * 0.5));
-          if (basic && potionCount(party.potions, basic.name) > 0 && isBloodied(h)) {
+          if (basic && potionCount(party.potions, basic.name) > 0 && h.hp < h.maxHp * 0.5) {
             takePotion(party.potions, basic.name);
-            healHero(h, rollDice(basic.formula, new Rng(1)).total);
+            healHero(h, rollDice(basic.formula, potionDice).total);
           }
         }
       }

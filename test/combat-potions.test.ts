@@ -129,6 +129,21 @@ describe('potions in a real encounter', () => {
     expect(low.lines.slice(0, low.lines.indexOf(lowDrink))).toEqual(high.lines.slice(0, high.lines.indexOf(highDrink)));
   });
 
+  it('drinks the tier that covers the fight maximum, which the base maximum would not', () => {
+    const heroes = company();
+    const result = runCombat(heroes, goblins, 1, {
+      ...COMBAT_RULES,
+      potions: { basic: 1, greater: 1, superior: 1 },
+      dice: eights,
+      blessingHp: 20,
+      noRetreat: true,
+    });
+    const drinks = result.lines.filter((line) => line.includes('healing potion'));
+
+    expect(drinks[0]).toBe(`${heroes[2]!.name} drinks a superior healing potion (8d4+8: 32).`);
+    expect(result.potionsDrunk).toEqual({ superior: 1, greater: 1 });
+  });
+
   it('leaves the engine log unchanged when two formulas heal the same total with different numbers of dice', () => {
     const twoDice: PotionConfig = { tiers: [{ name: 'basic', formula: '2d4+2', price: 50 }] };
     const oneDie: PotionConfig = { tiers: [{ name: 'basic', formula: '1d4+4', price: 50 }] };
@@ -144,6 +159,17 @@ describe('potions in a real encounter', () => {
     expect(many.lines.filter((line) => !line.includes('healing potion'))).toEqual(
       few.lines.filter((line) => !line.includes('healing potion')),
     );
+  });
+
+  it('rolls the drink on the child generator taken after placement', () => {
+    const heroes = company();
+    const result = runCombat(heroes, goblins, 2, { ...COMBAT_RULES, potions: { basic: 4 } });
+
+    expect(result.lines.filter((line) => line.includes('healing potion'))).toEqual([
+      `${heroes[2]!.name} drinks a basic healing potion (2d4+2: 6).`,
+    ]);
+    expect(result.heroes.map((hero) => hero.hp)).toEqual([24, 24, 16, 20]);
+    expect(result.potionsDrunk).toEqual({ basic: 1 });
   });
 });
 
