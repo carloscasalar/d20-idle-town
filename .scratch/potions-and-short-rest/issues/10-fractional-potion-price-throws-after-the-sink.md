@@ -1,6 +1,6 @@
 # A fractional potion price throws after the production sink
 
-Status: needs-triage
+Status: ready-for-agent
 
 Found during the implementation run of this PRD (turn 06, [issue 07](07-apothecary-production.md)), by the implementer and confirmed by the reviewer. Not reachable with the default configuration.
 
