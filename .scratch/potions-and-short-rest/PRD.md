@@ -1,6 +1,6 @@
 # PRD: Hit Dice at the short rest, four healing potion tiers and an apothecary that makes them
 
-Status: needs-triage
+Status: done
 
 Source: the map in [MAP.md](MAP.md) and its closed tickets [01](tickets/01-stronger-healing-potions.md) to [09](tickets/09-retuned-values-prototype.md). Where tickets disagree, [09](tickets/09-retuned-values-prototype.md) wins over 04, 05 and 08 on the apothecary's offer. Vocabulary is that of `CONTEXT.md`.
 
