@@ -9,6 +9,7 @@ import type { EncounterSpec } from '../src/quests/encounters';
 import { jobInquiry } from '../src/quests/job-intel';
 import type { Quest } from '../src/quests/quest';
 import { Board, DEFAULT_BOARD_CONFIG } from '../src/sim/board';
+import { Game } from '../src/sim/game';
 import { profilesById } from '../src/sim/work-kinds';
 import { advanceExpedition, encountersAhead, type CombatResolver, type ExpeditionContext, type ExpeditionEvent } from '../src/sim/expedition';
 import { openCoin } from '../src/town/coin';
@@ -84,6 +85,44 @@ function homecoming(success = true, level = 1) {
   return scenario;
 }
 
+/** One Short rest hour inside a real game, spending every die the pool still holds. */
+function shortRestThroughTheGame(hitDiceSpent: number): { before: { s: number }; after: { s: number }; rest: string } {
+  const party = createParty(new Rng(1), 4, 1, 0, STARTING_GOLD);
+  const hero = party.members[0]!;
+  hero.hp = 1;
+  hero.maxHp = 1000;
+  hero.hitDiceSpent = hitDiceSpent;
+  party.status = 'short-resting';
+  party.ticksLeft = 1;
+  party.shortRestStartedWith = 1;
+  party.questId = 'q-rest';
+  party.progress = 1;
+  const quest: Quest = {
+    id: 'q-rest', kind: 'contract', title: 'Clear the road', place: 'Stonebridge',
+    giverId: 'employer', assetId: null, lairId: null, theme: 'goblins', level: 1,
+    encounters: [encounter, encounter], revealed: 2, countRevealed: true,
+    reward: 100, itemReward: null, guildOnly: false, status: 'taken', partyId: party.id, postedAt: 0,
+  };
+  const game = Game.forTesting({
+    seed: 9,
+    roster: { maxCompanies: 1, firstArrivalTick: 1000 },
+    world: { maxOpenQuests: 0 },
+  }, (scenario) => {
+    scenario.lairs = [];
+    scenario.parties = [party];
+    scenario.quests = [quest];
+    for (const employer of scenario.town.employers) {
+      employer.stock = [];
+      employer.restockIn = 1000;
+    }
+  });
+  const before = JSON.parse(game.regressionState()).rng as { s: number };
+  game.step();
+  const rest = game.view().events.find((event) => event.text.includes('Short rest'))?.text ?? '';
+  const after = JSON.parse(game.regressionState()).rng as { s: number };
+  return { before, after, rest };
+}
+
 describe('an expedition hour', () => {
   it('reads the road before arriving and reveals the contract', () => {
     const { party, quest, context, events } = setup();
@@ -105,7 +144,8 @@ describe('an expedition hour', () => {
     const expectedRng = new Rng(99);
     const seeds: number[] = [];
     const woundedHp = 1;
-    const maxHp = party.members[0]!.maxHp;
+    const rolls = [4, 3];
+    context.restDice = () => ({ int: () => rolls.shift()! });
     context.combat = (_heroes, _spec, seed) => {
       seeds.push(seed);
       const result = outcome(party, 'party');
@@ -123,10 +163,9 @@ describe('an expedition hour', () => {
 
     advanceExpedition(party, context);
     expect(party.status).toBe('questing');
-    expect(party.members[0]!.hp).toBeGreaterThan(woundedHp);
-    expect(party.members[0]!.hp).toBeLessThanOrEqual(maxHp);
-    expect(party.members[1]!.hp).toBe(party.members[1]!.maxHp);
-    expect(events.at(-1)?.text).toContain('Short rest');
+    expect(party.members.map((hero) => hero.hp)).toEqual([7, 10, 14, 12]);
+    expect(events.at(-1)?.text).toBe(`${party.name} take a Short rest (1 hour). ${party.members[0]!.name}: 4+2=6; 7/10 HP. ${party.members[1]!.name}: 3+2=5; 10/10 HP.`);
+    expect(rolls).toEqual([]);
 
     advanceExpedition(party, context);
     expect(party.progress).toBe(quest.encounters.length);
@@ -542,6 +581,37 @@ describe('expedition potions and short rests', () => {
     if (potions > 0) expect(events.findIndex((event) => event.text.includes('potion'))).toBeGreaterThan(rest);
   });
 
+  it('gives a potion to a still-Bloodied hero who keeps Hit Dice after the quota', () => {
+    const { party, quest, context, events } = setup();
+    quest.encounters = [encounter, encounter, encounter];
+    quest.countRevealed = true;
+    quest.revealed = quest.encounters.length;
+    const hero = party.members[0]!;
+    hero.level = 2;
+    hero.heroClass = 'Fighter';
+    hero.maxHp = 30;
+    hero.hitDiceSpent = 0;
+    party.potions = 1;
+    const rolls = [2];
+    context.restDice = () => ({ int: () => rolls.shift()! });
+    context.combat = () => {
+      const result = outcome(party, 'party');
+      result.xpEarned = 0;
+      result.heroes[0]!.hp = 4;
+      return result;
+    };
+
+    advanceExpedition(party, context);
+    advanceExpedition(party, context);
+
+    expect(party.status).toBe('questing');
+    expect([hero.level, hero.hitDiceSpent, hero.hp]).toEqual([2, 1, 18]);
+    expect(party.potions).toBe(0);
+    expect(rolls).toEqual([]);
+    expect(events.at(-2)?.text).toBe(`${party.name} take a Short rest (1 hour). ${hero.name}: 2+2=4; 8/30 HP.`);
+    expect(events.at(-1)?.text).toBe(`${party.name} catch their breath. 1 potion drunk; 0 left.`);
+  });
+
   it('uses the HP after Hit Dice to continue when the company was below the retreat threshold', () => {
     const { party, quest, context } = setup();
     quest.countRevealed = true;
@@ -585,6 +655,18 @@ describe('expedition potions and short rests', () => {
     advanceExpedition(party, context);
 
     expect(party.potions).toBe(0);
+  });
+});
+
+describe('Short rest dice wired by the game', () => {
+  it('advances the world stream by one seed per Short rest whatever the Hit Dice spent', () => {
+    const oneDie = shortRestThroughTheGame(3);
+    const fourDice = shortRestThroughTheGame(0);
+
+    expect(oneDie.rest.match(/=\d+/g)).toHaveLength(1);
+    expect(fourDice.rest.match(/=\d+/g)).toHaveLength(4);
+    expect(oneDie.before).toEqual(fourDice.before);
+    expect(oneDie.after).toEqual(fourDice.after);
   });
 });
 
