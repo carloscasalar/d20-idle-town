@@ -1,6 +1,6 @@
 # The assault script uses rules the game dropped
 
-Status: ready-for-agent
+Status: done
 Category: bug
 
 Found by the architecture review of 2026-10-12. `scripts/assault.ts` estimates how often a Company clears a Bounty. It carries its own short version of what happens between two fights, written before the potions and Short rest work, so its percentages no longer describe the game.
@@ -74,3 +74,9 @@ Why: with the arrival purse alone the Company never passes the game's gate for a
 **2. Keeping the trial on that Lair's Bounty.** `world.maxOpenQuests: 0`, with a one-line comment naming the dependency, and a trial that stops with an error after a tick limit if the Bounty is never taken. Confidence: medium.
 
 Why: the brief defines a trial as that Company's Expedition against the Lair's Bounty; a Contract first would change gold, level and roster before the measured Bounty. Contract and raid posting read the limit and Bounty posting does not; it is a documented key and the brief allows `GameConfig` for isolating a trial. If Bounties ever obey the limit, the tick-limit error shows it.
+
+### Done (2026-10-12)
+
+Commit `a82db33` (Cursor; `37ebecc` is the report of its stop on the two questions above). `scripts/assault.ts` plays each trial as a game through `Game.forTesting`, with the purse and the isolation decided above, and reads the outcome from the view, the statistics and the combat events ("Encounter n/n" is the boss). `scripts/calibrate.ts` takes its defaults from the modules.
+
+Review: orchestrator (two scripts and two document lines). Run again: `TRIALS=5` prints six lines, identical in two runs; `scripts/calibrate.ts` prints exactly `run/measurements/calibrate-before.txt`; no import from `test/` under `scripts/`; no diff under `src/` or `test/`; typecheck clean, 784 tests green. PASS. Figures before and after for `TRIALS=40` are in `run/turns/13-14-assault-script-plays-the-game-report.md`; they moved, as expected, and nothing was retuned.
