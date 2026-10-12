@@ -10,6 +10,12 @@ Everything below is part of the first release, which has not been tagged yet.
 
 ### 2026-10-12
 
+- The apothecary sets aside rewards promised on open and taken Contracts when
+  sizing new rewards. Payment, failure and expiry release the amount.
+  `board.rewardSetAsideFor` selects town services or every employer of a kind;
+  it defaults to the apothecary alone. Upkeep can still take a treasury below
+  zero. No tuning value or random draw changed.
+
 - The apothecary makes each healing potion on demand. Its treasury pays a
   production sink of 25 / 100 / 1,000 / 10,000 gp before receiving the full
   sale price; every tier remains available while it is not ruined, whatever

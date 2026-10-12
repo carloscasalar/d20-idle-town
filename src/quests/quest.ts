@@ -118,6 +118,8 @@ export function rollDifficulties(rng: Rng, count: number, quests: QuestConfig): 
 
 export interface QuestTerms {
   employer: Employer;
+  /** Supplied by the Board, after any Reward set-aside. */
+  rewardTreasury: number;
   asset: Asset;
   theme: ThemeId;
   level: number;
@@ -146,7 +148,7 @@ export function generateQuest(rng: Rng, terms: QuestTerms, generation: QuestGene
   const desperation = asset.status === 'ravaged' ? quests.ravagedPayFactor : 1;
   const base = asset.incomePerDay * quests.incomeDays + level * level * quests.levelPayFactor;
   const wanted = Math.round(base * payFactor * employer.generosity * desperation * quests.rewardScale);
-  const reward = Math.max(quests.minimumReward, Math.min(wanted, Math.floor(employer.treasury * quests.treasuryShare)));
+  const reward = Math.max(quests.minimumReward, Math.min(wanted, Math.floor(terms.rewardTreasury * quests.treasuryShare)));
   // Relics turn up in old places, and rich employers sometimes pay in kind.
   const itemChance = (quests.relicHoldings.includes(asset.kind) ? quests.relicItemChance : quests.ordinaryItemChance) + (employer.kind === 'noble' ? quests.nobleItemChance : 0);
   const itemReward = rng.chance(itemChance) ? rollLootItem(rng, level, items) : null;

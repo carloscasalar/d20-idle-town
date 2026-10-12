@@ -17,6 +17,25 @@ function document(): Record<string, unknown> {
 }
 
 describe('game configuration', () => {
+  it('defaults Reward set-aside to the apothecary, accepts every service and employer kind, and can disable it', () => {
+    expect(DEFAULT_CONFIG.board.rewardSetAsideFor).toEqual(['apothecary']);
+    const names = ['tavern', 'temple', 'smith', 'apothecary', 'enchanter', 'guild', 'noble', 'merchant', 'faction'];
+    const configured = resolveGameConfig({ board: { rewardSetAsideFor: names } });
+    expect(configured.ok).toBe(true);
+    if (configured.ok) expect(configured.config.board.rewardSetAsideFor).toEqual(names);
+    const disabled = resolveGameConfig({ board: { rewardSetAsideFor: [] } });
+    expect(disabled.ok).toBe(true);
+    if (disabled.ok) expect(disabled.config.board.rewardSetAsideFor).toEqual([]);
+  });
+
+  it('rejects unknown Reward set-aside names and requires the list in a complete configuration', () => {
+    const invalid = resolveGameConfig({ board: { rewardSetAsideFor: ['alchemist'] } });
+    expect(invalid).toEqual({ ok: false, errors: ['board.rewardSetAsideFor: unknown employer kind or town service "alchemist"'] });
+    const missing = document();
+    delete (missing.board as Record<string, unknown>).rewardSetAsideFor;
+    expect(validateGameConfig(missing)).toEqual({ ok: false, errors: ['missing field board.rewardSetAsideFor'] });
+  });
+
   it('configures independent production costs and instant production ticks for every tier', () => {
     expect(DEFAULT_POTION_CONFIG.tiers.map(({ name, productionCost, productionTicks }) => ({ name, productionCost, productionTicks }))).toEqual([
       { name: 'basic', productionCost: 25, productionTicks: 0 },

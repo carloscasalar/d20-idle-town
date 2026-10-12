@@ -12,7 +12,7 @@ import { ASSET_KINDS, DEFAULT_HOLDING_CONFIG, type HoldingConfig } from '../town
 import { DEFAULT_ITEM_CONFIG, type ItemConfig } from '../items/items';
 import { DEFAULT_LAIR_CONFIG, type LairConfig } from '../town/lairs';
 import { DEFAULT_TOWN_SERVICE_CONFIG, SERVICE_STEP_REGISTRY, type TownServiceConfig } from '../town/services';
-import { DEFAULT_TOWN_CONFIG, EMPLOYER_KINDS, type TownConfig } from '../town/town';
+import { DEFAULT_TOWN_CONFIG, EMPLOYER_KINDS, SERVICE_KINDS, type TownConfig } from '../town/town';
 import { DEFAULT_BOARD_CONFIG, type BoardConfig } from './board';
 import { DEFAULT_KIND_CONFIGS, type WorkKindConfigs } from './kind-config';
 import { DEFAULT_EXPEDITION_CONFIG, type ExpeditionConfig } from './expedition';
@@ -139,6 +139,7 @@ function withFields(spec: Spec, fields: Record<string, Spec>): Spec {
 }
 
 const boardSpec = withFields(GAME_SPEC.kind === 'section' ? GAME_SPEC.fields.board! : GAME_SPEC, {
+  rewardSetAsideFor: { kind: 'strings' },
   difficultyScale: { kind: 'number', min: 0 },
   expiryCooldown: wholeRange,
   failureCooldown: wholeRange,
@@ -439,6 +440,7 @@ export function validateGameConfig(value: unknown): ConfigResult {
 
 /** Names a configuration may use, each checked against the catalogue that defines it. */
 const NAME_LISTS: readonly { path: string; label: string; allowed: readonly string[] }[] = [
+  { path: 'board.rewardSetAsideFor', label: 'employer kind or town service', allowed: [...EMPLOYER_KINDS, ...SERVICE_KINDS] },
   { path: 'town.retiredHoldings', label: 'holding', allowed: Object.keys(ASSET_KINDS) },
   { path: 'quests.relicHoldings', label: 'holding', allowed: Object.keys(ASSET_KINDS) },
   { path: 'quests.guildOnlyKinds', label: 'employer kind', allowed: EMPLOYER_KINDS },

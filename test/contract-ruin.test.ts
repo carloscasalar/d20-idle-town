@@ -28,7 +28,7 @@ describe('employer ruin', () => {
       scenario.lairs = [lair];
       scenario.quests = [bounty, ...employer.assets.map((asset) => {
         asset.status = status;
-        const quest = generateQuest(rng, { employer, asset, theme: lair.theme, lair, level: 1, partySize: 4, tick: scenario.tick }, QUEST_GENERATION);
+        const quest = generateQuest(rng, { employer, rewardTreasury: employer.treasury, asset, theme: lair.theme, lair, level: 1, partySize: 4, tick: scenario.tick }, QUEST_GENERATION);
         asset.questId = quest.id;
         return quest;
       })];

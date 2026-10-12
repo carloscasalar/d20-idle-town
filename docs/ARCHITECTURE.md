@@ -201,8 +201,9 @@ enchanter buys back.
   (`countAtPosting`) through `knowledgeAtPosting`. Later changes to `revealed`
   and `countRevealed` go through the handle only the Board gives out.
   `generateQuest` prices a contract from the holding's income, the difficulty
-  mix, the employer's generosity and desperation; `generateAssault` builds the
-  standing bounty on a lair.
+  mix, the employer's generosity and desperation, limited by `treasuryShare`
+  of the required `QuestTerms.rewardTreasury` supplied by the Board before
+  applying `minimumReward`. `generateAssault` builds the standing bounty on a lair.
 - **`job-intel.ts`** — job intelligence. It is the only writer, after a job is
   created, of the two public facts (whether the encounter count is known, and
   how many encounters are revealed) and of what each company has tried: a free
@@ -263,8 +264,9 @@ YAML. The field list is [Configuration](CONFIGURATION.md).
 
 The **Board** (`board.ts`) owns the contracts and bounties. It is the only
 code that posts them, accepts them, ends them, or writes the links between a
-holding, a lair, a company and that work. Its `BoardConfig` is plain numerical
-configuration (including inclusive cooldown ranges). Game's `board` section is
+holding, a lair, a company and that work. Its `BoardConfig` is plain data: numerical
+configuration (including inclusive cooldown ranges) and `rewardSetAsideFor`,
+a list of town service or employer kind names. Game's `board` section is
 that object: `travelTicks` and
 `difficultyScale` are not restated anywhere else. How long unanswered work
 stays open, and the renown a kind grants, live on `kinds`, keyed by the kind's
@@ -292,6 +294,17 @@ that uses it. Query results are deeply read-only TypeScript views, including
 encounters and rewards. `knowledge` hands back learn-next and reveal-all;
 those operations live in job intelligence, and knowledge only grows. `recordsForScenario` and
 `replaceForScenario` are test-only, used by scenario setup; regression serialization uses `all()`.
+
+The Board's `rewardTreasury(employer)` reads that employer's current treasury
+and, for an entry in `board.rewardSetAsideFor`, subtracts rewards on its `open`
+and `taken` Contracts. A service entry reaches its operator; a kind entry
+reaches every employer of that kind. Only the apothecary is enabled by default.
+The Board supplies this amount to Contract generation via `WorkContext`.
+No duplicate employer-to-work link or stored balance is introduced: paying,
+failing or expiring a Contract releases the amount through terminal status.
+Posting moves no gold; minimum rewards and upkeep retain their existing
+rules. Game still compares posting thresholds with the full treasury; the
+40-seed, 3,000-hour acceptance run stayed above zero without a threshold change.
 
 The ordering of `step()` is the game:
 
@@ -453,10 +466,11 @@ scripted 2d4+2 of 8.
 
 | Path | What it covers |
 | --- | --- |
+| `test/reward-set-aside.test.ts` | Board and hourly-game reward sizing with exact treasuries, open/taken obligations, three endings, every configured merchant, service/kind isolation, empty and missing lists, Contract-only accounting and unchanged upkeep |
 | `test/potions.test.ts` | Smallest covering tier, strongest fallback, a fallen hero's maximum, pack wording |
 | `test/apothecary-production.test.ts` | Exact per-potion sink/sale order and balances, one receipt after all pairs, independent configured costs, instant nonzero ticks, every tier from a treasury in debt, permanent ruin, game-view statistics and tuning report |
 | `test/coin.test.ts` | Coin reasons and holder accounting, including production moving only spent and lifetime production spending |
-| `test/game-config.test.ts` | Configuration validation, including required production costs and ticks, default zero ticks and invalid production values |
+| `test/game-config.test.ts` | Configuration validation, including required Reward set-aside lists, known service/kind names, empty-list disabling, required production costs and ticks, default zero ticks and invalid production values |
 | `test/potion-buying.test.ts` | Stock target, tier choice, budget step-down, resurrection reserve, one tier per visit, ruined and empty catalogues, `potionCoverFraction` |
 | `test/potion-sharing.test.ts` | Both sharing orders in combat and at the Short rest, no recorded policy, one draw per company, host policies on a merger, weight validation |
 | `test/dice.test.ts` | Formula parsing, scripted and seeded rolls, bounds, invalid formulas, derived Assured healing |

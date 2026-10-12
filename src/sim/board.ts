@@ -12,10 +12,11 @@ import { describeEncounter, type EncounterConfig, type EncounterSpec } from '../
 import { DEFAULT_KIND_CONFIGS, type WorkKindConfigs } from './kind-config';
 import { assaultProfile, contractProfile, renownGain, type WorkProfile } from './work-kinds';
 import type { ItemConfig } from '../items/items';
-import { assetById, serviceOf, type Employer, type Town } from '../town/town';
+import { assetById, serviceOf, type Employer, type EmployerKind, type ServiceKind, type Town } from '../town/town';
 
 /** Plain data: ticks for durations, days for income, inclusive cooldown ranges. */
 export interface BoardConfig {
+  rewardSetAsideFor: (EmployerKind | ServiceKind)[];
   windfallDays: number;
   lootingDays: number;
   failureRenownLoss: number;
@@ -29,6 +30,7 @@ export interface BoardConfig {
 }
 
 export const DEFAULT_BOARD_CONFIG: BoardConfig = freeze({
+  rewardSetAsideFor: ['apothecary'],
   windfallDays: 4,
   lootingDays: 2,
   failureRenownLoss: 1,
@@ -50,6 +52,7 @@ export interface WorkPosting {
 }
 
 export interface WorkContext extends BoardContext {
+  rewardTreasury: (employer: Employer) => number;
   config: DeepReadonly<BoardConfig>;
   kindTuning: DeepReadonly<WorkKindConfigs>;
   profileOf: (kind: QuestKind) => WorkProfile;
@@ -130,6 +133,17 @@ export class Board {
 
   taken(): readonly ReadonlyQuest[] {
     return Object.freeze(this.work.filter((work) => work.status === 'taken'));
+  }
+
+  /** Treasury available for sizing a new Contract reward; no gold is moved. */
+  rewardTreasury(employer: Employer): number {
+    const enabled = this.config.rewardSetAsideFor.some((name) => name === employer.service || name === employer.kind);
+    if (!enabled) return employer.treasury;
+    const owed = this.work.reduce((total, work) => total + (
+      work.kind === contractProfile.id && work.giverId === employer.id && (work.status === 'open' || work.status === 'taken')
+        ? work.reward : 0
+    ), 0);
+    return employer.treasury - owed;
   }
 
   byId(id: string | null): ReadonlyQuest | undefined {
@@ -240,6 +254,7 @@ export class Board {
       ...context,
       config: this.config,
       kindTuning: this.kindTuning,
+      rewardTreasury: (employer) => this.rewardTreasury(employer),
       profileOf: (kind) => this.profile(kind),
       breakLair: (lair, company, work, context) => this.breakLair(lair, company, work, context),
     };
@@ -310,6 +325,7 @@ function createContract(kind: QuestKind, terms: WorkPosting, context: WorkContex
   const lair = origin ?? context.lairs.find((candidate) => candidate.status === 'active' && candidate.theme === theme) ?? null;
   const work = generateQuest(context.rng, {
     employer,
+    rewardTreasury: context.rewardTreasury(employer),
     asset: holding,
     theme,
     level,

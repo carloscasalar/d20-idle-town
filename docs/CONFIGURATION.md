@@ -78,6 +78,7 @@ The Board. Defined in `src/sim/board.ts`.
 
 | Field | Default | Meaning |
 | --- | --- | --- |
+| `rewardSetAsideFor` | [apothecary] | Employers whose outstanding Contract rewards are kept out of new reward sizing; town service or employer kind names |
 | `windfallDays` | 4 | Days of holding income recovered when a Contract succeeds |
 | `lootingDays` | 2 | Days of holding income lost when an unanswered Contract expires |
 | `failureRenownLoss` | 1 | Renown lost when work fails |
@@ -88,6 +89,23 @@ The Board. Defined in `src/sim/board.ts`.
 | `travelTicks` | 2 | Hours of outbound travel, handed to the expedition |
 | `difficultyScale` | 1.15 | Multiplier on every encounter's XP budget. The browser's `?difficulty=` sets this. |
 | `lairStrengthGain` | 1 | Strength a lair gains after an unanswered raid or a failed bounty |
+
+`board.rewardSetAsideFor` is required in a complete configuration. An entry
+matches either a town service (`tavern`, `temple`, `smith`, `apothecary`,
+`enchanter`, `guild`) or every employer of a kind (`noble`, `merchant`,
+`faction`, `temple`); unknown names are rejected. `temple`, present in both
+catalogues, matches either. An empty list disables the rule. Only the
+apothecary is enabled by default and measured for balance; the other employers
+remain untested for balance and can still go into debt.
+
+The Board computes the amount from that employer's `open` and `taken`
+Contracts. New rewards apply `quests.treasuryShare` to treasury minus that
+amount; `quests.minimumReward` still applies. Payment (`done`), failure and
+expiry (`failed`) release the amount. No gold moves when posting, and upkeep
+can still take the treasury below zero. Posting thresholds still read the
+full treasury, including for listed employers. At low available treasury, `minimumReward` can exceed the available
+amount; the measured 40-seed, 3,000-hour acceptance run stayed above zero
+(lowest +198 gp, no ruined apothecary), so the threshold rule is unchanged.
 
 ## `roster`
 
@@ -207,7 +225,7 @@ How a Contract or Bounty is sized and paid. Defined in `src/quests/quest.ts`.
 | `levelPayFactor` | 10 | Added as level × level × this |
 | `rewardScale` | 0.6 | Scale applied after generosity and desperation |
 | `minimumReward` | 20 | Lowest reward, in gold |
-| `treasuryShare` | 0.8 | Most of the employer's treasury a reward may take |
+| `treasuryShare` | 0.8 | Most of the employer's reward-sizing treasury a reward may take, after any configured Reward set-aside |
 | `relicHoldings` | archive, catacombs, shrine, cemetery | Holdings that can pay with a relic |
 | `relicItemChance` | 0.12 | Chance of an item reward from those holdings |
 | `ordinaryItemChance` | 0.04 | Chance of an item reward from any other holding |

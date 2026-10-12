@@ -831,7 +831,7 @@ describe('Game and Board expedition ownership', () => {
       const lair = createLair(rng, 'goblins', 5, scenario.tick, DEFAULT_COMPANY_ROSTER_CONFIG.companySize, DEFAULT_LAIR_CONFIG);
       lair.raidCooldown = 10_000;
       const work = kind === 'contract'
-        ? generateQuest(rng, { employer: patron, asset: holding, theme: 'goblins', level: 5, partySize: 4, tick: scenario.tick }, QUEST_GENERATION)
+        ? generateQuest(rng, { employer: patron, rewardTreasury: patron.treasury, asset: holding, theme: 'goblins', level: 5, partySize: 4, tick: scenario.tick }, QUEST_GENERATION)
         : generateAssault(rng, lair, serviceOf(scenario.town, 'guild'), 4, scenario.tick, 1, QUEST_GENERATION);
       work.countRevealed = true;
       work.revealed = work.encounters.length;
@@ -879,7 +879,7 @@ describe('Game and Board expedition ownership', () => {
       lair.raidCooldown = 10_000;
       const company = createParty(rng, 1, 4, 0, STARTING_GOLD, DEFAULT_POLICIES_CONFIG.potionSharing);
       const work = kind === 'contract'
-        ? generateQuest(rng, { employer: patron, asset: holding, theme: 'goblins', level: 1, partySize: 4, tick: 0 }, QUEST_GENERATION)
+        ? generateQuest(rng, { employer: patron, rewardTreasury: patron.treasury, asset: holding, theme: 'goblins', level: 1, partySize: 4, tick: 0 }, QUEST_GENERATION)
         : generateAssault(rng, lair, serviceOf(scenario.town, 'guild'), 4, 0, 1, QUEST_GENERATION);
       work.encounters = [{ difficulty: 'hard', monsters: [{ name: 'Ancient Red Dragon', count: 6, xpEach: 62_000 }], totalXp: 372_000, tier: 'High' }];
       work.status = 'taken';

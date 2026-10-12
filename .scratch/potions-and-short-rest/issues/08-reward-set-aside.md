@@ -54,15 +54,15 @@ The six regression hash tests were skipped by issue 03. Leave them skipped. Do n
 
 ## Acceptance criteria
 
-- [ ] A new reward of the apothecary is sized from its treasury minus the rewards it owes on `open` and `taken` Contracts.
-- [ ] An employer outside the list is sized as today.
-- [ ] An employer kind in the list switches the rule on for every employer of that kind.
-- [ ] The amount set aside is released when the Contract is paid, fails or expires.
-- [ ] The list is configuration, default the apothecary alone; an entry that is neither a town service nor an employer kind is rejected.
-- [ ] Final check 3 was run, with its command and output recorded in this issue's Comments. If it failed, the rule of "If the check fails" was followed and the cause is written there.
-- [ ] The posting threshold is unchanged unless check 3 showed an apothecary treasury below zero from it.
-- [ ] The six regression hash tests stay skipped and are not re-recorded.
-- [ ] The suite is green.
+- [x] A new reward of the apothecary is sized from its treasury minus the rewards it owes on `open` and `taken` Contracts.
+- [x] An employer outside the list is sized as today.
+- [x] An employer kind in the list switches the rule on for every employer of that kind.
+- [x] The amount set aside is released when the Contract is paid, fails or expires.
+- [x] The list is configuration, default the apothecary alone; an entry that is neither a town service nor an employer kind is rejected.
+- [x] Final check 3 was run, with its command and output recorded in this issue's Comments. If it failed, the rule of "If the check fails" was followed and the cause is written there.
+- [x] The posting threshold is unchanged unless check 3 showed an apothecary treasury below zero from it.
+- [x] The six regression hash tests stay skipped and are not re-recorded.
+- [x] The suite is green.
 
 ### Tests
 
@@ -80,3 +80,73 @@ New:
 - `CHANGELOG.md`: the Reward set-aside.
 
 ## Comments
+
+### Implementation decisions (turn 07)
+
+- Use required `board.rewardSetAsideFor`, default `['apothecary']`. Validate
+  against the town service and employer kind catalogues; empty disables it.
+  A name matches either catalogue, so `temple` also matches every temple kind.
+- Compute outstanding gold on the Board, filtering this employer's `contract`
+  work in `open` or `taken`. Payment is `done`; failure and expiry are `failed`
+  in the existing model. No stored amount or new employer/work link.
+- Expose `Board.rewardTreasury(employer)` to its creators through WorkContext;
+  Contract generation requires `QuestTerms.rewardTreasury`. Posting moves no
+  gold and adds no random draw.
+- Tests use the agreed Board, employer treasury/Coin, configuration and hourly
+  Game interfaces, with exact rewards and balances. No questions asked under
+  this issue's No questions rule. Keep the existing posting threshold for the
+  first run; apply the owner's conditional fix only if check 3 warrants it.
+- Run check 3 with issues 02 through 07 merged, including issue 06 sharing
+  policy and issue 07 production (`b0e724e`). Compare the apothecary line
+  manually with unchanged `apothecaryLongRun` in `scripts/tune-baseline.json`:
+  2/40 ruined; lowest treasury -1,957 gp. The script's unavailable metric
+  comparison at 3,000 ticks is expected.
+
+### Final check 3 (turn 07)
+
+Command (detached background process, output outside the repository, waited
+for completion):
+
+```sh
+TICKS=3000 SEEDS=1..40 SCALES=1.15 pnpm dlx vite-node scripts/tune.ts
+```
+
+Actual output:
+
+```text
+tuning: seeds 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40  ticks 3000  tolerance +/-15%
+scale 1.15: quests 479.025  failed 111.325  deaths 378.825 (0.7908251135118208/quest)  wiped 32.075 of 111.6  raised 45.925
+apothecary: ruined 0 of 40  lowest treasury reached 198  treasury at end (mean) 2439.85  goldSpentOnProduction 54749.375
+baseline comparison: unavailable (TICKS=3000; baseline has 600 ticks)
+```
+
+Exit 0. PASS: lowest treasury +198 gp is above zero; 0 ruined of 40 is no
+more than baseline 2/40 (baseline lowest -1,957 gp). Issues 02–07 are all
+merged, including issue 06 sharing policy and issue 07 production (`b0e724e`).
+The printed comparison is unavailable because it compares only the 600-tick
+baseline; the apothecary line was compared manually with `apothecaryLongRun`.
+`scripts/tune-baseline.json` was not changed. The owner’s threshold fix was
+not triggered: the posting threshold stays on full treasury. No tuning value
+moves, no second run is required.
+
+### Verification and review (turn 07)
+
+- `pnpm typecheck`: PASS. `pnpm test`: PASS, 743 passed and the six regression
+  hashes skipped. The named surviving tests, seeds, expectations, both hash
+  files and snapshots are unchanged. No random draw and no tuning value moved.
+- Focused Board/configuration checks: 100 tests passed. All seven targeted
+  mutations were killed, including each terminal status, taken work, employer
+  selection, missing production configuration and creation wiring.
+- Standards and Spec code-review agents reviewed against starting HEAD
+  `44baee650e6a4bd76c9a45408b2e03ef96c10a99`. No implementation findings;
+  provisional threshold wording was replaced with the actual unchanged rule
+  after check 3, and both reviewers confirmed no remaining findings.
+- Browser smoke could not run: no browser connection; native Dia access was
+  denied (“Computer Use was not approved to use Dia”). The dev servers started
+  for the attempted checks were stopped. No questions; no new bugs found.
+- Full report: `../run/turns/07-08-reward-set-aside-report.md`.
+
+- Long sweep: `FROM=1 TO=150 HOURS=1500 pnpm dlx vite-node scripts/combat-sweep.ts`,
+  exit 0; final output: `no crashes in seeds 1-150 for 1500 hours`.
+- Turn commit message: `Implement configured reward set-aside for outstanding Contracts`.
+  The orchestrator records the commit hash when closing this issue.
