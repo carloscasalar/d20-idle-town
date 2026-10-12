@@ -264,18 +264,37 @@ they live in `potions`.
 ## `potions`
 
 The Healing potion catalogue. Defined in `src/adventurers/potions.ts`.
-Each tier has a name, a dice formula and a selling price. The name is the key
+Each tier has a name, a dice formula, a selling price, an independent
+`productionCost` and `productionTicks`. Production costs are finite, non-negative
+whole gold pieces; ticks are finite, non-negative whole numbers. The name is the key
 in a company's pack. Assured healing is not stored: the dice module derives it
 from the formula, and a smaller tier is one with lower assured healing.
 Replacing `tiers` replaces the whole list, so a tier can be dropped or changed.
 A formula that does not parse is rejected.
 
-| Tier | Formula | Price (gp) | Assured healing |
-| --- | --- | --- | --- |
-| basic | 2d4+2 | 50 | 8 |
-| greater | 4d4+4 | 200 | 16 |
-| superior | 8d4+8 | 2,000 | 32 |
-| supreme | 10d4+20 | 20,000 | 50 |
+| Tier | Formula | Price (gp) | Production cost (gp) | Assured healing |
+| --- | --- | --- | --- | --- |
+| basic | 2d4+2 | 50 | 25 | 8 |
+| greater | 4d4+4 | 200 | 100 | 16 |
+| superior | 8d4+8 | 2,000 | 1,000 | 32 |
+| supreme | 10d4+20 | 20,000 | 10,000 | 50 |
+
+The apothecary makes each potion on demand, sinking its configured cost from
+its treasury before receiving the full selling price. Every non-ruined
+apothecary offers every catalogue tier, whatever its treasury. There is no
+production reserve, treasury gate or shelf. Ruin remains permanent.
+
+| Tier | `productionTicks` |
+| --- | --- |
+| basic | 0 |
+| greater | 0 |
+| superior | 0 |
+| supreme | 0 |
+
+Production-time deviation: the SRD asks for 1 / 5 / 25 / 62.5 days per potion.
+The game makes them instantly. This table is the configuration switch for
+future production time: the model reads it, but a nonzero value currently has
+no behaviour and never delays a sale.
 
 ## `policies`
 

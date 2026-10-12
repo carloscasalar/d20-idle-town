@@ -328,6 +328,8 @@ const potionTier: Spec = {
     name: { kind: 'string', nonEmpty: true },
     formula: { kind: 'string', nonEmpty: true },
     price,
+    productionCost: { ...price, integer: true },
+    productionTicks: count,
   },
 };
 

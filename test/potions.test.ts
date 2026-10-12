@@ -2,10 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { choosePotion, describePack, type PotionTier } from '../src/adventurers/potions';
 
 const tiers: readonly PotionTier[] = [
-  { name: 'basic', formula: '2d4+2', price: 50 },
-  { name: 'greater', formula: '4d4+4', price: 200 },
-  { name: 'superior', formula: '8d4+8', price: 2000 },
-  { name: 'supreme', formula: '10d4+20', price: 20000 },
+  { name: 'basic', formula: '2d4+2', price: 50, productionCost: 25, productionTicks: 0 },
+  { name: 'greater', formula: '4d4+4', price: 200, productionCost: 100, productionTicks: 0 },
+  { name: 'superior', formula: '8d4+8', price: 2000, productionCost: 1000, productionTicks: 0 },
+  { name: 'supreme', formula: '10d4+20', price: 20000, productionCost: 10000, productionTicks: 0 },
 ];
 
 describe('choosing a healing potion', () => {
@@ -24,9 +24,9 @@ describe('choosing a healing potion', () => {
 
   it('counts a fallen hero as missing their whole maximum, even when hit points are below zero', () => {
     const catalogue: readonly PotionTier[] = [
-      { name: 'mend', formula: '4d4+4', price: 200 },
-      { name: 'close', formula: '2d4+16', price: 400 },
-      { name: 'flood', formula: '8d4+8', price: 2000 },
+      { name: 'mend', formula: '4d4+4', price: 200, productionCost: 100, productionTicks: 0 },
+      { name: 'close', formula: '2d4+16', price: 400, productionCost: 200, productionTicks: 0 },
+      { name: 'flood', formula: '8d4+8', price: 2000, productionCost: 1000, productionTicks: 0 },
     ];
     const pack = { mend: 1, close: 1, flood: 1 };
 

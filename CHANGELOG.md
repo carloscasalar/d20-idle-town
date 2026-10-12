@@ -10,6 +10,13 @@ Everything below is part of the first release, which has not been tagged yet.
 
 ### 2026-10-12
 
+- The apothecary makes each healing potion on demand. Its treasury pays a
+  production sink of 25 / 100 / 1,000 / 10,000 gp before receiving the full
+  sale price; every tier remains available while it is not ruined, whatever
+  its treasury. Costs are independent catalogue configuration. Production
+  ticks default to zero and are read but have no behaviour yet. The lifetime
+  `goldSpentOnProduction` statistic appears in the game view and tuning report.
+
 - A company draws a Potion sharing policy once, when it is constituted:
   company order, or fallen heroes first and then the lowest hit point
   fraction. The weights are `policies.potionSharing`, default 50 / 50. A

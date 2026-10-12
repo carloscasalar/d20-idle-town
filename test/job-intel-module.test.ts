@@ -125,7 +125,7 @@ describe('job intelligence', () => {
     expect(company.gold).toBe(resurrectionCost(partyLevel(company), DEFAULT_HERO_ECONOMY) * DEFAULT_JOB_INTEL_CONFIG.divinationReserveFactor);
     expect(company.spent).toBe(spent + cost);
     expect(temple).toMatchObject({ treasury: treasury + cost, earned: earned + cost });
-    expect(statistics).toEqual({ goldPaid: 0, goldSpentByHeroes: cost });
+    expect(statistics).toEqual({ goldPaid: 0, goldSpentByHeroes: cost, goldSpentOnProduction: 0 });
     expect(company.members.every((hero) => hero.goldSpent === 0)).toBe(true);
   });
 
@@ -164,7 +164,7 @@ describe('job intelligence', () => {
     expect(jobInquiry(company, work.id)?.roundsBought).toBe(1);
     expect(company.gold).toBe(resurrectionCost(partyLevel(company), DEFAULT_HERO_ECONOMY) * DEFAULT_JOB_INTEL_CONFIG.roundReserveFactor);
     expect(tavern.treasury).toBe(treasury + cost);
-    expect(statistics).toEqual({ goldPaid: 0, goldSpentByHeroes: cost });
+    expect(statistics).toEqual({ goldPaid: 0, goldSpentByHeroes: cost, goldSpentOnProduction: 0 });
     expect(company.members.every((hero) => hero.goldSpent === 0)).toBe(true);
   });
 

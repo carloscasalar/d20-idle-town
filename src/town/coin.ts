@@ -15,6 +15,7 @@ import { freeze } from '../core/freeze';
 export interface GoldStatistics {
   goldPaid: number;
   goldSpentByHeroes: number;
+  goldSpentOnProduction: number;
 }
 
 /** What one adventurer has had spent on them. Named by the movement that spends it. */
@@ -33,6 +34,7 @@ export interface CoinEffects {
   readonly earned: boolean;
   readonly goldPaid: boolean;
   readonly goldSpentByHeroes: boolean;
+  readonly goldSpentOnProduction: boolean;
   /** When set, an adventurer named on the movement has `goldSpent` increased. */
   readonly adventurer: boolean;
 }
@@ -46,6 +48,7 @@ const purchase: CoinEffects = freeze({
   earned: true,
   goldPaid: false,
   goldSpentByHeroes: true,
+  goldSpentOnProduction: false,
   adventurer: true,
 });
 
@@ -55,6 +58,7 @@ const income: CoinEffects = freeze({
   earned: true,
   goldPaid: false,
   goldSpentByHeroes: false,
+  goldSpentOnProduction: false,
   adventurer: false,
 });
 
@@ -64,6 +68,7 @@ const upkeep: CoinEffects = freeze({
   earned: false,
   goldPaid: false,
   goldSpentByHeroes: false,
+  goldSpentOnProduction: false,
   adventurer: false,
 });
 
@@ -78,36 +83,38 @@ const upkeep: CoinEffects = freeze({
 export const coinReasons = freeze({
   /** A company pays an employer for a service. */
   service: purchase,
+  /** Making a potion on demand: gold leaves the apothecary's treasury. */
+  production: freeze({ spent: true, earned: false, goldPaid: false, goldSpentByHeroes: false, adventurer: false, goldSpentOnProduction: true }),
   /** A company pays to learn about a Contract or Bounty. */
   intel: purchase,
   /** An employer buys gear back from a company. */
-  resale: freeze({ spent: true, earned: true, goldPaid: false, goldSpentByHeroes: false, adventurer: false }),
+  resale: freeze({ spent: true, earned: true, goldPaid: false, goldSpentByHeroes: false, adventurer: false, goldSpentOnProduction: false }),
   /** An employer pays a completed Contract or Bounty. */
-  reward: freeze({ spent: true, earned: true, goldPaid: true, goldSpentByHeroes: false, adventurer: false }),
+  reward: freeze({ spent: true, earned: true, goldPaid: true, goldSpentByHeroes: false, adventurer: false, goldSpentOnProduction: false }),
   /** Daily income from a Holding. */
   income,
   /** Income recovered when a Holding is freed. */
   windfall: income,
   /** Gold taken from a Lair's hoard or a Holding's loot. */
-  spoils: freeze({ spent: false, earned: true, goldPaid: false, goldSpentByHeroes: false, adventurer: false }),
+  spoils: freeze({ spent: false, earned: true, goldPaid: false, goldSpentByHeroes: false, adventurer: false, goldSpentOnProduction: false }),
   /** An unanswered Contract's loss, taken by an active Lair. */
-  looting: freeze({ spent: true, earned: false, goldPaid: false, goldSpentByHeroes: false, adventurer: false }),
+  looting: freeze({ spent: true, earned: false, goldPaid: false, goldSpentByHeroes: false, adventurer: false, goldSpentOnProduction: false }),
   /** That same loss when no active Lair receives it. */
   forfeit: upkeep,
   /** A wiped company's purse, left in the field. */
-  wipe: freeze({ spent: true, earned: false, goldPaid: false, goldSpentByHeroes: false, adventurer: false }),
+  wipe: freeze({ spent: true, earned: false, goldPaid: false, goldSpentByHeroes: false, adventurer: false, goldSpentOnProduction: false }),
   /** Survivors bring their company's purse to the host company. */
-  merger: freeze({ spent: true, earned: true, goldPaid: false, goldSpentByHeroes: false, adventurer: false }),
+  merger: freeze({ spent: true, earned: true, goldPaid: false, goldSpentByHeroes: false, adventurer: false, goldSpentOnProduction: false }),
   /** An employer's daily costs. The treasury may go into debt. */
   upkeep,
   /** Buying a business. The new treasury is opening capital, not earnings. */
-  retirement: freeze({ spent: true, earned: false, goldPaid: false, goldSpentByHeroes: true, adventurer: false }),
+  retirement: freeze({ spent: true, earned: false, goldPaid: false, goldSpentByHeroes: true, adventurer: false, goldSpentOnProduction: false }),
 });
 
 export type CoinReason = keyof typeof coinReasons;
 
 export function emptyGoldStatistics(): GoldStatistics {
-  return { goldPaid: 0, goldSpentByHeroes: 0 };
+  return { goldPaid: 0, goldSpentByHeroes: 0, goldSpentOnProduction: 0 };
 }
 
 /** The world's gold statistics and the reason table, built once. */
@@ -275,6 +282,7 @@ function move<Reason extends string>(
   }
   if (reasonEffects.goldPaid) statistics.goldPaid += amount;
   if (reasonEffects.goldSpentByHeroes) statistics.goldSpentByHeroes += amount;
+  if (reasonEffects.goldSpentOnProduction) statistics.goldSpentOnProduction += amount;
   if (reasonEffects.adventurer && adventurer) adventurer.goldSpent += amount;
 }
 

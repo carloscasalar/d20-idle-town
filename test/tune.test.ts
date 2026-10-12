@@ -1,4 +1,11 @@
 import { describe, expect, it } from 'vitest';
+import { createHero } from '../src/adventurers/hero';
+import { createParty } from '../src/adventurers/party';
+import { DEFAULT_POLICIES_CONFIG } from '../src/adventurers/policies';
+import { Rng } from '../src/core/rng';
+import { Game } from '../src/sim/game';
+import { serviceOf } from '../src/town/town';
+import { STARTING_GOLD } from './helpers/supplied-config';
 import { compareScaleToBaseline, type TuneBaseline } from '../scripts/tune-report';
 import {
   ApothecaryTracker, compareMetrics, formatComparison, formatScaleReport, parseTuneArgs,
@@ -159,6 +166,39 @@ describe('tuning report', () => {
     expect(apothecary.goldSpentOnProduction).toBe(100);
     expect(formatScaleReport({ scale: 1, metrics: { quests: 0, failed: 0, deaths: 0, deathsPerQuest: 0, wiped: 0, arrived: 0, raised: 0 }, apothecary })[1])
       .toContain('goldSpentOnProduction 100');
+  });
+
+  it('prints production spending from a real game purchase with configured cost and ticks', () => {
+    const game = Game.forTesting({
+      seed: 42, roster: { maxCompanies: 0, companySize: 1 }, world: { maxOpenQuests: 0 },
+      services: { steps: ['potions'] },
+      potions: { tiers: [{ name: 'basic', formula: '2d4+2', price: 50, productionCost: 7, productionTicks: 3 }] },
+    }, (scenario) => {
+      scenario.lairs = [];
+      for (const employer of scenario.town.employers) {
+        employer.assets = [];
+        employer.cooldown = 10000;
+      }
+      Object.assign(serviceOf(scenario.town, 'apothecary'), { treasury: 0, earned: 0, spent: 0 });
+      const rng = new Rng(71);
+      const party = createParty(rng, 1, 1, 0, STARTING_GOLD, DEFAULT_POLICIES_CONFIG.potionSharing);
+      party.members = [createHero(rng, 1, 'Fighter')];
+      party.members[0]!.maxHp = 32;
+      party.gold = 1190;
+      scenario.parties = [party];
+    });
+    const tracker = new ApothecaryTracker();
+    tracker.observe(game.view());
+    game.step();
+    const view = game.view();
+    expect(view.parties[0]).toMatchObject({ gold: 1090, earned: 0, spent: 100, potions: { basic: 2 } });
+    expect(view.town.employers.find((employer) => employer.service === 'apothecary'))
+      .toMatchObject({ treasury: 86, earned: 100, spent: 14 });
+    expect(view.stats).toMatchObject({ goldPaid: 0, goldSpentByHeroes: 100, goldSpentOnProduction: 14 });
+    tracker.observe(view);
+    tracker.observe(view);
+    expect(formatScaleReport({ scale: 1, metrics: { quests: 0, failed: 0, deaths: 0, deathsPerQuest: 0, wiped: 0, arrived: 0, raised: 0 }, apothecary: tracker.report() })[1])
+      .toBe('apothecary: ruined 0 of 1  lowest treasury reached 0  treasury at end (mean) 86  goldSpentOnProduction 14');
   });
 
   it('totals ruined shops across seeds, preserves the global minimum and averages final treasuries and production', () => {

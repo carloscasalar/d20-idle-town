@@ -103,7 +103,12 @@ export function buyPotions(p: Party, context: TownServiceContext): boolean {
   const apothecary = serviceOf(visit.town, 'apothecary');
   if (apothecary.ruined) return false;
   const cost = purchase.count * purchase.tier.price;
-  visit.pay(p, apothecary, cost);
+  // Read the time tuning, but production is instant even for a nonzero value.
+  void purchase.tier.productionTicks;
+  for (let made = 0; made < purchase.count; made++) {
+    visit.coin.sink(treasury(apothecary), purchase.tier.productionCost, 'production');
+    visit.pay(p, apothecary, purchase.tier.price);
+  }
   givePotions(p.potions, purchase.tier.name, purchase.count);
   const plural = purchase.count === 1 ? '' : 's';
   visit.log('shop', `${p.name} buy ${purchase.count} ${purchase.tier.name} healing potion${plural} from ${apothecary.name} for ${cost} gp.`);

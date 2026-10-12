@@ -106,7 +106,7 @@ function rest(policy: PotionSharingPolicy | undefined) {
   const context: ExpeditionContext = {
     quest, town, rng: new Rng(3),
     ledger: { heroesDied: 0, partiesWiped: 0 },
-    coin: openCoin({ goldPaid: 0, goldSpentByHeroes: 0 }),
+    coin: openCoin({ goldPaid: 0, goldSpentByHeroes: 0, goldSpentOnProduction: 0 }),
     kinds: profilesById(),
     ...rules,
     config: { ...rules.config, retreatHpFraction: 0 },
@@ -282,7 +282,7 @@ describe('drawing a potion sharing policy', () => {
       DEFAULT_COMPANY_ROSTER_CONFIG, DEFAULT_HERO_ECONOMY, DEFAULT_TOWN_CONFIG, DEFAULT_HOLDING_CONFIG, DEFAULT_POLICIES_CONFIG,
     );
     roster.replaceForScenario([host, donor]);
-    roster.merge(host, donor, { coin: openCoin({ goldPaid: 0, goldSpentByHeroes: 0 }) });
+    roster.merge(host, donor, { coin: openCoin({ goldPaid: 0, goldSpentByHeroes: 0, goldSpentOnProduction: 0 }) });
     expect(host.policies).toEqual({ potionSharing: 'most-hurt' });
   });
 });

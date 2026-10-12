@@ -146,8 +146,8 @@ describe('potions in a real encounter', () => {
   });
 
   it('leaves the engine log unchanged when two formulas heal the same total with different numbers of dice', () => {
-    const twoDice: PotionConfig = { tiers: [{ name: 'basic', formula: '2d4+2', price: 50 }] };
-    const oneDie: PotionConfig = { tiers: [{ name: 'basic', formula: '1d4+4', price: 50 }] };
+    const twoDice: PotionConfig = { tiers: [{ name: 'basic', formula: '2d4+2', price: 50, productionCost: 25, productionTicks: 0 }] };
+    const oneDie: PotionConfig = { tiers: [{ name: 'basic', formula: '1d4+4', price: 50, productionCost: 25, productionTicks: 0 }] };
     const many = runCombat(company(), goblins, 2, {
       ...COMBAT_RULES, catalogue: twoDice, potions: { basic: 4 }, dice: { int: () => 3 },
     });

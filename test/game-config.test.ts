@@ -17,6 +17,45 @@ function document(): Record<string, unknown> {
 }
 
 describe('game configuration', () => {
+  it('configures independent production costs and instant production ticks for every tier', () => {
+    expect(DEFAULT_POTION_CONFIG.tiers.map(({ name, productionCost, productionTicks }) => ({ name, productionCost, productionTicks }))).toEqual([
+      { name: 'basic', productionCost: 25, productionTicks: 0 },
+      { name: 'greater', productionCost: 100, productionTicks: 0 },
+      { name: 'superior', productionCost: 1000, productionTicks: 0 },
+      { name: 'supreme', productionCost: 10000, productionTicks: 0 },
+    ]);
+    const configured = resolveGameConfig({ potions: { tiers: [
+      { name: 'custom', formula: '2d4+2', price: 50, productionCost: 7, productionTicks: 3 },
+    ] } });
+    expect(configured.ok).toBe(true);
+    if (configured.ok) expect(configured.config.potions.tiers).toEqual([
+      { name: 'custom', formula: '2d4+2', price: 50, productionCost: 7, productionTicks: 3 },
+    ]);
+  });
+
+  it.each([
+    ['productionCost', -1, 'negative price'],
+    ['productionCost', 1.5, 'expected a whole number, got 1.5'],
+    ['productionTicks', -1, 'expected a number >= 0, got -1'],
+    ['productionTicks', 1.5, 'expected a whole number, got 1.5'],
+    ['productionCost', Number.NaN, 'expected a number, got number'],
+    ['productionTicks', Number.POSITIVE_INFINITY, 'expected a number, got number'],
+  ])('rejects invalid %s of %s', (key, value, error) => {
+    const invalid = document();
+    (invalid.potions as { tiers: Record<string, unknown>[] }).tiers[0]![key] = value;
+    const result = validateGameConfig(invalid);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.errors).toContain(`potions.tiers[0].${key}: ${error}`);
+  });
+
+  it.each(['productionCost', 'productionTicks'])('requires the tier field %s', (key) => {
+    const incomplete = document();
+    delete (incomplete.potions as { tiers: Record<string, unknown>[] }).tiers[0]![key];
+    const result = validateGameConfig(incomplete);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.errors).toContain(`missing field potions.tiers[0].${key}`);
+  });
+
   it('rejects the removed Short rest flat-healing key as unknown', () => {
     expect(resolveGameConfig({ expedition: { shortRestHealFraction: 0.5 } })).toEqual({
       ok: false, errors: ['unknown field expedition.shortRestHealFraction'],
@@ -54,17 +93,17 @@ describe('game configuration', () => {
   it('offers the four healing potion tiers and lets a tier be dropped or repriced', () => {
     expect(DEFAULT_HERO_ECONOMY.startingGoldPerLevel).toBe(50);
     expect(DEFAULT_POTION_CONFIG.tiers).toEqual([
-      { name: 'basic', formula: '2d4+2', price: 50 },
-      { name: 'greater', formula: '4d4+4', price: 200 },
-      { name: 'superior', formula: '8d4+8', price: 2000 },
-      { name: 'supreme', formula: '10d4+20', price: 20000 },
+      { name: 'basic', formula: '2d4+2', price: 50, productionCost: 25, productionTicks: 0 },
+      { name: 'greater', formula: '4d4+4', price: 200, productionCost: 100, productionTicks: 0 },
+      { name: 'superior', formula: '8d4+8', price: 2000, productionCost: 1000, productionTicks: 0 },
+      { name: 'supreme', formula: '10d4+20', price: 20000, productionCost: 10000, productionTicks: 0 },
     ]);
     const dropped = resolveGameConfig({
-      potions: { tiers: [{ name: 'basic', formula: '2d4+2', price: 40 }] },
+      potions: { tiers: [{ name: 'basic', formula: '2d4+2', price: 40, productionCost: 20, productionTicks: 0 }] },
     });
     expect(dropped.ok).toBe(true);
     if (!dropped.ok) return;
-    expect(dropped.config.potions.tiers).toEqual([{ name: 'basic', formula: '2d4+2', price: 40 }]);
+    expect(dropped.config.potions.tiers).toEqual([{ name: 'basic', formula: '2d4+2', price: 40, productionCost: 20, productionTicks: 0 }]);
   });
 
   it('rejects a potion tier with a bad formula, a negative price, an unknown field, or a missing field', () => {
@@ -81,10 +120,10 @@ describe('game configuration', () => {
     if (!parsed.ok) expect(parsed.errors).toContain('potions.tiers[1].formula: Invalid dice formula "lots"; expected NdM+K.');
 
     const extra = document();
-    (extra.potions as { tiers: Record<string, unknown>[] }).tiers[0]!.productionCost = 25;
+    (extra.potions as { tiers: Record<string, unknown>[] }).tiers[0]!.shelf = 25;
     const unknown = validateGameConfig(extra);
     expect(unknown.ok).toBe(false);
-    if (!unknown.ok) expect(unknown.errors).toContain('unknown field potions.tiers[0].productionCost');
+    if (!unknown.ok) expect(unknown.errors).toContain('unknown field potions.tiers[0].shelf');
 
     const incomplete = document();
     delete (incomplete.potions as { tiers: { formula?: string }[] }).tiers[2]!.formula;

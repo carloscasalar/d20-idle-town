@@ -46,15 +46,15 @@ describe('town services through an hourly tick', () => {
     party.duesPaidDay = -1;
     party.gold = 290;
     const apothecary = shop('apothecary');
-    const treasury = apothecary.treasury;
-    const earned = apothecary.earned;
+    Object.assign(apothecary, { treasury: 1000, earned: 0, spent: 0 });
     game.step();
     expect(party.potions).toEqual({ basic: 2 });
     expect(party.gold).toBe(190);
     expect(party.spent).toBe(100);
-    expect(game.view().stats.goldSpentByHeroes).toBe(party.spent);
-    expect(apothecary.treasury).toBe(treasury + party.spent);
-    expect(apothecary.earned).toBe(earned + party.spent);
+    expect(game.view().stats).toMatchObject({ goldSpentByHeroes: 100, goldSpentOnProduction: 50 });
+    expect(apothecary.treasury).toBe(1050);
+    expect(apothecary.earned).toBe(100);
+    expect(apothecary.spent).toBe(50);
     expect(party.guildMember).toBe(false);
     expect(game.view().events.filter((event) => event.text.includes('healing potion')).map((event) => event.text)).toEqual([
       `${party.name} buy 2 basic healing potions from ${apothecary.name} for 100 gp.`,

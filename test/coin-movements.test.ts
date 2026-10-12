@@ -127,6 +127,7 @@ function watchBooks(game: Game, config: DeepPartial<GameConfig> = {}) {
         }
       }
     }
+    sinks += current.stats.goldSpentOnProduction - previous.stats.goldSpentOnProduction; // Apothecary production.
     previous = current;
     previousIndex = currentIndex;
   };
@@ -205,11 +206,11 @@ function investigationScene(gold: number) {
 // literal outcomes; fixtures start with nonzero lifetime entries as well.
 describe('service purchase ledgers', () => {
   it.each([
-    { gold: 240, potions: { basic: 1 }, left: 190, spent: 50, treasury: 1050 },
-    { gold: 239, potions: {}, left: 239, spent: 0, treasury: 1000 },
-    { gold: 290, potions: { basic: 2 }, left: 190, spent: 100, treasury: 1100 },
-    { gold: 289, potions: { basic: 1 }, left: 239, spent: 50, treasury: 1050 },
-  ])('buys basic potions from a $gold gp purse while keeping the reserve', ({ gold, potions, left, spent, treasury }) => {
+    { gold: 240, potions: { basic: 1 }, left: 190, spent: 50, treasury: 1025, production: 25 },
+    { gold: 239, potions: {}, left: 239, spent: 0, treasury: 1000, production: 0 },
+    { gold: 290, potions: { basic: 2 }, left: 190, spent: 100, treasury: 1050, production: 50 },
+    { gold: 289, potions: { basic: 1 }, left: 239, spent: 50, treasury: 1025, production: 25 },
+  ])('buys basic potions from a $gold gp purse while keeping the reserve', ({ gold, potions, left, spent, treasury, production }) => {
     const game = scene((s, rng) => {
       const p = provisioned(rng, 1, gold);
       p.potions = {};
@@ -217,7 +218,7 @@ describe('service purchase ledgers', () => {
     });
     watchBooks(game).step();
     expect(game.view().parties[0]).toMatchObject({ gold: left, earned: 0, spent, potions });
-    expect(employer(game, 'apothecary')).toMatchObject({ treasury, earned: spent, spent: 0 });
+    expect(employer(game, 'apothecary')).toMatchObject({ treasury, earned: spent, spent: production });
     expect(readWorld(game).parties[0]!.members.map((h) => h.goldSpent)).toEqual([0, 0, 0, 0]);
     expect(game.view().stats).toMatchObject({ goldSpentByHeroes: spent, itemsSold: 0 });
   });
@@ -241,7 +242,7 @@ describe('service purchase ledgers', () => {
   });
 
   it.each([
-    { service: 'apothecary', cost: 100, left: 900, spent: 110, treasury: 1100, earned: 120, totalSpent: 107 },
+    { service: 'apothecary', cost: 100, left: 900, spent: 110, treasury: 1050, earned: 120, totalSpent: 107 },
     { service: 'guild', cost: 60, left: 940, spent: 70, treasury: 1060, earned: 80, totalSpent: 67 },
     { service: 'temple', cost: 40, left: 960, spent: 50, treasury: 1040, earned: 60, totalSpent: 47 },
     { service: 'smith', cost: 120, left: 880, spent: 130, treasury: 1120, earned: 140, totalSpent: 127 },
@@ -263,12 +264,12 @@ describe('service purchase ledgers', () => {
     const starting = openings(world);
     const before = totalGold(world);
     const ledger = { itemsSold: 3 };
-    const statistics = { goldPaid: 0, goldSpentByHeroes: 7 };
+    const statistics = { goldPaid: 0, goldSpentByHeroes: 7, goldSpentOnProduction: 0 };
 
     expect(visitTownServices(p, { ...SERVICE_SUPPLIES, town, day: 1, ledger, coin: openCoin(statistics), report: () => {} }, defaultTownServiceSteps())).toBe(true);
 
     expect(p).toMatchObject({ gold: left, earned: 30, spent });
-    expect(shop).toMatchObject({ treasury, earned, spent: 5 });
+    expect(shop).toMatchObject({ treasury, earned, spent: service === 'apothecary' ? 55 : 5 });
     expect(ledger).toEqual({ itemsSold: 3 });
     expect(statistics.goldSpentByHeroes).toBe(totalSpent);
     expect(p.members.map((h) => h.goldSpent)).toEqual(service === 'smith' || service === 'enchanter' ? [cost, 0, 0, 0] : [0, 0, 0, 0]);
@@ -277,7 +278,7 @@ describe('service purchase ledgers', () => {
     if (service === 'temple') expect(p.blessed).toBe(true);
     if (service === 'smith') expect(p.members[0]!.armorTier).toBe(1);
     if (service === 'enchanter') { expect(shop.stock).toEqual([]); expect(p.members[0]!.items[0]!.name).toBe('Shield +1'); }
-    assertConservation(before, totalGold(world));
+    assertConservation(before, totalGold(world), 0, service === 'apothecary' ? 50 : 0);
     assertHolderCounters(world, starting);
   });
 });
@@ -361,7 +362,7 @@ describe('homecoming payments', () => {
     const starting = openings(world);
     const before = totalGold(world);
     const ledger = { heroesDied: 0, partiesWiped: 0 };
-    const statistics = { goldPaid: 0, goldSpentByHeroes: 0 };
+    const statistics = { goldPaid: 0, goldSpentByHeroes: 0, goldSpentOnProduction: 0 };
     const reports: string[] = [];
     const roster = new CompanyRoster(DEFAULT_COMPANY_ROSTER_CONFIG, DEFAULT_HERO_ECONOMY, DEFAULT_TOWN_CONFIG, DEFAULT_HOLDING_CONFIG, DEFAULT_POLICIES_CONFIG);
     roster.replaceForScenario([p]);

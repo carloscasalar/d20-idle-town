@@ -124,7 +124,7 @@ function road(work = job(), skillDc = DEFAULT_JOB_INTEL_CONFIG.skillDc, seed = 1
   const events: ExpeditionEvent[] = [];
   const context: ExpeditionContext = {
     quest: board.byId(work.id), town: generateTown(rng, DEFAULT_TOWN_CONFIG, DEFAULT_HOLDING_CONFIG), rng: new Rng(seed),
-    ledger: { heroesDied: 0, partiesWiped: 0 }, coin: openCoin({ goldPaid: 0, goldSpentByHeroes: 0 }), kinds: profilesById(),
+    ledger: { heroesDied: 0, partiesWiped: 0 }, coin: openCoin({ goldPaid: 0, goldSpentByHeroes: 0, goldSpentOnProduction: 0 }), kinds: profilesById(),
     ...expeditionRules({ travelTicks: 4, skillDc }),
     combat: () => { throw new Error('Travel does not fight'); },
     disband: () => { throw new Error('Travel does not disband'); },

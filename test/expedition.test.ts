@@ -65,7 +65,7 @@ function setup(level = 1) {
   const town = generateTown(new Rng(2), DEFAULT_TOWN_CONFIG, DEFAULT_HOLDING_CONFIG);
   const rng = new Rng(99);
   const ledger = { heroesDied: 0, partiesWiped: 0 };
-  const statistics = { goldPaid: 0, goldSpentByHeroes: 0 };
+  const statistics = { goldPaid: 0, goldSpentByHeroes: 0, goldSpentOnProduction: 0 };
   const events: ExpeditionEvent[] = [];
   const calls: string[] = [];
   const combat = vi.fn<CombatResolver>(() => outcome(party, 'party'));

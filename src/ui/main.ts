@@ -203,6 +203,7 @@ function renderTown(view: GameView): string {
   return `<div class="card"><h3><span>${esc(view.town.name)}</span><span class="status">town</span></h3>
       <div class="row"><span>${view.parties.length} companies in town</span><span>${view.stats.partiesArrived} arrived so far</span></div>
       <div class="row"><span>heroes have spent</span><span class="gold">${view.stats.goldSpentByHeroes} gp</span></div>
+      <div class="row"><span>spent on potion production</span><span class="gold">${view.stats.goldSpentOnProduction} gp</span></div>
       <div class="row"><span>contracts expired</span><span>${view.stats.questsExpired}</span></div>
       <div class="row"><span>magic items found / sold</span><span>${view.stats.itemsFound} / ${view.stats.itemsSold}</span></div>
       <div class="row"><span>retired adventurers</span><span>${view.stats.retirements}</span></div>
@@ -239,7 +240,7 @@ function renderAll(): void {
   const view = game.view();
   clockEl.textContent = view.time;
   const stats = view.stats;
-  statsEl.innerHTML = `<span>quests <b>${stats.questsCompleted}</b>/${stats.questsCompleted + stats.questsFailed}</span><span>gold paid <b>${stats.goldPaid}</b></span><span>deaths <b>${stats.heroesDied}</b></span><span>raised <b>${stats.resurrections}</b></span><span>wiped <b>${stats.partiesWiped}</b></span>`;
+  statsEl.innerHTML = `<span>quests <b>${stats.questsCompleted}</b>/${stats.questsCompleted + stats.questsFailed}</span><span>gold paid <b>${stats.goldPaid}</b></span><span>production spent <b>${stats.goldSpentOnProduction}</b></span><span>deaths <b>${stats.heroesDied}</b></span><span>raised <b>${stats.resurrections}</b></span><span>wiped <b>${stats.partiesWiped}</b></span>`;
   renderPanel(view);
 }
 

@@ -48,7 +48,7 @@ describe('party merging', () => {
     donor.gold = 5;
     const roster = new CompanyRoster(DEFAULT_COMPANY_ROSTER_CONFIG, DEFAULT_HERO_ECONOMY, DEFAULT_TOWN_CONFIG, DEFAULT_HOLDING_CONFIG, DEFAULT_POLICIES_CONFIG);
     roster.replaceForScenario([host, donor]);
-    const leftover = roster.merge(host, donor, { coin: openCoin({ goldPaid: 0, goldSpentByHeroes: 0 }) });
+    const leftover = roster.merge(host, donor, { coin: openCoin({ goldPaid: 0, goldSpentByHeroes: 0, goldSpentOnProduction: 0 }) });
     expect(roster.isReady(host)).toBe(true);
     expect(aliveMembers(host).length).toBe(5); // 2 + 3: room for six, so everyone comes along
     expect(leftover.length).toBe(0);

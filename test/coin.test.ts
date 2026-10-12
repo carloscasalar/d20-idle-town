@@ -17,7 +17,7 @@ import {
 const AMOUNT = 10;
 
 function books() {
-  return { goldPaid: 13, goldSpentByHeroes: 17 };
+  return { goldPaid: 13, goldSpentByHeroes: 17, goldSpentOnProduction: 19 };
 }
 
 function accounts() {
@@ -38,10 +38,32 @@ function accounts() {
 
 /** A reason whose flags are all observable, and which asks for counters a hoard does not have. */
 const PROBE = Object.freeze({
-  probe: Object.freeze({ spent: true, earned: true, goldPaid: true, goldSpentByHeroes: true, adventurer: true } satisfies CoinEffects),
+  probe: Object.freeze({ spent: true, earned: true, goldPaid: true, goldSpentByHeroes: true, goldSpentOnProduction: true, adventurer: true } satisfies CoinEffects),
 });
 
 describe('coin movements', () => {
+  it('production sinks treasury gold and moves only spent and lifetime production spending', () => {
+    const shop = { treasury: 80, earned: 7, spent: 11 };
+    const statistics = { goldPaid: 13, goldSpentByHeroes: 17, goldSpentOnProduction: 19 };
+    const adventurer = { goldSpent: 2 };
+    const coin = openCoin(statistics);
+
+    coin.sink(treasury(shop), 25, 'production', adventurer);
+
+    expect(shop).toEqual({ treasury: 55, earned: 7, spent: 36 });
+    expect(statistics).toEqual({ goldPaid: 13, goldSpentByHeroes: 17, goldSpentOnProduction: 44 });
+    expect(adventurer.goldSpent).toBe(2);
+
+    // A sink has no receiver. Exercise that flag through the same public coin
+    // interface too, so an erroneous earned effect cannot hide behind the sink.
+    const receiver = { treasury: 3, earned: 4, spent: 5 };
+    coin.transfer(treasury(shop), treasury(receiver), 10, 'production', adventurer);
+    expect(shop).toEqual({ treasury: 45, earned: 7, spent: 46 });
+    expect(receiver).toEqual({ treasury: 13, earned: 4, spent: 5 });
+    expect(statistics).toEqual({ goldPaid: 13, goldSpentByHeroes: 17, goldSpentOnProduction: 54 });
+    expect(adventurer.goldSpent).toBe(2);
+  });
+
   it('sources, sinks and transfers each kind of holder', () => {
     for (const kind of ['purse', 'treasury', 'hoard', 'loot'] as const) {
       const sourced = accounts();
@@ -77,7 +99,7 @@ describe('coin movements', () => {
     expect(counters(moved.holders.loot)).toBeUndefined();
     expect(moved.lair).toEqual({ hoard: { gold: 9 } });
     expect(moved.holding).toEqual({ loot: { gold: 4 } });
-    expect(moved.statistics).toEqual({ goldPaid: 13 + AMOUNT * 4, goldSpentByHeroes: 17 + AMOUNT * 4 });
+    expect(moved.statistics).toEqual({ goldPaid: 13 + AMOUNT * 4, goldSpentByHeroes: 17 + AMOUNT * 4, goldSpentOnProduction: 59 });
     expect(moved.adventurer.goldSpent).toBe(2 + AMOUNT * 4);
   });
 
@@ -132,7 +154,7 @@ describe('coin movements', () => {
       openCoin(statistics, coinReasons).transfer(purse(company), treasury(employer), AMOUNT, reason, adventurer);
       expect(company).toEqual({ gold: purseGold, earned: purseEarned, spent: purseSpent });
       expect(employer).toEqual({ treasury: treasuryBalance, earned: treasuryEarned, spent: treasurySpent });
-      expect(statistics).toEqual({ goldPaid, goldSpentByHeroes });
+      expect(statistics).toEqual({ goldPaid, goldSpentByHeroes, goldSpentOnProduction: 19 });
       expect(adventurer.goldSpent).toBe(goldSpent);
       expect(heldGold([purse(company), treasury(employer)])).toBe(120);
     },
@@ -140,14 +162,14 @@ describe('coin movements', () => {
 
   it('applies a reason from a table passed in, on a source and a sink as well as a transfer', () => {
     const tribute = Object.freeze({
-      tribute: Object.freeze({ spent: false, earned: true, goldPaid: true, goldSpentByHeroes: false, adventurer: false } satisfies CoinEffects),
+      tribute: Object.freeze({ spent: false, earned: true, goldPaid: true, goldSpentByHeroes: false, goldSpentOnProduction: false, adventurer: false } satisfies CoinEffects),
     });
 
     const gifted = accounts();
     openCoin(gifted.statistics, tribute).source(hoard(gifted.lair), AMOUNT, 'tribute');
     expect(gifted.lair.hoard.gold).toBe(19);
     expect(gifted.lair).toEqual({ hoard: { gold: 19 } });
-    expect(gifted.statistics).toEqual({ goldPaid: 23, goldSpentByHeroes: 17 });
+    expect(gifted.statistics).toEqual({ goldPaid: 23, goldSpentByHeroes: 17, goldSpentOnProduction: 19 });
     expect(counters(hoard(gifted.lair))).toBeUndefined();
 
     const lost = accounts();
@@ -161,12 +183,12 @@ describe('coin movements', () => {
     openCoin(moved.statistics, tribute).transfer(purse(moved.company), treasury(moved.employer), AMOUNT, 'tribute');
     expect(moved.company).toEqual({ gold: 30, earned: 3, spent: 5 });
     expect(moved.employer).toEqual({ treasury: 90, earned: 17, spent: 11 });
-    expect(moved.statistics).toEqual({ goldPaid: 23, goldSpentByHeroes: 17 });
+    expect(moved.statistics).toEqual({ goldPaid: 23, goldSpentByHeroes: 17, goldSpentOnProduction: 19 });
   });
 
   it('conserves gold over random sequences of movements', () => {
     const quiet = Object.freeze({
-      probe: Object.freeze({ spent: false, earned: false, goldPaid: false, goldSpentByHeroes: false, adventurer: false } satisfies CoinEffects),
+      probe: Object.freeze({ spent: false, earned: false, goldPaid: false, goldSpentByHeroes: false, goldSpentOnProduction: false, adventurer: false } satisfies CoinEffects),
     });
     const rng = new Rng(6);
     const company = { gold: 100, earned: 0, spent: 0 };

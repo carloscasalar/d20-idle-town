@@ -6,19 +6,22 @@ export interface PotionTier {
   name: string;
   formula: string;
   price: number;
+  productionCost: number;
+  /** Read by the apothecary; production remains instant even when nonzero. */
+  productionTicks: number;
 }
 
-/** The Healing potion catalogue. Production cost arrives with a later slice. */
+/** The Healing potion catalogue, including production tuning. */
 export interface PotionConfig {
   tiers: readonly PotionTier[];
 }
 
 export const DEFAULT_POTION_CONFIG: PotionConfig = freeze({
   tiers: [
-    { name: 'basic', formula: '2d4+2', price: 50 },
-    { name: 'greater', formula: '4d4+4', price: 200 },
-    { name: 'superior', formula: '8d4+8', price: 2000 },
-    { name: 'supreme', formula: '10d4+20', price: 20000 },
+    { name: 'basic', formula: '2d4+2', price: 50, productionCost: 25, productionTicks: 0 },
+    { name: 'greater', formula: '4d4+4', price: 200, productionCost: 100, productionTicks: 0 },
+    { name: 'superior', formula: '8d4+8', price: 2000, productionCost: 1000, productionTicks: 0 },
+    { name: 'supreme', formula: '10d4+20', price: 20000, productionCost: 10000, productionTicks: 0 },
   ],
 });
 

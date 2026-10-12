@@ -86,7 +86,8 @@ RNG argument. Interleaving two worlds cannot change either world's IDs.
   equipped item into one bundle of AC / weapon / HP / speed / resistance
   modifiers. It also owns out-of-combat skill checks (`rollSkill`,
   `SKILL_ADVANTAGE`) used for tavern investigation and reading the road.
-- **`potions.ts`** — the Healing potion catalogue (name, formula, price) and the
+- **`potions.ts`** — the Healing potion catalogue (name, formula, price,
+  independent production cost and production ticks) and the
   shared pack, a count per tier. It chooses the potion a Bloodied hero drinks
   and describes the pack for the log. The game view copies that pack in catalogue
   order; the party card joins the view and does not import the catalogue. Combat, the Short rest
@@ -153,7 +154,13 @@ enchanter buys back.
   name any registered step, including one that is not in the default list.
   Each step
   keeps the existing reserve, equipment allocation and synchronous reporting.
-  Gold moves through the world's coin object. The blessing's hit points per
+  Gold moves through the world's coin object. The potions step makes each
+  potion on demand: a `production` sink first, then its full-price `service`
+  transfer, with no event between them. A multi-potion purchase repeats that
+  pair and reports one receipt afterwards. Every tier is offered while the
+  apothecary is not ruined, regardless of treasury. Production ticks are read
+  but have no behaviour yet; production is instant and draws no randomness.
+  The blessing's hit points per
   level live on the services configuration and are passed into combat setup.
 
 - **`coin.ts`** — the only writer of a gold balance or a gold counter. `openCoin`
@@ -170,6 +177,11 @@ enchanter buys back.
   `Game`. The reason table stays in code: the effects are the accounting
   identity of a movement, not a tunable of the world. Factories still set a
   holder's starting amount.
+  `production` sets only `spent` and `goldSpentOnProduction`; its other effects
+  are false. `GoldStatistics`, `GameStats` and `Game.view().stats` expose
+  `goldPaid`, `goldSpentByHeroes` and the lifetime `goldSpentOnProduction`.
+  The UI shows production spending in the Town summary and statistics bar. Only
+  the built-in `production` reason moves that new statistic.
 
 ### `src/quests` — what companies actually do
 
@@ -442,6 +454,9 @@ scripted 2d4+2 of 8.
 | Path | What it covers |
 | --- | --- |
 | `test/potions.test.ts` | Smallest covering tier, strongest fallback, a fallen hero's maximum, pack wording |
+| `test/apothecary-production.test.ts` | Exact per-potion sink/sale order and balances, one receipt after all pairs, independent configured costs, instant nonzero ticks, every tier from a treasury in debt, permanent ruin, game-view statistics and tuning report |
+| `test/coin.test.ts` | Coin reasons and holder accounting, including production moving only spent and lifetime production spending |
+| `test/game-config.test.ts` | Configuration validation, including required production costs and ticks, default zero ticks and invalid production values |
 | `test/potion-buying.test.ts` | Stock target, tier choice, budget step-down, resurrection reserve, one tier per visit, ruined and empty catalogues, `potionCoverFraction` |
 | `test/potion-sharing.test.ts` | Both sharing orders in combat and at the Short rest, no recorded policy, one draw per company, host policies on a merger, weight validation |
 | `test/dice.test.ts` | Formula parsing, scripted and seeded rolls, bounds, invalid formulas, derived Assured healing |
@@ -461,7 +476,7 @@ scripted 2d4+2 of 8.
 | `test/job-intel.test.ts` | Hourly characterization of learning a contract or bounty |
 | `test/job-intel-module.test.ts` | Job intelligence through its own interface: each way of learning, each refusal, and a made-up step |
 | `test/job-intel-regression.test.ts` | Three seeds, 400 hours: the world with investigations removed matches the run from before inquiries changed shape |
-| `test/tune.test.ts` | Seed ranges and lists, invalid arguments, default scales, unrounded reports, inclusive baseline comparison and apothecary treasury tracking |
+| `test/tune.test.ts` | Seed ranges and lists, invalid arguments, default scales, unrounded reports, inclusive baseline comparison, apothecary treasury tracking and production spending from a real configured game purchase |
 | `scripts/combat-sweep.ts` | Long runs for seeds 1–150, 1,500 hours each, reporting crashes |
 | `test/party.test.ts` | Hero progression on the 5e thresholds, death and resurrection, merging, party levels |
 | `test/encounters.test.ts` | XP bands land inside the engine's own thresholds |
@@ -506,8 +521,9 @@ The apothecary report reads `Game.view()` at initialization and after every tick
 Ruined and total shops are counts across seeds; lowest treasury is the minimum
 of any apothecary at any observed tick, including after ruin. Treasury at the
 end is the mean final apothecary treasury total per seed. `goldSpentOnProduction`
-is the mean final lifetime statistic per seed when available, otherwise it is
-printed as unavailable. Other services do not enter these figures.
+is the mean final lifetime statistic per seed, exposed by the game with its
+other gold statistics. Reports of older observations that lack it still print
+unavailable. Other services do not enter these figures.
 
 ## Extension points
 

@@ -125,7 +125,7 @@ function world(
     rng,
     tick: 0,
     ledger,
-    coin: openCoin({ goldPaid: 0, goldSpentByHeroes: 0 }),
+    coin: openCoin({ goldPaid: 0, goldSpentByHeroes: 0, goldSpentOnProduction: 0 }),
     report: () => {},
     companySize: companySize ?? DEFAULT_COMPANY_ROSTER_CONFIG.companySize,
     renownCap: renownCap ?? DEFAULT_COMPANY_ROSTER_CONFIG.renownCap,

@@ -62,3 +62,42 @@ Prior art: the coin movement tests that hold each treasury equal to opening plus
 - `CHANGELOG.md`: apothecary production and the new statistic.
 
 ## Comments
+
+
+- Turn 06 decisions: each purchased potion has its own `production` sink and
+  full-price `service` transfer, in that order. A purchase of several potions
+  repeats these adjacent pairs, then adds the pack and emits the existing single
+  receipt for the full bill. No adventurer is named on either movement. This
+  preserves issue 05's one-tier visit, total hero spending and log wording.
+- `productionCost` and `productionTicks` live on each `potions.tiers` catalogue
+  row. Both are required, finite, non-negative whole numbers: the coin interface
+  takes whole gold pieces, so fractional production costs are rejected before
+  play. Costs are independent of selling prices. The ticks table defaults to
+  zero throughout; the service reads the configured value but nonzero values
+  deliberately leave production instant, as this issue specifies.
+- Test seams are the public coin interface, the configured `potions` service
+  step, configuration validation, `Game.view()` at receipt and after the hour,
+  and the tuning tracker/formatter. Required statistic/catalogue fixture fields
+  are migrated. Existing potion buying tests change only production accounting
+  assertions and required fields; buying policy cases and receipt expectations
+  remain the same. The conservation audit counts the new production sink;
+  economic expectations now include it. The six hash tests and snapshots,
+  guarded seeds and guarded expectations remain unchanged.
+- Review fixed point: the starting HEAD `c75fa65`; review this turn's working
+  diff against that commit under both Standards and Spec.
+- Review corrections: expose production spending beside the UI's gold statistics
+  in both the Town summary and statistics bar. Update the Healing potion
+  definition in `CONTEXT.md` so production defaults are described as independent
+  configuration, and the existing hourly service test accounts for the new sink.
+- Out-of-scope bug found and reproduced: the unchanged selling-price validator
+  accepts a fractional potion price (for example 1.5 gp), but coin movements
+  require whole gold pieces. An affordable purchase with productionCost 7
+  sinks production first, then the per-potion service payment throws. Rule 5
+  leaves price validation/fractional coin support for separate work; aggregating
+  sales to hide this would violate the required per-potion movement pairs.
+- Final checks: `pnpm typecheck` passes; `pnpm test` passes with 727 tests
+  passed and six hash tests skipped. The 150-seed, 1,500-hour crash sweep
+  completes with no crashes. All 11 targeted mutations fail the tests. Final
+  Standards and Spec reviews have no remaining findings. Browser smoke is
+  unavailable because there is no connected browser and native browser access
+  was denied. Full report: `../run/turns/06-07-apothecary-production-report.md`.

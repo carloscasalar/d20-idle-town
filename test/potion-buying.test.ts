@@ -90,9 +90,9 @@ describe('buying potions through the potions step', () => {
     expect(party.gold).toBe(RESERVE + 900);
     expect(party.spent).toBe(100);
     expect(party.members[0]!.goldSpent).toBe(0);
-    expect(shop.treasury).toBe(100);
+    expect(shop.treasury).toBe(50);
     expect(shop.earned).toBe(100);
-    expect(shop.spent).toBe(0);
+    expect(shop.spent).toBe(50);
     expect(statistics.goldSpentByHeroes).toBe(100);
     expect(events).toEqual([receipt(party.name, 2, 'basic', 100)]);
   });
@@ -142,9 +142,9 @@ describe('buying potions through the potions step', () => {
 
   it('buys the tier whose assurance is exactly half the need, not the tier just above it', () => {
     const tiers: PotionTier[] = [
-      { name: 'low', formula: '1d2+8', price: 10 },
-      { name: 'mid', formula: '1d2+18', price: 100 },
-      { name: 'high', formula: '1d1+19', price: 1000 },
+      { name: 'low', formula: '1d2+8', price: 10, productionCost: 5, productionTicks: 0 },
+      { name: 'mid', formula: '1d2+18', price: 100, productionCost: 50, productionTicks: 0 },
+      { name: 'high', formula: '1d1+19', price: 1000, productionCost: 500, productionTicks: 0 },
     ];
     const { party, bought, events } = visit({ heroes: [{ maxHp: 80 }], gold: RESERVE + 10000, tiers });
     expect(bought).toBe(true);
@@ -215,7 +215,7 @@ describe('buying potions through the potions step', () => {
   });
 
   it('buys a free tier without taking gold from the reserve', () => {
-    const free: PotionTier = { name: 'basic', formula: '2d4+2', price: 0 };
+    const free: PotionTier = { name: 'basic', formula: '2d4+2', price: 0, productionCost: 0, productionTicks: 0 };
     const { party, bought, events, shop } = visit({
       heroes: [{ maxHp: 32 }],
       gold: RESERVE,
@@ -248,8 +248,8 @@ describe('buying potions through the potions step', () => {
 
   it('buys the lowest tier by assured healing when the catalogue has no tier named basic', () => {
     const tiers: PotionTier[] = [
-      { name: 'major', formula: '4d4+4', price: 10 },
-      { name: 'minor', formula: '1d4+1', price: 80 },
+      { name: 'major', formula: '4d4+4', price: 10, productionCost: 5, productionTicks: 0 },
+      { name: 'minor', formula: '1d4+1', price: 80, productionCost: 40, productionTicks: 0 },
     ];
     const { party, bought, events } = visit({ heroes: [{ maxHp: 4 }], gold: RESERVE + 1000, tiers });
     expect(bought).toBe(true);
@@ -260,8 +260,8 @@ describe('buying potions through the potions step', () => {
 
   it('breaks an assured-healing tie toward the earlier catalogue tier, not the cheaper one', () => {
     const tiers: PotionTier[] = [
-      { name: 'earlier', formula: '1d4+1', price: 40 },
-      { name: 'later', formula: '1d4+1', price: 5 },
+      { name: 'earlier', formula: '1d4+1', price: 40, productionCost: 20, productionTicks: 0 },
+      { name: 'later', formula: '1d4+1', price: 5, productionCost: 2, productionTicks: 0 },
     ];
     const { party, bought, events } = visit({ heroes: [{ maxHp: 4 }], gold: RESERVE + 1000, tiers });
     expect(bought).toBe(true);
@@ -272,9 +272,9 @@ describe('buying potions through the potions step', () => {
 
   it('steps down to five weak when the stronger cheaper tier is above the chosen one', () => {
     const tiers: PotionTier[] = [
-      { name: 'weak', formula: '1d2+2', price: 10 },
-      { name: 'mid', formula: '2d4+2', price: 100 },
-      { name: 'odd', formula: '4d4+4', price: 50 },
+      { name: 'weak', formula: '1d2+2', price: 10, productionCost: 5, productionTicks: 0 },
+      { name: 'mid', formula: '2d4+2', price: 100, productionCost: 50, productionTicks: 0 },
+      { name: 'odd', formula: '4d4+4', price: 50, productionCost: 25, productionTicks: 0 },
     ];
     const { party, bought, events } = visit({ heroes: [{ maxHp: 40 }], gold: RESERVE + 299, tiers });
     expect(bought).toBe(true);
@@ -286,9 +286,9 @@ describe('buying potions through the potions step', () => {
 
   it('steps down the healing ladder to the next cheaper tier whose count the purse can pay', () => {
     const tiers: PotionTier[] = [
-      { name: 'mild', formula: '2d4+2', price: 400 },
-      { name: 'steep', formula: '8d4+8', price: 5000 },
-      { name: 'bargain', formula: '4d4+4', price: 50 },
+      { name: 'mild', formula: '2d4+2', price: 400, productionCost: 200, productionTicks: 0 },
+      { name: 'steep', formula: '8d4+8', price: 5000, productionCost: 2500, productionTicks: 0 },
+      { name: 'bargain', formula: '4d4+4', price: 50, productionCost: 25, productionTicks: 0 },
     ];
     const { party, bought, events } = visit({ heroes: [{ maxHp: 128 }], gold: RESERVE + 3500, tiers });
     expect(bought).toBe(true);
@@ -299,9 +299,9 @@ describe('buying potions through the potions step', () => {
 
   it('buys as many of the cheapest tier as the purse affords when no full count fits', () => {
     const tiers: PotionTier[] = [
-      { name: 'mild', formula: '2d4+2', price: 400 },
-      { name: 'steep', formula: '8d4+8', price: 5000 },
-      { name: 'bargain', formula: '4d4+4', price: 50 },
+      { name: 'mild', formula: '2d4+2', price: 400, productionCost: 200, productionTicks: 0 },
+      { name: 'steep', formula: '8d4+8', price: 5000, productionCost: 2500, productionTicks: 0 },
+      { name: 'bargain', formula: '4d4+4', price: 50, productionCost: 25, productionTicks: 0 },
     ];
     const { party, bought, events } = visit({ heroes: [{ maxHp: 128 }], gold: RESERVE + 100, tiers });
     expect(bought).toBe(true);
