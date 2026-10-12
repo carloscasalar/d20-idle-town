@@ -1,6 +1,6 @@
 # Hit Dice at the Short rest
 
-Status: ready-for-agent
+Status: done
 
 Blocked-by: [02 - Measuring tool and baseline](02-measuring-tool-and-baseline.md)
 
@@ -129,3 +129,9 @@ Fixture migration: heroes gain `hitDiceSpent`; migrate any test helper or fixtur
   `4cead1d`. Implementation uses that actual clean tip; issue 02 files remain
   unchanged. `RTK.md`, referenced by `AGENTS.md`, was not found in this repo or
   the relevant parent/agent directories; no configuration files were changed.
+
+### Closed by the orchestrator (2026-10-12)
+
+Commits `04d8b91` (the feature, Codex) and `d970272` (correction 1, tests only, Cursor: Codex reached its usage limit after committing). Review: the slice reviewer found no wrong behaviour, ran 26 mutations (24 caught) and the long sweep (`no crashes in seeds 1-150 for 1500 hours`), and failed the first round on three missing tests; the correction added them and the orchestrator confirmed that the two surviving mutations (`restDice` returning the world generator; potions only for heroes with no dice left) now fail a test. 658 tests green, 6 skipped (the regression hashes, until issue 09).
+
+Reviewer notes, not corrected: `ExpeditionContext` takes the whole `QuestConfig` and `WorkKindConfigs`; `encountersAhead` names `kinds.assault` directly; `src/sim/expedition.ts` writes `h.hp` and `hitDiceSpent` itself.
