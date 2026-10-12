@@ -1,6 +1,6 @@
 # One drinking decision for the Company, applied in a fight and at a Short rest
 
-Status: ready-for-agent
+Status: done
 Category: enhancement
 
 Found by the architecture review of 2026-10-12 and settled with the owner in the session that followed. It follows [ADR 0001](../../../docs/adr/0001-actor-decisions-live-with-the-actor.md): an actor's decisions live with the actor, and what a thing does lives with the thing.
@@ -67,3 +67,11 @@ The whole round can be planned before any die is rolled because no choice depend
 - The count of encounters the Short rest paces Hit Dice over.
 
 ## Comments
+
+### Done (2026-10-12)
+
+Commits `71c5790` (the decision `planDrinkingRound` in `src/adventurers/policies.ts`, the effect `drinkPotion` in `src/adventurers/potions.ts`, the fight and the Short rest applying the plan) and `1a983c6` (correction 1). Implemented by Cursor; Codex refused its configured model.
+
+Review: `slice-reviewer` on `71c5790` found the code behaviour-identical to `ff29ca7`, every listed mutation killed and the long sweep clean (150 seeds, 1500 hours), and failed it on one test gap (the Short rest could ignore the Company's policy unnoticed). Correction 1 closed it, stopped exporting `potionSharingOf` and removed a second copy of the pack rule; the orchestrator read that diff and re-ran the checks: PASS. 784 tests green; snapshots and `scripts/tune-baseline.json` unchanged. Report: `run/turns/12-13-one-drinking-decision-report.md`; review: `run/reviews/12-13-slice-review.md`.
+
+Left unguarded, as before this issue: no fight test has an unconscious fighter above 0 hit points, so only the regression hashes would notice the fight describing them as conscious.

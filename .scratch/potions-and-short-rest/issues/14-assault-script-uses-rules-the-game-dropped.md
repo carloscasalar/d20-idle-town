@@ -62,3 +62,15 @@ The game itself does not change: no source file under `src/` needs to change for
 - The Company's drinking decision (issue 13). Once the script plays the real game it uses whatever the game does, before or after issue 13.
 - Tests for the script.
 - `scripts/tune.ts` and the other scripts, beyond the import of `scripts/calibrate.ts`.
+
+### Decision during turn 13 (2026-10-12, `prd-answerer`)
+
+The implementer stopped on two questions (`run/turns/13-14-assault-script-plays-the-game-report.md`).
+
+**1. The purse of the trial's Company.** `resurrectionCost(level, heroes) + heroes.startingGoldPerLevel * level`, both read from `src/adventurers/hero.ts` (1,400 gp at level 5). The pack is not set by hand and `services.steps` stays at its default. Confidence: medium that it is neither the arrival purse nor exactly the resurrection cost; low on the exact amount.
+
+Why: with the arrival purse alone the Company never passes the game's gate for a Bounty, so no trial fights. With exactly the resurrection cost the town sells nothing and the pack is always empty, which is not the game's Company: the brief lists restocking in town among what the old script lacked. Setting the pack by hand would copy the buying target into the script, and triage decided the script "stops carrying rules of its own". The amount chosen is the old script's arrival purse on top of the reserve the gate demands: the apothecary sells as many basic potions as the spare gold affords and nothing else is bought. If wrong, it is one expression in the script.
+
+**2. Keeping the trial on that Lair's Bounty.** `world.maxOpenQuests: 0`, with a one-line comment naming the dependency, and a trial that stops with an error after a tick limit if the Bounty is never taken. Confidence: medium.
+
+Why: the brief defines a trial as that Company's Expedition against the Lair's Bounty; a Contract first would change gold, level and roster before the measured Bounty. Contract and raid posting read the limit and Bounty posting does not; it is a documented key and the brief allows `GameConfig` for isolating a trial. If Bounties ever obey the limit, the tick-limit error shows it.
