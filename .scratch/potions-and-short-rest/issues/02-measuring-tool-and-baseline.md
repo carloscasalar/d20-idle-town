@@ -1,6 +1,6 @@
 # Measuring tool and baseline
 
-Status: ready-for-agent
+Status: done
 
 Blocked-by: none - can start immediately
 
@@ -168,3 +168,9 @@ print no PASS/FAIL verdicts. Both code-review axes report no findings. Baseline
 measurements, game code, all six regression hashes and every existing test
 expectation are unchanged. Full correction report and actual CLI outputs:
 `../run/turns/01-02-correction-1-report.md`.
+
+### Closed by the orchestrator (2026-10-12)
+
+Commits `2d1ecd2` (the tool, the baseline, the tests, the documents) and `fd30c23` (correction 1: a verdict only when the run's seeds are the baseline's). Review: the slice reviewer found evidence for every acceptance criterion and re-ran scale 1.15 and the 3,000-tick run with the recorded results; it failed the first round on the seed comparison, and the correction was checked by the orchestrator (613 tests green, `SEEDS=1..10 SCALES=1,1.25,1.75 TICKS=600` exits 0 with no verdict). No change under `src/` or `test/__snapshots__/`.
+
+Left for later issues: the 3,000-tick run prints "comparison unavailable" although `apothecaryLongRun` is in the baseline file, so final check 3 (issues 08 and 09) is compared by eye or the script is extended there.
