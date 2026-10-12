@@ -30,6 +30,8 @@ Run finished 2026-10-12: issues 02 to 09 done; `pnpm typecheck` clean, 749 tests
 
 Run resumed 2026-10-12 at checkpoint `9c9a2f7` (typecheck clean, 754 tests green) for issues 11 and 12, triaged to `ready-for-agent` after the first finish.
 
+Run finished again 2026-10-12: issues 11 and 12 done; `pnpm typecheck` clean, 773 tests green with none skipped; final smoke `smoke/08-final-after-11-12.md` PASS at `60b4970`, every figure identical to `07-final.md`. Nothing left `ready-for-agent`.
+
 ## Lessons
 
 - `pnpm exec vite-node` (as written in `docs/agents/implementation.md`) fails with "Command not found"; `pnpm dlx vite-node` works. Prompts of this run use `pnpm dlx`.
