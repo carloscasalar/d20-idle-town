@@ -63,3 +63,10 @@ No behaviour of the game changes: no configuration default, no random draw and n
 - Bounties in the Reward set-aside (issue 11). If issue 11 is built first, keep its behaviour and apply the visibility change to whatever it left.
 - Any other change to the catalogues or to configuration validation.
 
+### Decision before turn 11 (2026-10-12, `prd-answerer`)
+
+- Question: since issue 11, the Game calls `Board.rewardTreasury` and `Board.bountyRewardCap` from `postAssaults()` (the Bounty threshold of a listed employer, and no Bounty of zero or less). What does item 2 require now?
+- Decision: both methods become private and `WorkContext` keeps both. The Board gains one public yes-or-no query for the Game (for example `canFundBounty(employer, threshold, quests)`): true when the reward-sizing treasury meets the threshold and the Bounty cap is positive. `postAssaults()` asks it where the threshold check is today.
+- Why: the issue says "apply the visibility change to whatever it left" and "The Board's reward-sizing treasury is not part of the Board's public surface", so leaving them public is out. Moving the check into `Board.postBounty` would put a Game decision in the Board: `world.postingThreshold` is Game configuration, all three threshold checks are in `src/sim/game.ts`, and `docs/ARCHITECTURE.md` says the Game checks the threshold. No test or script calls either method.
+- Confidence: high that the methods cannot stay public; medium for a Board query over folding the check into `postBounty`. If wrong, it is one Board method and one call site.
+
