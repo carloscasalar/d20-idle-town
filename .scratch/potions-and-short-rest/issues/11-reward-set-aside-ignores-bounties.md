@@ -1,6 +1,6 @@
 # The Reward set-aside ignores Bounties
 
-Status: ready-for-agent
+Status: done
 Category: enhancement
 
 Found by the owner while reviewing [issue 08](08-reward-set-aside.md). Not reachable with the default configuration: `board.rewardSetAsideFor` holds the apothecary alone, and the apothecary never posts a Bounty.
@@ -73,3 +73,10 @@ An employer outside the list is unchanged in every respect: its Bounty is capped
 - A minimum reward for Bounties, and any change to `rewardPerLevel` or `treasuryShare`.
 - Whether open Bounties use Contract slots or expire, and what a ruined employer pays (the `contract-lifecycle` issues).
 
+### Closed by the orchestrator (2026-10-12)
+
+- Commits: `5329eea` (Codex, turn 10) and `f8327e3` (same session, correction 1). Reports: `../run/turns/10-11-reward-set-aside-bounties-report.md`.
+- Review of `5329eea` by the `slice-reviewer`: every acceptance criterion proven by a test in `test/reward-set-aside.test.ts`, no survivor among the nine mutation families, the regression hashes, their snapshots and `scripts/tune-baseline.json` byte-identical to `9c9a2f7`, long sweep over seeds 1 to 150 for 1,500 hours with no crash. FAIL on design only: `generateAssault` kept a fallback that read the guild's treasury, the Board repeated the reward formula, and one field name had two meanings. Record: `../run/reviews/10-11-slice-review.md`.
+- Correction `f8327e3` read whole by the orchestrator: `generateAssault` takes `AssaultFunding` only, with the field renamed `rewardCap`; the formula lives in generation and the Board rejects a returned reward of zero or less. Seven call sites in three test files and `scripts/assault.ts` changed the shape of the argument, with no assertion changed. `pnpm typecheck` clean, 770 tests green, guard files still identical to `9c9a2f7`.
+- Behaviour to know: a Bounty with a reward of zero or less is no longer posted for any guild, listed or not (before, an unlisted guild with `rewardPerLevel` 0 or a treasury of 0 or less posted one). The brief's "No Bounty is ever posted with a reward of zero or less" covers it.
+- The default game is unchanged, so no smoke check was run for this issue.
