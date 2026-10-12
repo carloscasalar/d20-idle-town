@@ -487,7 +487,7 @@ seeds 1 and 2 keep those fights, with a scripted 2d4+2 of 8.
 | `test/apothecary-production.test.ts` | Exact per-potion sink/sale order and balances, one receipt after all pairs, independent configured costs, instant nonzero ticks, every tier from a treasury in debt, permanent ruin, game-view statistics and tuning report |
 | `test/coin.test.ts` | Coin reasons and holder accounting, including production moving only spent and lifetime production spending |
 | `test/coin-movements.test.ts` | Service purchases, paid rounds, resurrection, homecoming, retirement, income, expiry, windfall and purse movements, including a 400-hour bookkeeping run |
-| `test/game-config.test.ts` | Configuration validation, including required Reward set-aside lists, known service/kind names, empty-list disabling, required production costs and ticks, default zero ticks and invalid production values |
+| `test/game-config.test.ts` | Configuration validation, including required Reward set-aside lists, known service/kind names, empty-list disabling, required production costs and ticks, default zero ticks, invalid production values, whole-number potion prices, and formulas whose lowest total is below 1 |
 | `test/potion-buying.test.ts` | Stock target, tier choice, budget step-down, resurrection reserve, one tier per visit, ruined and empty catalogues, `potionCoverFraction` |
 | `test/potion-sharing.test.ts` | Both sharing orders in combat and at the Short rest, no recorded policy, one draw per company, host policies on a merger, weight validation |
 | `test/dice.test.ts` | Formula parsing, scripted and seeded rolls, bounds, invalid formulas, derived Assured healing |

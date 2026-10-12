@@ -27,8 +27,9 @@ home changes the game everywhere that value applies.
 `validateGameConfig` checks a complete document. It reports a missing section,
 a missing field, an unknown field, a section that is not an object, a wrong
 type, a count that is not a whole number, an empty weight list, a weight list
-whose weights are all zero, a negative price, or a range whose minimum exceeds
-its maximum. It also checks every name against the catalogue that defines it:
+whose weights are all zero, a negative price, a potion price that is not a
+whole number, a potion formula whose lowest total is below 1, or a range whose
+minimum exceeds its maximum. It also checks every name against the catalogue that defines it:
 `board.rewardSetAsideFor` against employer kinds and town services,
 `town.retiredHoldings` and `quests.relicHoldings` against holding kinds,
 `quests.guildOnlyKinds` against employer kinds, `services.steps` against the
@@ -284,13 +285,14 @@ they live in `potions`.
 
 The Healing potion catalogue. Defined in `src/adventurers/potions.ts`.
 Each tier has a name, a dice formula, a selling price, an independent
-`productionCost` and `productionTicks`. Production costs are finite, non-negative
-whole gold pieces; ticks are finite, non-negative whole numbers. The name is the key
-in a company's pack. Assured healing is not stored: the dice module derives it
-from the formula, and a smaller tier is one with lower assured healing.
-Replacing `tiers` replaces the whole list, so a tier can be dropped or changed.
-A formula that does not parse is rejected. A duplicate tier name is rejected,
-for example `potions.tiers: duplicate tier "basic"`.
+`productionCost` and `productionTicks`. Selling prices and production costs are
+finite, non-negative whole gold pieces; ticks are finite, non-negative whole
+numbers. The name is the key in a company's pack. Assured healing is not stored:
+the dice module derives it from the formula, and a smaller tier is one with lower
+assured healing. Replacing `tiers` replaces the whole list, so a tier can be
+dropped or changed. A formula that does not parse is rejected, as is a formula
+whose lowest total is below 1 (each die counts at least 1, plus the bonus). A
+duplicate tier name is rejected, for example `potions.tiers: duplicate tier "basic"`.
 
 | Tier | Formula | Price (gp) | Production cost (gp) | Assured healing |
 | --- | --- | --- | --- | --- |

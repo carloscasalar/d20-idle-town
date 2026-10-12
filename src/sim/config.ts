@@ -328,7 +328,7 @@ const potionTier: Spec = {
   fields: {
     name: { kind: 'string', nonEmpty: true },
     formula: { kind: 'string', nonEmpty: true },
-    price,
+    price: { ...price, integer: true },
     productionCost: { ...price, integer: true },
     productionTicks: count,
   },
@@ -424,8 +424,10 @@ export function mergeConfig(base: unknown, override: unknown): unknown {
 
 /**
  * Check a complete configuration, such as the object a YAML loader would return.
- * A missing section, a wrong type, a negative price, or a range whose minimum
- * exceeds its maximum is reported in words. A valid value is returned as `GameConfig`.
+ * A missing section, a wrong type, a negative price, a potion price that is not
+ * a whole number, a potion formula whose lowest total is below 1, or a range
+ * whose minimum exceeds its maximum is reported in words. A valid value is
+ * returned as `GameConfig`.
  */
 export function validateGameConfig(value: unknown): ConfigResult {
   const errors: string[] = [];
@@ -466,7 +468,11 @@ function checkPotionFormulas(value: Record<string, unknown>, errors: string[]): 
     if (!isPlainObject(tier)) return;
     if (typeof tier.formula === 'string') {
       try {
-        parseDice(tier.formula);
+        const dice = parseDice(tier.formula);
+        const lowestTotal = dice.count + dice.bonus;
+        if (lowestTotal < 1) {
+          errors.push(`potions.tiers[${index}].formula: lowest total ${lowestTotal} is below 1`);
+        }
       } catch (error) {
         errors.push(`potions.tiers[${index}].formula: ${error instanceof Error ? error.message : String(error)}`);
       }

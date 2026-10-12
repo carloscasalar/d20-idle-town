@@ -67,6 +67,51 @@ describe('game configuration', () => {
     if (!result.ok) expect(result.errors).toContain(`potions.tiers[0].${key}: ${error}`);
   });
 
+  it('rejects a fractional selling price on a later potion tier', () => {
+    const configured = resolveGameConfig({
+      potions: { tiers: [
+        { name: 'sound', formula: '2d4-1', price: 10, productionCost: 5, productionTicks: 0 },
+        { name: 'odd', formula: '1d4', price: 1.5, productionCost: 1, productionTicks: 0 },
+      ] },
+    });
+    expect(configured).toEqual({
+      ok: false,
+      errors: ['potions.tiers[1].price: expected a whole number, got 1.5'],
+    });
+  });
+
+  it.each([
+    ['1d4-1', 'lowest total 0 is below 1'],
+    ['1d4-3', 'lowest total -2 is below 1'],
+    ['1d4-20', 'lowest total -19 is below 1'],
+  ])('rejects potion formula %s on a later tier because its %s', (formula, error) => {
+    const configured = resolveGameConfig({
+      potions: { tiers: [
+        { name: 'sound', formula: '2d4-1', price: 10, productionCost: 5, productionTicks: 0 },
+        { name: 'weak', formula, price: 10, productionCost: 5, productionTicks: 0 },
+      ] },
+    });
+    expect(configured).toEqual({
+      ok: false,
+      errors: [`potions.tiers[1].formula: ${error}`],
+    });
+  });
+
+  it('accepts a potion formula whose lowest total is 1, including a negative bonus', () => {
+    const configured = resolveGameConfig({
+      potions: { tiers: [
+        { name: 'plain', formula: '1d4', price: 10, productionCost: 5, productionTicks: 0 },
+        { name: 'edged', formula: '2d4-1', price: 12, productionCost: 6, productionTicks: 0 },
+      ] },
+    });
+    expect(configured.ok).toBe(true);
+    if (!configured.ok) return;
+    expect(configured.config.potions.tiers).toEqual([
+      { name: 'plain', formula: '1d4', price: 10, productionCost: 5, productionTicks: 0 },
+      { name: 'edged', formula: '2d4-1', price: 12, productionCost: 6, productionTicks: 0 },
+    ]);
+  });
+
   it.each(['productionCost', 'productionTicks'])('requires the tier field %s', (key) => {
     const incomplete = document();
     delete (incomplete.potions as { tiers: Record<string, unknown>[] }).tiers[0]![key];

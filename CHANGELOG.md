@@ -10,6 +10,11 @@ Everything below is part of the first release, which has not been tagged yet.
 
 ### 2026-10-12
 
+- A potion tier's selling price must be a whole number of gold, and its
+  formula's lowest total must be at least 1. Each die counts as at least 1,
+  plus the bonus, worked out without rolling. The dice module still accepts a
+  negative bonus, and the default catalogue is unchanged.
+
 - The six regression hashes were re-recorded once, on purpose, because the
   healing rules change every seeded trajectory: three whole-world snapshots
   and three stripped-world hashes. No tuning default moved; the acceptance,
