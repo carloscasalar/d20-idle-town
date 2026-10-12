@@ -1,4 +1,4 @@
-import { assuredHealing } from '../core/dice';
+import { rollDice, type DiceSource } from '../core/dice';
 import { freeze } from '../core/freeze';
 
 /** One Healing potion tier. The name is the pack key. */
@@ -32,30 +32,12 @@ export function potionCount(pack: PotionPack, name: string): number {
   return pack[name] ?? 0;
 }
 
-/**
- * Smallest stocked tier whose assured healing covers the missing hit points,
- * or the strongest stocked tier when none does. A fallen hero is missing their
- * whole maximum, not `maxHp - hp`.
- */
-export function choosePotion(
-  pack: PotionPack,
-  catalogue: readonly PotionTier[],
-  wound: { hp: number; maxHp: number; fallen: boolean },
-): PotionTier | undefined {
-  const missing = wound.fallen ? wound.maxHp : wound.maxHp - wound.hp;
-  const stocked = catalogue.filter((tier) => potionCount(pack, tier.name) > 0);
-  if (stocked.length === 0) return undefined;
-  const byStrength = [...stocked].sort((a, b) =>
-    assuredHealing(a.formula) - assuredHealing(b.formula) || catalogue.indexOf(a) - catalogue.indexOf(b));
-  return byStrength.find((tier) => assuredHealing(tier.formula) >= missing) ?? byStrength[byStrength.length - 1];
-}
-
 export function givePotions(pack: PotionPack, name: string, count: number): void {
   if (count <= 0) return;
   pack[name] = potionCount(pack, name) + count;
 }
 
-export function takePotion(pack: PotionPack, name: string): void {
+function takePotion(pack: PotionPack, name: string): void {
   const left = potionCount(pack, name) - 1;
   if (left > 0) pack[name] = left;
   else delete pack[name];
@@ -91,7 +73,26 @@ export function describePack(pack: PotionPack, catalogue: readonly PotionTier[])
   return parts.length > 0 ? parts.join(', ') : '0 potions';
 }
 
-export function potionDrinkText(drinker: string, tier: PotionTier, total: number, giver?: string): string {
+function potionDrinkText(drinker: string, tier: PotionTier, total: number, giver?: string): string {
   const draught = `a ${tier.name} healing potion (${tier.formula}: ${total})`;
   return giver ? `${giver} gives ${drinker} ${draught}.` : `${drinker} drinks ${draught}.`;
+}
+
+/** What drinking one potion does. The caller heals with `total`. */
+export interface PotionDrink {
+  total: number;
+  text: string;
+}
+
+/** Rolls the formula on the given dice, takes the potion from the pack, and gives the drink's text. */
+export function drinkPotion(
+  pack: PotionPack,
+  tier: PotionTier,
+  dice: DiceSource,
+  drinker: string,
+  giver?: string,
+): PotionDrink {
+  const roll = rollDice(tier.formula, dice);
+  takePotion(pack, tier.name);
+  return { total: roll.total, text: potionDrinkText(drinker, tier, roll.total, giver) };
 }

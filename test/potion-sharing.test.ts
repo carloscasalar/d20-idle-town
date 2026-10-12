@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { CompanyRoster, DEFAULT_COMPANY_ROSTER_CONFIG } from '../src/adventurers/company-roster';
 import { createHero, DEFAULT_HERO_ECONOMY } from '../src/adventurers/hero';
-import { DEFAULT_POLICIES_CONFIG, type PotionSharingPolicy, type PotionSharingWeight } from '../src/adventurers/policies';
+import { planDrinkingRound, DEFAULT_POLICIES_CONFIG, type DrinkingAdventurer, type PlannedDrink, type PotionSharingPolicy, type PotionSharingWeight } from '../src/adventurers/policies';
+import { DEFAULT_POTION_CONFIG, type PotionTier } from '../src/adventurers/potions';
 import { createParty, type Party } from '../src/adventurers/party';
 import { DEFAULT_COMBAT_CONFIG, runCombat } from '../src/combat/battlecast';
 import { Rng } from '../src/core/rng';
@@ -75,7 +76,7 @@ function fight(policy: PotionSharingPolicy | undefined) {
   const result = runCombat(party.members, roc, 1, {
     ...COMBAT_RULES,
     rules: { ...DEFAULT_COMBAT_CONFIG, maxRounds: 1 },
-    potions: { basic: 2 },
+    potions: party.potions,
     dice: eights,
     noRetreat: true,
     ...(policy ? { potionSharing: policy } : {}),
@@ -87,6 +88,7 @@ function fight(policy: PotionSharingPolicy | undefined) {
     }),
     potionsDrunk: result.potionsDrunk,
     drinks: result.lines.filter((line) => line.includes('healing potion')),
+    potions: party.potions,
   };
 }
 
@@ -126,36 +128,204 @@ function rest(policy: PotionSharingPolicy | undefined) {
   };
 }
 
-const companyOrderFight = {
-  hp: [
-    { name: 'Ann', hp: 10, alive: true },
-    { name: 'Bev', hp: 14, alive: true },
-    { name: 'Cid', hp: 0, alive: false },
-  ],
-  potionsDrunk: { basic: 2 },
-  drinks: [
-    'Ann drinks a basic healing potion (2d4+2: 8).',
-    'Bev drinks a basic healing potion (2d4+2: 8).',
-  ],
-};
+const tiers = DEFAULT_POTION_CONFIG.tiers;
 
-const mostHurtFight = {
-  hp: [
-    { name: 'Ann', hp: 5, alive: true },
-    { name: 'Bev', hp: 14, alive: true },
-    { name: 'Cid', hp: 8, alive: true },
-  ],
-  potionsDrunk: { basic: 2 },
-  drinks: [
-    'Ann gives Cid a basic healing potion (2d4+2: 8).',
-    'Bev drinks a basic healing potion (2d4+2: 8).',
-  ],
-};
+function person(id: string, name: string, hp: number, maxHp: number, conscious: boolean): DrinkingAdventurer {
+  return { id, name, hp, maxHp, conscious };
+}
 
-describe('potion sharing in a fight and at a Short rest', () => {
-  it('serves Bloodied heroes in company order when that is the policy', () => {
-    expect(fight('company-order')).toEqual(companyOrderFight);
+function listed(plan: readonly PlannedDrink[]) {
+  return plan.map((drink) => ({
+    id: drink.id,
+    name: drink.name,
+    tier: drink.tier.name,
+    ...(drink.giver === undefined ? {} : { giver: drink.giver }),
+  }));
+}
+
+/** Ann 5/10, Bev 6/40, Cid 0/20. Company order is Ann then Bev. Most hurt is Cid then Bev. */
+const line = [
+  person('ann', 'Ann', 5, 10, true),
+  person('bev', 'Bev', 6, 40, true),
+  person('cid', 'Cid', 0, 20, false),
+];
+
+describe('the company plans a round of drinking', () => {
+  it('drinks the smallest tier whose assured healing covers the hit points missing', () => {
+    const pack = { basic: 1, greater: 1, superior: 1, supreme: 1 };
+    const wound = (hp: number, maxHp: number) => listed(planDrinkingRound(
+      [person('ann', 'Ann', hp, maxHp, true)], pack, tiers, { potionSharing: 'company-order' },
+    ));
+
+    // Missing 8, 9, 17 and 50. Each adventurer is Bloodied, so the plan is the tier.
+    expect(wound(8, 16)).toEqual([{ id: 'ann', name: 'Ann', tier: 'basic' }]);
+    expect(wound(9, 18)).toEqual([{ id: 'ann', name: 'Ann', tier: 'greater' }]);
+    expect(wound(3, 20)).toEqual([{ id: 'ann', name: 'Ann', tier: 'superior' }]);
+    expect(wound(0, 50)).toEqual([{ id: 'ann', name: 'Ann', tier: 'supreme' }]);
+  });
+
+  it('drinks the strongest tier in the pack when none covers the wound', () => {
+    expect(listed(planDrinkingRound(
+      [person('ann', 'Ann', 0, 51, true)],
+      { basic: 2, greater: 1 },
+      tiers,
+      { potionSharing: 'company-order' },
+    ))).toEqual([{ id: 'ann', name: 'Ann', tier: 'greater' }]);
+  });
+
+  it('counts a fallen adventurer as missing their whole maximum, even when hit points are below zero', () => {
+    const catalogue: readonly PotionTier[] = [
+      { name: 'mend', formula: '4d4+4', price: 200, productionCost: 100, productionTicks: 0 },
+      { name: 'close', formula: '2d4+16', price: 400, productionCost: 200, productionTicks: 0 },
+      { name: 'flood', formula: '8d4+8', price: 2000, productionCost: 1000, productionTicks: 0 },
+    ];
+    const pack = { mend: 1, close: 1, flood: 1 };
+    const ann = person('ann', 'Ann', 40, 40, true);
+    const plan = (fallen: DrinkingAdventurer) => listed(planDrinkingRound(
+      [ann, fallen], pack, catalogue, { potionSharing: 'company-order' },
+    ));
+
+    expect(plan(person('cid', 'Cid', -8, 20, false))).toEqual([
+      { id: 'cid', name: 'Cid', tier: 'close', giver: 'Ann' },
+    ]);
+    expect(plan(person('dee', 'Dee', 0, 20, false))).toEqual([
+      { id: 'dee', name: 'Dee', tier: 'close', giver: 'Ann' },
+    ]);
+  });
+
+  it('ignores an empty count and a tier the pack does not hold', () => {
+    expect(listed(planDrinkingRound(
+      [person('ann', 'Ann', 8, 16, true)],
+      { basic: 0, supreme: 1 },
+      tiers,
+      { potionSharing: 'company-order' },
+    ))).toEqual([{ id: 'ann', name: 'Ann', tier: 'supreme' }]);
+    expect(planDrinkingRound(
+      [person('ann', 'Ann', 1, 20, true)],
+      {},
+      tiers,
+      { potionSharing: 'company-order' },
+    )).toEqual([]);
+  });
+
+  it('ranks tiers by assured healing when the catalogue lists a stronger tier first', () => {
+    expect(listed(planDrinkingRound(
+      [person('ann', 'Ann', 8, 16, true)],
+      { basic: 1, supreme: 1 },
+      [...tiers].reverse(),
+      { potionSharing: 'company-order' },
+    ))).toEqual([{ id: 'ann', name: 'Ann', tier: 'basic' }]);
+  });
+
+  it('leaves the pack and the adventurers it was given unchanged', () => {
+    const adventurers = [
+      person('ann', 'Ann', 5, 10, true),
+      person('bev', 'Bev', 1, 40, true),
+    ];
+    const pack = { basic: 1, greater: 2 };
+    const before = adventurers.map((adventurer) => ({ ...adventurer }));
+
+    planDrinkingRound(adventurers, pack, tiers, { potionSharing: 'most-hurt' });
+
+    expect(pack).toEqual({ basic: 1, greater: 2 });
+    expect(adventurers).toEqual(before);
+  });
+
+  it('with one potion, only the first Bloodied adventurer in policy order drinks', () => {
+    expect(listed(planDrinkingRound(
+      [person('ann', 'Ann', 5, 10, true), person('bev', 'Bev', 6, 40, true)],
+      { basic: 1 },
+      tiers,
+      { potionSharing: 'most-hurt' },
+    ))).toEqual([{ id: 'bev', name: 'Bev', tier: 'basic' }]);
+  });
+
+  it('serves Bloodied adventurers in company order when that is the policy', () => {
+    expect(listed(planDrinkingRound(line, { basic: 2 }, tiers, { potionSharing: 'company-order' }))).toEqual([
+      { id: 'ann', name: 'Ann', tier: 'basic' },
+      { id: 'bev', name: 'Bev', tier: 'basic' },
+    ]);
+  });
+
+  it('serves fallen adventurers first, then the lowest hit point fraction', () => {
+    expect(listed(planDrinkingRound(line, { basic: 2 }, tiers, { potionSharing: 'most-hurt' }))).toEqual([
+      { id: 'cid', name: 'Cid', tier: 'basic', giver: 'Ann' },
+      { id: 'bev', name: 'Bev', tier: 'basic' },
+    ]);
+  });
+
+  it('serves a company with no recorded policy in company order', () => {
+    expect(listed(planDrinkingRound(line, { basic: 2 }, tiers, undefined))).toEqual([
+      { id: 'ann', name: 'Ann', tier: 'basic' },
+      { id: 'bev', name: 'Bev', tier: 'basic' },
+    ]);
+  });
+
+  it('the first conscious companion gives every potion in the round', () => {
+    expect(listed(planDrinkingRound(
+      [
+        person('ann', 'Ann', 30, 30, true),
+        person('bev', 'Bev', 30, 30, true),
+        person('cid', 'Cid', 0, 20, false),
+        person('dee', 'Dee', -3, 18, false),
+      ],
+      { basic: 2 },
+      tiers,
+      { potionSharing: 'company-order' },
+    ))).toEqual([
+      { id: 'cid', name: 'Cid', tier: 'basic', giver: 'Ann' },
+      { id: 'dee', name: 'Dee', tier: 'basic', giver: 'Ann' },
+    ]);
+  });
+
+  it('nobody drinks when nobody is conscious', () => {
+    expect(planDrinkingRound(
+      [person('cid', 'Cid', 0, 20, false), person('dee', 'Dee', -4, 18, false)],
+      { basic: 4 },
+      tiers,
+      { potionSharing: 'most-hurt' },
+    )).toEqual([]);
+  });
+
+  it('an unconscious adventurer above 0 hit points does not drink and is not given a potion', () => {
+    expect(planDrinkingRound(
+      [person('ann', 'Ann', 20, 20, true), person('bev', 'Bev', 5, 10, false)],
+      { basic: 2 },
+      tiers,
+      { potionSharing: 'company-order' },
+    )).toEqual([]);
+  });
+
+  it('a conscious adventurer at 0 hit points drinks', () => {
+    expect(listed(planDrinkingRound(
+      [person('ann', 'Ann', 20, 20, true), person('cid', 'Cid', 0, 20, true)],
+      { basic: 1 },
+      tiers,
+      { potionSharing: 'most-hurt' },
+    ))).toEqual([{ id: 'cid', name: 'Cid', tier: 'basic' }]);
+  });
+});
+
+describe('the plan is applied in a fight and at a Short rest', () => {
+  it('applies the plan between rounds of a fight', () => {
+    expect(fight('most-hurt')).toEqual({
+      hp: [
+        { name: 'Ann', hp: 5, alive: true },
+        { name: 'Bev', hp: 14, alive: true },
+        { name: 'Cid', hp: 8, alive: true },
+      ],
+      potionsDrunk: { basic: 2 },
+      drinks: [
+        'Ann gives Cid a basic healing potion (2d4+2: 8).',
+        'Bev drinks a basic healing potion (2d4+2: 8).',
+      ],
+      potions: { basic: 2 },
+    });
+  });
+
+  it('applies the plan at a Short rest', () => {
     const rested = rest('company-order');
+
     expect(rested.hp).toEqual([
       { name: 'Ann', hp: 10, alive: true },
       { name: 'Bev', hp: 14, alive: true },
@@ -163,29 +333,6 @@ describe('potion sharing in a fight and at a Short rest', () => {
     ]);
     expect(rested.potions).toEqual({});
     expect(rested.breath).toBe('The Bold Foxes catch their breath. Ann drinks a basic healing potion (2d4+2: 8). Bev drinks a basic healing potion (2d4+2: 8). 0 potions left.');
-  });
-
-  it('serves fallen heroes first, then the lowest hit point fraction', () => {
-    expect(fight('most-hurt')).toEqual(mostHurtFight);
-    const rested = rest('most-hurt');
-    expect(rested.hp).toEqual([
-      { name: 'Ann', hp: 5, alive: true },
-      { name: 'Bev', hp: 14, alive: true },
-      { name: 'Cid', hp: 8, alive: true },
-    ]);
-    expect(rested.potions).toEqual({});
-    expect(rested.breath).toBe('The Bold Foxes catch their breath. Cid drinks a basic healing potion (2d4+2: 8). Bev drinks a basic healing potion (2d4+2: 8). 0 potions left.');
-  });
-
-  it('serves a company with no recorded policy in company order', () => {
-    expect(fight(undefined)).toEqual(companyOrderFight);
-    const rested = rest(undefined);
-    expect(rested.hp).toEqual([
-      { name: 'Ann', hp: 10, alive: true },
-      { name: 'Bev', hp: 14, alive: true },
-      { name: 'Cid', hp: 0, alive: true },
-    ]);
-    expect(rested.potions).toEqual({});
   });
 });
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { choosePotion, describePack, type PotionTier } from '../src/adventurers/potions';
+import { describePack, drinkPotion, type PotionTier } from '../src/adventurers/potions';
 
 const tiers: readonly PotionTier[] = [
   { name: 'basic', formula: '2d4+2', price: 50, productionCost: 25, productionTicks: 0 },
@@ -8,41 +8,29 @@ const tiers: readonly PotionTier[] = [
   { name: 'supreme', formula: '10d4+20', price: 20000, productionCost: 10000, productionTicks: 0 },
 ];
 
-describe('choosing a healing potion', () => {
-  it('drinks the smallest tier whose assured healing covers the hit points missing', () => {
-    const pack = { basic: 1, greater: 1, superior: 1, supreme: 1 };
+describe('drinking a healing potion', () => {
+  it('rolls the formula on the dice it is given, takes one from the pack, and gives the drink', () => {
+    const pack = { basic: 2 };
+    const drink = drinkPotion(pack, tiers[0]!, { int: () => 3 }, 'Ann');
 
-    expect(choosePotion(pack, tiers, { hp: 12, maxHp: 20, fallen: false })?.name).toBe('basic');
-    expect(choosePotion(pack, tiers, { hp: 11, maxHp: 20, fallen: false })?.name).toBe('greater');
-    expect(choosePotion(pack, tiers, { hp: 3, maxHp: 20, fallen: false })?.name).toBe('superior');
-    expect(choosePotion(pack, tiers, { hp: 0, maxHp: 50, fallen: false })?.name).toBe('supreme');
+    expect(drink).toEqual({ total: 8, text: 'Ann drinks a basic healing potion (2d4+2: 8).' });
+    expect(pack).toEqual({ basic: 1 });
   });
 
-  it('drinks the strongest tier in the pack when none covers the wound', () => {
-    expect(choosePotion({ basic: 2, greater: 1 }, tiers, { hp: 0, maxHp: 51, fallen: false })?.name).toBe('greater');
+  it('names the companion when the potion is given', () => {
+    const pack = { basic: 1 };
+    const drink = drinkPotion(pack, tiers[0]!, { int: () => 4 }, 'Cid', 'Ann');
+
+    expect(drink).toEqual({ total: 10, text: 'Ann gives Cid a basic healing potion (2d4+2: 10).' });
+    expect(pack).toEqual({});
   });
 
-  it('counts a fallen hero as missing their whole maximum, even when hit points are below zero', () => {
-    const catalogue: readonly PotionTier[] = [
-      { name: 'mend', formula: '4d4+4', price: 200, productionCost: 100, productionTicks: 0 },
-      { name: 'close', formula: '2d4+16', price: 400, productionCost: 200, productionTicks: 0 },
-      { name: 'flood', formula: '8d4+8', price: 2000, productionCost: 1000, productionTicks: 0 },
-    ];
-    const pack = { mend: 1, close: 1, flood: 1 };
+  it('rolls a different total when it is given a different generator', () => {
+    const low = drinkPotion({ greater: 1 }, tiers[1]!, { int: () => 1 }, 'Bev');
+    const high = drinkPotion({ greater: 1 }, tiers[1]!, { int: () => 4 }, 'Bev');
 
-    expect(choosePotion(pack, catalogue, { hp: -8, maxHp: 20, fallen: true })?.name).toBe('close');
-    expect(choosePotion(pack, catalogue, { hp: 0, maxHp: 20, fallen: true })?.name).toBe('close');
-  });
-
-  it('ignores an empty count and a tier the pack does not hold', () => {
-    expect(choosePotion({ basic: 0, supreme: 1 }, tiers, { hp: 19, maxHp: 20, fallen: false })?.name).toBe('supreme');
-    expect(choosePotion({}, tiers, { hp: 1, maxHp: 20, fallen: false })).toBeUndefined();
-  });
-
-  it('ranks tiers by assured healing when the catalogue lists a stronger tier first', () => {
-    const reversed = [...tiers].reverse();
-
-    expect(choosePotion({ basic: 1, supreme: 1 }, reversed, { hp: 19, maxHp: 20, fallen: false })?.name).toBe('basic');
+    expect(low).toEqual({ total: 8, text: 'Bev drinks a greater healing potion (4d4+4: 8).' });
+    expect(high).toEqual({ total: 20, text: 'Bev drinks a greater healing potion (4d4+4: 20).' });
   });
 });
 

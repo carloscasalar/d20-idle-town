@@ -452,3 +452,35 @@ The documents say a new kind needs a table entry and a posting rule in Game.
 **Verification.** `pnpm typecheck` passed. `pnpm test` passed all 579 tests
 across 29 files. The regression snapshot has no diff. Its SHA-256 remains
 `cbbf8cc5c7c6a321866dd4db3b27bef401a39557a003c05d7480ce703d2d7343`.
+
+## 9. One drinking decision for the Company
+
+**Problem.** Which adventurers drink a Healing potion, in what order and which
+tier, was written twice: between rounds of a fight, and at a Short rest. Neither
+copy lived with the Company. The potion module also chose the tier, which is the
+Company's decision, not what a potion does.
+
+**Change.** `planDrinkingRound` in `src/adventurers/policies.ts` plans one round.
+It is given the living adventurers in company order, each with hit points,
+maximum and whether they are conscious, plus the pack, the catalogue and the
+Company's policies. It keeps the Bloodied, orders them by the Potion sharing
+policy, chooses the tier, names the first conscious companion when a fallen
+adventurer is given the potion, and runs a copy of the pack down. It rolls no
+dice and writes nothing. `drinkPotion` in `src/adventurers/potions.ts` is what
+one potion does: roll its formula on the dice it is given, leave the pack, and
+give the drink's text. The fight and the Short rest describe their adventurers,
+ask for the plan, and apply each drink in their own way. A fight still works on
+a copy and reports `potionsDrunk`. At a Short rest every living adventurer is
+conscious, and the drink is taken from the Company's pack.
+
+**Files.** `src/adventurers/policies.ts`, `src/adventurers/potions.ts`,
+`src/combat/battlecast.ts`, `src/sim/expedition.ts`, `scripts/assault.ts` (only
+so it still typechecks), the drinking tests, and the architecture references.
+
+**Evidence.** The same dice are rolled from the same generators in the same
+order. The regression hashes and `scripts/tune-baseline.json` are not
+re-recorded.
+
+**Verification.** `pnpm typecheck` passed. `pnpm test` passed all 784 tests
+across 38 files. The regression snapshots and `scripts/tune-baseline.json`
+have no diff.

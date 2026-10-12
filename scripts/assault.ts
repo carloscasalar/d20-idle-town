@@ -1,6 +1,5 @@
 import { healHero } from '../src/adventurers/hero';
-import { rollDice } from '../src/core/dice';
-import { DEFAULT_POTION_CONFIG, potionCount, takePotion } from '../src/adventurers/potions';
+import { DEFAULT_POTION_CONFIG, drinkPotion, potionCount } from '../src/adventurers/potions';
 import { DEFAULT_COMPANY_ROSTER_CONFIG } from '../src/adventurers/company-roster';
 import { aliveMembers, createParty } from '../src/adventurers/party';
 import { DEFAULT_POLICIES_CONFIG } from '../src/adventurers/policies';
@@ -45,8 +44,7 @@ for (const level of [5, 6, 8]) {
         for (const h of alive) {
           healHero(h, Math.ceil(h.maxHp * 0.5));
           if (basic && potionCount(party.potions, basic.name) > 0 && h.hp < h.maxHp * 0.5) {
-            takePotion(party.potions, basic.name);
-            healHero(h, rollDice(basic.formula, potionDice).total);
+            healHero(h, drinkPotion(party.potions, basic, potionDice, h.name).total);
           }
         }
       }

@@ -1,9 +1,9 @@
-import { describeHero, gainXp, healHero, isBloodied, killHero, resurrectionCost, type Hero, type HeroEconomyConfig } from '../adventurers/hero';
+import { describeHero, gainXp, healHero, killHero, resurrectionCost, type Hero, type HeroEconomyConfig } from '../adventurers/hero';
 import { aliveMembers, deadMembers, partyLevel, type Party } from '../adventurers/party';
-import { potionSharingOf } from '../adventurers/policies';
-import { choosePotion, describePack, potionDrinkText, spendPotions, takePotion, type PotionConfig } from '../adventurers/potions';
+import { planDrinkingRound } from '../adventurers/policies';
+import { describePack, drinkPotion, spendPotions, type PotionConfig } from '../adventurers/potions';
 import { pacedHitDice, spendHitDice } from '../adventurers/hit-dice';
-import { rollDice, type DiceSource } from '../core/dice';
+import type { DiceSource } from '../core/dice';
 import type { CombatOptions, CombatOutcome } from '../combat/battlecast';
 import { freeze } from '../core/freeze';
 import { listNames } from '../core/names';
@@ -267,7 +267,7 @@ export function encountersAhead(q: ReadonlyQuest, completed: number, profile: Wo
   return Math.max(1, total - completed);
 }
 
-/** One hour: Hit Dice, then the retreat decision, then potions for those still Bloodied. */
+/** One hour: Hit Dice, then the retreat decision, then the company's drinking plan. */
 function shortRest(p: Party, q: ReadonlyQuest, context: ExpeditionContext): void {
   const startedWith = p.shortRestStartedWith;
   if (startedWith === undefined) throw new Error(`Missing original line for ${p.name}'s Short rest.`);
@@ -288,14 +288,18 @@ function shortRest(p: Party, q: ReadonlyQuest, context: ExpeditionContext): void
   log(context, 'party', `${p.name} take a Short rest (1 hour).${details.length ? ` ${details.join(' ')}` : ''}`);
   if (turnBack(p, q, startedWith, context)) return;
   const drinks: string[] = [];
-  const bloodied = aliveMembers(p).filter((h) => isBloodied(h));
-  for (const h of potionSharingOf(p.policies?.potionSharing).order(bloodied)) {
-    const tier = choosePotion(p.potions, context.potions.tiers, { hp: h.hp, maxHp: h.maxHp, fallen: false });
-    if (!tier) break;
-    const roll = rollDice(tier.formula, source);
-    takePotion(p.potions, tier.name);
-    healHero(h, roll.total);
-    drinks.push(potionDrinkText(h.name, tier, roll.total));
+  const living = aliveMembers(p);
+  const plan = planDrinkingRound(
+    living.map((h) => ({ id: h.id, name: h.name, hp: h.hp, maxHp: h.maxHp, conscious: true })),
+    p.potions,
+    context.potions.tiers,
+    p.policies,
+  );
+  for (const drink of plan) {
+    const h = living.find((member) => member.id === drink.id)!;
+    const draught = drinkPotion(p.potions, drink.tier, source, h.name, drink.giver);
+    healHero(h, draught.total);
+    drinks.push(draught.text);
   }
   if (drinks.length > 0) {
     log(context, 'party', `${p.name} catch their breath. ${drinks.join(' ')} ${describePack(p.potions, context.potions.tiers)} left.`);

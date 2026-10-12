@@ -1,5 +1,8 @@
+import { assuredHealing } from '../core/dice';
 import { freeze } from '../core/freeze';
 import type { Rng } from '../core/rng';
+import { isBloodied } from './hero';
+import { potionCount, type PotionPack, type PotionTier } from './potions';
 
 /** How a company orders Bloodied heroes when the pack is short. */
 export type PotionSharingPolicy = 'company-order' | 'most-hurt';
@@ -68,4 +71,68 @@ export const DEFAULT_POLICIES_CONFIG: PoliciesConfig = freeze({
 /** One roll, however the weights are set. */
 export function drawPotionSharing(rng: Rng, weights: readonly PotionSharingWeight[]): PotionSharingPolicy {
   return rng.weighted(weights.map((entry) => ({ item: entry.policy, weight: entry.weight })));
+}
+
+/** A living adventurer, as the company describes them for one round of drinking. */
+export interface DrinkingAdventurer extends ShareCandidate {
+  id: string;
+  name: string;
+  conscious: boolean;
+}
+
+/** One drink in the company's plan. `giver` is the conscious companion when the drinker has fallen. */
+export interface PlannedDrink {
+  id: string;
+  name: string;
+  tier: PotionTier;
+  giver?: string;
+}
+
+/**
+ * Plans one round of drinking. Rolls no dice and writes neither the pack nor an adventurer.
+ * A fallen adventurer is missing their whole maximum and is given the potion by the first
+ * conscious companion in company order. When nobody is conscious, nobody drinks.
+ */
+export function planDrinkingRound(
+  adventurers: readonly DrinkingAdventurer[],
+  pack: PotionPack,
+  catalogue: readonly PotionTier[],
+  policies: CompanyPolicies | undefined,
+): PlannedDrink[] {
+  const companion = adventurers.find((adventurer) => adventurer.conscious);
+  if (!companion) return [];
+
+  const bloodied = adventurers.filter((adventurer) =>
+    isBloodied(adventurer) && (adventurer.conscious || adventurer.hp <= 0));
+  const stock: PotionPack = { ...pack };
+  const plan: PlannedDrink[] = [];
+  for (const adventurer of potionSharingOf(policies?.potionSharing).order(bloodied)) {
+    const missing = adventurer.hp <= 0 ? adventurer.maxHp : adventurer.maxHp - adventurer.hp;
+    const tier = chooseTier(stock, catalogue, missing);
+    if (!tier) break;
+    holdOneLess(stock, tier.name);
+    plan.push({
+      id: adventurer.id,
+      name: adventurer.name,
+      tier,
+      ...(adventurer.conscious ? {} : { giver: companion.name }),
+    });
+  }
+  return plan;
+}
+
+/** Smallest stocked tier whose assured healing covers the missing hit points, or the strongest stocked. */
+function chooseTier(pack: PotionPack, catalogue: readonly PotionTier[], missing: number): PotionTier | undefined {
+  const stocked = catalogue.filter((tier) => potionCount(pack, tier.name) > 0);
+  if (stocked.length === 0) return undefined;
+  const byStrength = [...stocked].sort((a, b) =>
+    assuredHealing(a.formula) - assuredHealing(b.formula) || catalogue.indexOf(a) - catalogue.indexOf(b));
+  return byStrength.find((tier) => assuredHealing(tier.formula) >= missing) ?? byStrength[byStrength.length - 1];
+}
+
+/** The plan's scratch pack, following the same rule as taking one potion. */
+function holdOneLess(pack: PotionPack, name: string): void {
+  const left = potionCount(pack, name) - 1;
+  if (left > 0) pack[name] = left;
+  else delete pack[name];
 }

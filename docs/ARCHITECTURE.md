@@ -89,13 +89,17 @@ RNG argument. Interleaving two worlds cannot change either world's IDs.
   `SKILL_ADVANTAGE`) used for tavern investigation and reading the road.
 - **`potions.ts`** — the Healing potion catalogue (name, formula, price,
   independent production cost and production ticks) and the
-  shared pack, a count per tier. It chooses the potion a Bloodied hero drinks
-  and describes the pack for the log. The game view copies that pack in catalogue
-  order; the party card joins the view and does not import the catalogue. Combat, the Short rest
-  and the apothecary ask it; none of them owns a second price or heal formula.
+  shared pack, a count per tier. Drinking one potion rolls its formula on the
+  dice it is given, takes it from the pack, and gives the drink's text. The
+  game view copies that pack in catalogue order; the party card joins the view
+  and does not import the catalogue. Combat, the Short rest and the apothecary
+  ask it; none of them owns a second price or heal formula.
 - **`policies.ts`** — the Potion sharing policy (`company-order` or
-  `most-hurt`) and the one weighted draw at company creation. Combat and the
-  Short rest ask it for the order of Bloodied heroes. A missing policy is
+  `most-hurt`), the one weighted draw at company creation, and the company's
+  drinking decision. The decision plans one round: which Bloodied adventurers
+  drink, which tier, and which conscious companion gives a potion to a fallen
+  adventurer. It rolls no dice and writes nothing. Combat and the Short rest
+  ask it for that plan and apply each drink themselves. A missing policy is
   company order.
 - **`hit-dice.ts`** — die size and Constitution from the engine's `hpFormula`,
   and a pure calculation of Hit Dice spent at a Short rest. The caller writes
@@ -240,7 +244,7 @@ enchanter buys back.
    items become `acOverride`, `hpOverride`, `speedOverride`,
    `additionalResistances`; a +1 weapon is rebuilt from the class's own main
    attack with the bonus folded into attack and damage.
-4. Runs the engine's `Encounter` to a conclusion or a round cap. Between unfinished rounds, before checking whether to flee, the company's Potion sharing policy orders its Bloodied heroes and each drinks one potion from the supplied pack: the smallest tier whose assured healing covers the hit points they are missing, or the strongest tier in the pack. A fallen hero counts their fight maximum, blessings and items included, and receives the potion from the first conscious companion in company order. If nobody is conscious, no potion is used. The adapter rolls the formula on `src/core/dice.ts` and passes the total to `heal`. The engine does not roll the potion.
+4. Runs the engine's `Encounter` to a conclusion or a round cap. Between unfinished rounds, before checking whether to flee, the adapter describes each living adventurer — hit points, the fight maximum (blessings and items included), and whether they are conscious — and asks the company for one drinking plan. It does not choose who drinks or which tier. For each drink it asks the potion what it does: the formula is rolled on `src/core/dice.ts` from the fight's dice, the potion leaves the fight's copy of the pack, and the total is passed to `heal`. The company's pack is not written; the outcome reports `potionsDrunk`. The engine does not roll the potion.
 5. Maps the result back to a `CombatOutcome`: winner (`party | monsters |
    retreat | stalemate`), rounds, per-hero HP / alive / kills, XP earned, potions
    drunk, and the engine's narration plus potion-drinking lines.
@@ -395,10 +399,11 @@ the default spreads remaining dice with `ceil(D / E)`, stopping at full HP.
 The profile's `encounterCountSource` selects the configured upper bound when the
 count is unknown (Contract counts, or Bounty upper bound plus the boss), never
 below what job intelligence has revealed. A known count uses the exact total.
-The rest logs rolls, checks retreat using the resulting HP, then gives each
-still-Bloodied living hero one rolled Healing potion, in the company's Potion
-sharing policy order, if the company continues. Those potion rolls use the same local generator as the Hit
-Dice, after every Hit Die. An unhurt company checks losses in the combat tick and skips
+The rest logs rolls, checks retreat using the resulting HP, then, if the company
+continues, asks the company for one drinking plan. Every living adventurer is
+conscious. Each drink is taken from the company's pack and rolled on the same
+local generator as the Hit Dice, after every Hit Die. The hero is healed by
+that total. An unhurt company checks losses in the combat tick and skips
 the rest. Level-up adds a remaining die without changing `hitDiceSpent`; death
 and resurrection preserve the pool. The town Long rest resets living heroes'
 spent dice alongside full HP at the end of eight hours, even without paid rooms
@@ -475,9 +480,9 @@ fight badly hurt abandons the contract and walks home.
   generator, after that company's classes and heroes are chosen and before its
   name. The draw is one weighted roll whatever the weights are, so later world
   draws move by that one step and a seed still reproduces itself. The company keeps
-  the result on a policies object. Combat and the Short rest ask that policy
-  only for the order in which Bloodied heroes are served. A company with no
-  recorded policy is served in company order. A merger keeps the host's policies.
+  the result on a policies object. Combat and the Short rest ask the company
+  for one drinking plan, which orders its Bloodied adventurers by that policy.
+  A company with no recorded policy is served in company order. A merger keeps the host's policies.
 - The engine is itself deterministic under a seed, so `seed + tick order` fixes
   the entire run.
 
@@ -497,13 +502,13 @@ seeds 1 and 2 keep those fights, with a scripted 2d4+2 of 8.
 | --- | --- |
 | `test/reward-set-aside.test.ts` | Board and hourly-game reward sizing with exact treasuries, open/taken obligations, Contract and Bounty endings, every configured merchant, service/kind isolation, empty and missing lists, mixed work accounting, fractional Bounty caps without a minimum, hourly threshold deferral, whole-treasury unlisted guilds, zero-reward rejection and unchanged upkeep |
 | `test/raid-posting-threshold.test.ts` | Hourly raids reject a treasury below the configured threshold, post at equality, and use a listed employer’s whole treasury despite rewards owed; exact rewards, raid counts and holding status |
-| `test/potions.test.ts` | Smallest covering tier, strongest fallback, a fallen hero's maximum, pack wording |
+| `test/potions.test.ts` | Drinking one potion on the dice it is given, the pack and the drink's text, pack wording |
 | `test/apothecary-production.test.ts` | Exact per-potion sink/sale order and balances, one receipt after all pairs, independent configured costs, instant nonzero ticks, every tier from a treasury in debt, permanent ruin, game-view statistics and tuning report |
 | `test/coin.test.ts` | Coin reasons and holder accounting, including production moving only spent and lifetime production spending |
 | `test/coin-movements.test.ts` | Service purchases, paid rounds, resurrection, homecoming, retirement, income, expiry, windfall and purse movements, including a 400-hour bookkeeping run |
 | `test/game-config.test.ts` | Configuration validation, including required Reward set-aside lists, known service/kind names, empty-list disabling, required production costs and ticks, default zero ticks, invalid production values, whole-number potion prices, and formulas whose lowest total is below 1 |
 | `test/potion-buying.test.ts` | Stock target, tier choice, budget step-down, resurrection reserve, one tier per visit, ruined and empty catalogues, `potionCoverFraction` |
-| `test/potion-sharing.test.ts` | Both sharing orders in combat and at the Short rest, no recorded policy, one draw per company, host policies on a merger, weight validation |
+| `test/potion-sharing.test.ts` | The company's drinking plan (order, tier, a fallen adventurer's maximum, a short pack, the conscious companion), one fight and one Short rest applying it, one draw per company, host policies on a merger, weight validation |
 | `test/dice.test.ts` | Formula parsing, scripted and seeded rolls, bounds, invalid formulas, derived Assured healing |
 | `test/hit-dice.test.ts` | Engine HP parser, minimum healing, pure spending, quota, full-HP stopping, exhausted heroes, level-up, death and resurrection |
 | `test/expedition.test.ts` | Separate Short rest hour, dice/retreat/potion order, shared local rolls including rest potions, world seed isolation, encounter bounds, Long rest in every lodging case |

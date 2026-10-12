@@ -1,10 +1,10 @@
 import { buildHero, Encounter, EncounterError, getFootprintSize, getMonsterByName, type BattleLog, type Creature, type HeroClassName, type MonsterData } from 'battlecast-engine';
 import type { DeepReadonly } from '../core/readonly';
 import { Rng } from '../core/rng';
-import { combinedEffect, heroAc, isBloodied, skillBonus, WEAPON_CLASSES, type Hero, type HeroEconomyConfig } from '../adventurers/hero';
-import { potionSharingOf, type PotionSharingPolicy } from '../adventurers/policies';
-import { choosePotion, potionDrinkText, takePotion, type PotionConfig, type PotionPack } from '../adventurers/potions';
-import { rollDice, type DiceSource } from '../core/dice';
+import { combinedEffect, heroAc, skillBonus, WEAPON_CLASSES, type Hero, type HeroEconomyConfig } from '../adventurers/hero';
+import { planDrinkingRound, type DrinkingAdventurer, type PotionSharingPolicy } from '../adventurers/policies';
+import { drinkPotion, type PotionConfig, type PotionPack } from '../adventurers/potions';
+import type { DiceSource } from '../core/dice';
 import { freeze } from '../core/freeze';
 import type { EncounterSpec } from '../quests/encounters';
 
@@ -242,31 +242,33 @@ export function runCombat(heroes: Hero[], spec: DeepReadonly<EncounterSpec>, see
       winner = r.winner;
       break;
     }
-    // Stand-in for the 2024 Bonus Action: conscious Bloodied heroes drink;
-    // a fallen hero receives a potion from the first conscious companion.
     // Between rounds, before deciding whether the company must flee.
-    const companion = fighters.find((h) => {
-      const c = enc.creatures.find((x) => x.id === idByHero.get(h.id));
-      return c?.isAlive && c.currentHp > 0 && !c.conditions.includes('unconscious');
-    });
-    const bloodied = [];
+    // The company plans the round; each drink is taken from this fight's copy of the pack.
+    const living: DrinkingAdventurer[] = [];
     for (const h of fighters) {
       const c = enc.creatures.find((x) => x.id === idByHero.get(h.id));
-      if (!c?.isAlive || !isBloodied({ hp: c.currentHp, maxHp: c.maxHp })) continue;
-      if (c.currentHp > 0 && c.conditions.includes('unconscious')) continue;
-      bloodied.push({ hero: h, creature: c, hp: c.currentHp, maxHp: c.maxHp });
+      if (!c?.isAlive) continue;
+      living.push({
+        id: h.id,
+        name: h.name,
+        hp: c.currentHp,
+        maxHp: c.maxHp,
+        conscious: c.currentHp > 0 && !c.conditions.includes('unconscious'),
+      });
     }
-    for (const drinker of potionSharingOf(opts.potionSharing).order(bloodied)) {
-      if (!companion) break;
-      const { hero: h, creature: c } = drinker;
-      const fallen = c.currentHp <= 0;
-      const tier = choosePotion(pack, catalogue.tiers, { hp: c.currentHp, maxHp: c.maxHp, fallen });
-      if (!tier) break;
-      const roll = rollDice(tier.formula, potionDice);
-      enc.heal(c.id, roll.total);
-      takePotion(pack, tier.name);
-      potionsDrunk[tier.name] = (potionsDrunk[tier.name] ?? 0) + 1;
-      lines.push(potionDrinkText(h.name, tier, roll.total, fallen ? companion.name : undefined));
+    const plan = planDrinkingRound(
+      living,
+      pack,
+      catalogue.tiers,
+      opts.potionSharing === undefined ? undefined : { potionSharing: opts.potionSharing },
+    );
+    for (const drink of plan) {
+      const h = fighters.find((hero) => hero.id === drink.id)!;
+      const c = enc.creatures.find((x) => x.id === idByHero.get(h.id))!;
+      const draught = drinkPotion(pack, drink.tier, potionDice, h.name, drink.giver);
+      enc.heal(c.id, draught.total);
+      potionsDrunk[drink.tier.name] = (potionsDrunk[drink.tier.name] ?? 0) + 1;
+      lines.push(draught.text);
     }
     if (!opts.noRetreat && shouldFlee(enc.creatures, fighters.length, rules)) {
       retreated = true;
