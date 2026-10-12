@@ -1,6 +1,6 @@
 # A Bounty's encounter range counts the boss; the Short rest paces over one too many
 
-Status: ready-for-agent
+Status: done
 Category: bug
 
 Found by the architecture review of 2026-10-12 and settled with the owner the same day.
@@ -45,3 +45,9 @@ The generator is right. The range is the total number of encounters of a Bounty,
 - The pacing of Contracts.
 
 ## Comments
+
+### Done (2026-10-12)
+
+Commit `5cb506a` (Cursor). `encountersAhead` paces a Bounty of unknown count over `kinds.assault.encounters[1]`; the descriptions and line 111 of the PRD agree with the generator.
+
+Review: orchestrator (two source lines, one test file). Restoring the `+ 1` fails the three Bounty pacing tests of `test/expedition.test.ts`; the implementer's report shows `encounters[0]` and the removed floor failing too. Typecheck clean, 786 tests green, snapshots and `scripts/tune-baseline.json` unchanged, long sweep clean (150 seeds, 1500 hours). PASS.

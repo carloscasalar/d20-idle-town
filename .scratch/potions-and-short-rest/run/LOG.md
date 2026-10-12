@@ -25,12 +25,20 @@ Branch `feature/potions-healing`. Run started 2026-10-12 at checkpoint `4774e43`
 | 10 | 11 Bounties in the Reward set-aside | feature | Codex | `5329eea` | FAIL on design only (slice-reviewer): criteria proven, no mutation survives, guard identical, long sweep clean; a treasury fallback in `generateAssault`, a repeated formula, one name with two meanings |
 | 10 fix 1 | 11 | correction | Codex (same session) | `f8327e3` | PASS (orchestrator read the whole diff, checks and guard re-run); issue done |
 | 11 | 12 Reward set-aside review leftovers | tests, visibility, types | Codex (sandbox refused the commit; committed by the orchestrator) | `4880c6c` | PASS first round (orchestrator read the diff; three raid mutations and four catalogue mutations fail as required); issue done; one `prd-answerer` decision |
+| 12 | 13 one drinking decision for the Company | refactor | Codex (refused: its account no longer accepts the configured model), then Cursor (new session) | `71c5790` | FAIL on one test gap (slice-reviewer): behaviour identical, every listed mutation killed, long sweep clean; the Short rest could ignore the Company's policy unnoticed |
+| 12 fix 1 | 13 | correction | Cursor (same session) | `1a983c6` | PASS (orchestrator read the diff, checks re-run); issue done |
+| 13 | 14 assault script plays the real game | scripts | Cursor (stopped on two product questions, `37ebecc`; resumed with the `prd-answerer` decisions) | `a82db33` | PASS first round (orchestrator ran the scripts and the checks); issue done; two `prd-answerer` decisions |
+| 14 | 15 a Bounty's encounter range counts the boss | bug fix | Cursor | `5cb506a` | PASS first round (orchestrator: restoring the bug fails three tests; long sweep clean); issue done |
 
 Run finished 2026-10-12: issues 02 to 09 done; `pnpm typecheck` clean, 749 tests green with none skipped; final smoke `smoke/07-final.md` PASS at `98e1bae`. Left open: issue 01 and issue 10 (`needs-triage`).
 
 Run resumed 2026-10-12 at checkpoint `9c9a2f7` (typecheck clean, 754 tests green) for issues 11 and 12, triaged to `ready-for-agent` after the first finish.
 
 Run finished again 2026-10-12: issues 11 and 12 done; `pnpm typecheck` clean, 773 tests green with none skipped; final smoke `smoke/08-final-after-11-12.md` PASS at `60b4970`, every figure identical to `07-final.md`. Nothing left `ready-for-agent`.
+
+Run resumed 2026-10-12 at checkpoint `a07f18f` (typecheck clean, 773 tests green) for issues 13, 14 and 15.
+
+Run finished a third time 2026-10-12: issues 13, 14 and 15 done; `pnpm typecheck` clean, 786 tests green with none skipped; long sweep clean at `5cb506a`; final smoke `smoke/09-final-after-13-15.md` PASS at `5cb506a`, every figure identical to `08-final-after-11-12.md`. Nothing left `ready-for-agent`.
 
 ## Lessons
 
@@ -45,3 +53,6 @@ Run finished again 2026-10-12: issues 11 and 12 done; `pnpm typecheck` clean, 77
 - A detached measurement an implementer started before its usage limit keeps running: its output is a free independent run for the review.
 - A prompt that forbids every other test edit also forbids the call-site edits a signature change needs; the implementer then keeps a fallback instead of asking. Say which call sites may change shape.
 - An issue written before its sibling was built can lose its premise (a method "with no outside caller" gained one): read the code the issue names before writing the prompt, and take the question to the `prd-answerer` before dispatching, not after the implementer stops.
+- Codex answered "model is not supported when using Codex with a ChatGPT account" for `gpt-6.1-sol`: the wrapper's exit and message are not a `LIMIT` line, so read the result before waiting on a turn that died in a second. The pool table needs a model the account accepts.
+- An issue that says "stop and report what the game does not expose" got a useful stop: the implementer measured the options before asking, and the `prd-answerer` decided from its figures in one round.
+- A review in a throwaway worktree lets the next issue start in the main tree at once, when the two issues touch different folders.
