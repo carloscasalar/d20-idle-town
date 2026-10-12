@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createHero, rollSkill, skillBonus } from '../src/adventurers/hero';
 import { createParty, rollClasses } from '../src/adventurers/party';
+import { DEFAULT_POLICIES_CONFIG } from '../src/adventurers/policies';
 import { Rng } from '../src/core/rng';
 import { generateAssault } from '../src/quests/quest';
 import { DEFAULT_COMPANY_ROSTER_CONFIG } from '../src/adventurers/company-roster';
@@ -32,13 +33,10 @@ describe('lairs', () => {
   it('every town starts with lairs and their raids reach the board', () => {
     const g = new Game({ seed: 5 });
     expect(g.view().lairs.length).toBeGreaterThanOrEqual(2);
-    let bountyPosted = false;
-    for (let i = 0; i < 600; i++) {
-      g.step();
-      if (g.view().board.open.some((quest) => quest.lair !== null)) bountyPosted = true;
-    }
-    expect(g.view().stats.raids).toBeGreaterThan(0);
-    expect(bountyPosted).toBe(true);
+    for (let i = 0; i < 600; i++) g.step();
+    const view = g.view();
+    expect(view.stats.raids).toBeGreaterThan(0);
+    expect(view.board.open.some((quest) => quest.lair !== null)).toBe(true);
   }, LONG_SIMULATION_TIMEOUT_MS);
 
   it('removes the posted bounty when a successful company returns and clears the lair', () => {
@@ -47,7 +45,7 @@ describe('lairs', () => {
       const lair = createLair(rng, 'goblins', 5, 0, DEFAULT_COMPANY_ROSTER_CONFIG.companySize, DEFAULT_LAIR_CONFIG);
       lair.raidCooldown = 100;
       const bounty = generateAssault(rng, lair, serviceOf(scenario.town, 'guild'), 4, 0, 1, QUEST_GENERATION);
-      const company = createParty(rng, 5, 4, 0, STARTING_GOLD);
+      const company = createParty(rng, 5, 4, 0, STARTING_GOLD, DEFAULT_POLICIES_CONFIG.potionSharing);
       bounty.status = 'taken';
       bounty.partyId = company.id;
       lair.questId = bounty.id;
@@ -81,7 +79,7 @@ function bountyScene(treasury: number) {
     guild.upkeepPerDay = 0;
     const lair = createLair(rng, 'goblins', 4, 0, DEFAULT_COMPANY_ROSTER_CONFIG.companySize, DEFAULT_LAIR_CONFIG);
     lair.raidCooldown = 10_000;
-    const company = createParty(rng, 4, 4, 0, STARTING_GOLD);
+    const company = createParty(rng, 4, 4, 0, STARTING_GOLD, DEFAULT_POLICIES_CONFIG.potionSharing);
     scenario.tick = 100;
     scenario.lairs = [lair];
     scenario.parties = [company];

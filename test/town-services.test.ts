@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { DEFAULT_COMPANY_ROSTER_CONFIG } from '../src/adventurers/company-roster';
 import { Game } from '../src/sim/game';
 import { createParty } from '../src/adventurers/party';
+import { DEFAULT_POLICIES_CONFIG } from '../src/adventurers/policies';
 import { armorUpgradeCost, createHero, resurrectionCost } from '../src/adventurers/hero';
 import { Rng } from '../src/core/rng';
 import { instantiate, ITEM_CATALOGUE } from '../src/items/items';
@@ -12,7 +13,7 @@ import { DEFAULT_HERO_ECONOMY } from '../src/adventurers/hero';
 // Exercise the public hourly tick, with unrelated arrivals, raids and restocking disabled.
 function setup(level = 1, tick = 0) {
   const rng = new Rng(8);
-  const party = createParty(rng, level, 4, 0, STARTING_GOLD);
+  const party = createParty(rng, level, 4, 0, STARTING_GOLD, DEFAULT_POLICIES_CONFIG.potionSharing);
   party.members = Array.from({ length: 4 }, () => createHero(rng, level, 'Fighter'));
   party.potions = { basic: 4 };
   party.blessed = true;

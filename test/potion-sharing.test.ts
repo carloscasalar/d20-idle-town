@@ -43,7 +43,7 @@ const roc: EncounterSpec = {
 };
 
 function wounded(): Party {
-  const party = createParty(new Rng(1), 1, 3, 0, STARTING_GOLD);
+  const party = createParty(new Rng(1), 1, 3, 0, STARTING_GOLD, DEFAULT_POLICIES_CONFIG.potionSharing);
   const naming = new Rng(2);
   const heroes = (['Fighter', 'Rogue', 'Barbarian'] as const).map((heroClass) => createHero(naming, 1, heroClass));
   heroes[0]!.name = 'Ann';
@@ -226,6 +226,32 @@ describe('drawing a potion sharing policy', () => {
     expect(two.map((run) => run.next)).toEqual([two[0]!.next, two[0]!.next, two[0]!.next]);
   });
 
+  it('gives a stranded band the policy the roster weights dictate', () => {
+    const arrive = (weights: readonly PotionSharingWeight[]) => {
+      const rng = new Rng(4);
+      const town = generateTown(new Rng(0), DEFAULT_TOWN_CONFIG, DEFAULT_HOLDING_CONFIG);
+      const roster = new CompanyRoster(
+        { ...DEFAULT_COMPANY_ROSTER_CONFIG, patienceTicks: 7, firstArrivalTick: 0 },
+        DEFAULT_HERO_ECONOMY, DEFAULT_TOWN_CONFIG, DEFAULT_HOLDING_CONFIG,
+        { potionSharing: weights },
+      );
+      const stranded = createParty(new Rng(8), 2, 2, 0, STARTING_GOLD, DEFAULT_POLICIES_CONFIG.potionSharing);
+      stranded.idleTicks = 7;
+      roster.replaceForScenario([stranded]);
+      roster.arrivals({
+        town, rng, tick: 0,
+        ledger: { partiesArrived: 0 },
+        board: { open: () => [] },
+        report: () => {},
+      });
+      const band = roster.active().find((party) => party !== stranded);
+      return band?.policies?.potionSharing;
+    };
+
+    expect(arrive(companyOrderOnly)).toBe('company-order');
+    expect(arrive(mostHurtOnly)).toBe('most-hurt');
+  });
+
   it('advances the world stream the same whatever the weights, and a seed repeats its policy', () => {
     const world = (weights: readonly PotionSharingWeight[]) => {
       const game = new Game({ seed: 4, policies: { potionSharing: [...weights] }, world: { maxOpenQuests: 0 } });
@@ -248,8 +274,8 @@ describe('drawing a potion sharing policy', () => {
 
   it('keeps the host\'s policies when two companies merge', () => {
     const rng = new Rng(6);
-    const host = createParty(rng, 2, 4, 0, STARTING_GOLD);
-    const donor = createParty(rng, 2, 2, 0, STARTING_GOLD);
+    const host = createParty(rng, 2, 4, 0, STARTING_GOLD, DEFAULT_POLICIES_CONFIG.potionSharing);
+    const donor = createParty(rng, 2, 2, 0, STARTING_GOLD, DEFAULT_POLICIES_CONFIG.potionSharing);
     host.policies = { potionSharing: 'most-hurt' };
     donor.policies = { potionSharing: 'company-order' };
     const roster = new CompanyRoster(

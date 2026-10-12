@@ -48,3 +48,67 @@ Questions: none.
 Bugs: none left open.
 
 Not done: nothing. No push; the orchestrator pushes.
+
+## Correction 1
+
+The policy is now drawn after the heroes and before the company name. `createParty` takes the weight list as a required argument. A stranded band arriving through the roster gets the weights that roster was given. The expedition test expects a literal options object, and a `most-hurt` company is forwarded as `most-hurt`. `potionSharingOf` indexes the table of orders by name. The interface document matches those signatures.
+
+`test/lairs.test.ts` is the `27539f5` file again, plus the required weights argument on its two `createParty` calls. The hour-600 assertion is the original one, and it passes. No other test needed a new expectation.
+
+Check results:
+
+| Command or check | Result |
+| --- | --- |
+| `pnpm typecheck` | Pass. |
+| `pnpm test` | Pass: 33 files passed, 2 skipped; 709 tests passed, 6 skipped (715). |
+| Diff of the regression hash tests and their snapshots | Empty. |
+| `test/lairs.test.ts` against `27539f5` | The assertion is unchanged. The file adds the weights import and passes that list into the two `createParty` calls. |
+
+The regression guard did not change. The six hashes stay skipped. Moving the draw before the name left every other expected value as it was.
+
+The stranded-band mutation was the call in `src/adventurers/company-roster.ts` receiving `DEFAULT_POLICIES_CONFIG.potionSharing` instead of `this.policies.potionSharing`. `test/potion-sharing.test.ts` ("gives a stranded band the policy the roster weights dictate") then failed:
+
+```
+AssertionError: expected 'most-hurt' to be 'company-order'
+
+Expected: "company-order"
+Received: "most-hurt"
+
+ ❯ test/potion-sharing.test.ts:251:38
+     expect(arrive(companyOrderOnly)).toBe('company-order');
+```
+
+That call was put back. The fight mutation was `src/sim/expedition.ts` forwarding `potionSharing: 'company-order'` on every fight. `test/expedition.test.ts` ("passes a most-hurt policy into the fight") then failed:
+
+```
+-   "potionSharing": "most-hurt",
++   "potionSharing": "company-order",
+```
+
+That forwarding was put back.
+
+| Criterion | Coverage and result |
+| --- | --- |
+| The draw is after the heroes and before the name, and the original lairs test passes | `test/lairs.test.ts`: "every town starts with lairs and their raids reach the board", restored. Seed 5, 600 hours, a lair bounty still open. Pass. |
+| The weights are a required argument, passed by the script and the tests | `createParty` has no default. `scripts/assault.ts` and every direct call pass `DEFAULT_POLICIES_CONFIG.potionSharing`. The roster still passes `this.policies.potionSharing`. |
+| A stranded band gets the policy the weights dictate | "gives a stranded band the policy the roster weights dictate". Weights 100 / 0 yield `company-order`. Weights 0 / 100 yield `most-hurt`. Pass. The mutation above fails it. |
+| The expedition options expectation is a literal, and a most-hurt fight receives `most-hurt` | "passes a blessing and the no-retreat rule into the final lair fight" expects `potionSharing: 'company-order'` as a literal, which is the policy that setup draws. "passes a most-hurt policy into the fight" expects `potionSharing: 'most-hurt'`. Pass. The mutation above fails the second. |
+| The interface document matches the code | `docs/ARCHITECTURE-INTERFACES.md` now has `CompanyRoster(..., policies)`, `createParty(..., sharingWeights)`, `src/adventurers/policies.ts`, and `CombatOptions.potionSharing`. |
+| An order is selected by the policy's name | `potionSharingOf` returns `SHARING[policy]`, and company order only when `policy` is `undefined`. The fight and rest tests still pass for both orders and for a company with no recorded policy. |
+| The six regression hash tests stay skipped | Those files are not in the diff. The suite reports 6 skipped. |
+
+## Standards
+
+No hard violation left. The script and the direct tests pass the module's default list because they are not the roster. The roster passes the list it was constructed with, including into the stranded band.
+
+## Spec
+
+The six corrections are in the tests and the documents above. No requirement from the correction is missing. No expected value outside the allowed edits was changed.
+
+Review summary: Standards had no hard violation. Spec had no missing requirement.
+
+Questions: none.
+
+Bugs: none left open.
+
+Not done: nothing. No push; the orchestrator pushes.

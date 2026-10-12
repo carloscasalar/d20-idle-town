@@ -418,9 +418,9 @@ fight badly hurt abandons the contract and walks home.
   and does not roll the potion, so a low roll and a high roll leave the same
   engine log until the first drink.
 - Constituting a company draws its Potion sharing policy once, from the same
-  generator, after that company's classes, heroes and name are chosen. The
-  draw is one weighted roll whatever the weights are, so later world draws
-  move by that one step and a seed still reproduces itself. The company keeps
+  generator, after that company's classes and heroes are chosen and before its
+  name. The draw is one weighted roll whatever the weights are, so later world
+  draws move by that one step and a seed still reproduces itself. The company keeps
   the result on a policies object. Combat and the Short rest ask that policy
   only for the order in which Bloodied heroes are served. A company with no
   recorded policy is served in company order. A merger keeps the host's policies.

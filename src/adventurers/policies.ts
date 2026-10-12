@@ -45,7 +45,7 @@ const SHARING: Record<PotionSharingPolicy, PotionSharing> = {
 
 /** A company with no recorded policy is served in company order. */
 export function potionSharingOf(policy: PotionSharingPolicy | undefined): PotionSharing {
-  return policy === 'most-hurt' ? SHARING['most-hurt'] : SHARING['company-order'];
+  return policy === undefined ? SHARING['company-order'] : SHARING[policy];
 }
 
 export interface PotionSharingWeight {

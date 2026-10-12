@@ -25,7 +25,7 @@ function setup(config: Partial<CompanyRosterConfig> = {}) {
     coin: openCoin(emptyGoldStatistics()), report: (event) => events.push(event),
   };
   const board = new Board(DEFAULT_BOARD_CONFIG);
-  const company = (level = 1, size = 4): Party => createParty(rng, level, size, 0, STARTING_GOLD);
+  const company = (level = 1, size = 4): Party => createParty(rng, level, size, 0, STARTING_GOLD, DEFAULT_POLICIES_CONFIG.potionSharing);
   const arrivals = () => roster.arrivals({ ...context, board });
   return { roster, context, company, events, board, arrivals };
 }

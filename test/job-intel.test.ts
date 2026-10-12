@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { DEFAULT_COMPANY_ROSTER_CONFIG } from '../src/adventurers/company-roster';
 import { createHero } from '../src/adventurers/hero';
 import { createParty, type Party } from '../src/adventurers/party';
+import { DEFAULT_POLICIES_CONFIG } from '../src/adventurers/policies';
 import { Rng } from '../src/core/rng';
 import type { EncounterSpec } from '../src/quests/encounters';
 import { DEFAULT_JOB_INTEL_CONFIG } from '../src/quests/job-intel';
@@ -43,7 +44,7 @@ function job(overrides: Partial<Quest> = {}): Quest {
 }
 
 function company(rng: Rng, level = 1, gold = 300, name = 'Lanterns'): Party {
-  const result = createParty(rng, level, 4, 0, STARTING_GOLD);
+  const result = createParty(rng, level, 4, 0, STARTING_GOLD, DEFAULT_POLICIES_CONFIG.potionSharing);
   result.name = name;
   result.members = Array.from({ length: 4 }, (_, index) => {
     const hero = createHero(rng, level, 'Fighter');

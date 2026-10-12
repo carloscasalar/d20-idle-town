@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_COMPANY_ROSTER_CONFIG } from '../src/adventurers/company-roster';
 import { createParty, type Party } from '../src/adventurers/party';
+import { DEFAULT_POLICIES_CONFIG } from '../src/adventurers/policies';
 import { DEFAULT_ENCOUNTER_CONFIG } from '../src/quests/encounters';
 import { DEFAULT_ITEM_CONFIG } from '../src/items/items';
 import { DEFAULT_JOB_INTEL_CONFIG } from '../src/quests/job-intel';
@@ -152,7 +153,7 @@ function world(
 }
 
 function companyOf(rng: Rng, parties: Party[]): Party {
-  const company = createParty(rng, 5, 4, 0, STARTING_GOLD);
+  const company = createParty(rng, 5, 4, 0, STARTING_GOLD, DEFAULT_POLICIES_CONFIG.potionSharing);
   parties.push(company);
   return company;
 }
@@ -824,7 +825,7 @@ describe('Game and Board expedition ownership', () => {
       }
       const patron = scenario.town.employers[0]!;
       const holding = patron.assets[0]!;
-      const company = createParty(rng, 5, 4, scenario.tick, STARTING_GOLD);
+      const company = createParty(rng, 5, 4, scenario.tick, STARTING_GOLD, DEFAULT_POLICIES_CONFIG.potionSharing);
       Object.assign(company, { gold: kind === 'assault' ? 2000 : 0, potions: { basic: 100 }, blessed: true, duesPaidDay: 5, guildMember: true, idleTicks: 12 });
       for (const hero of company.members) hero.armorTier = 3;
       const lair = createLair(rng, 'goblins', 5, scenario.tick, DEFAULT_COMPANY_ROSTER_CONFIG.companySize, DEFAULT_LAIR_CONFIG);
@@ -876,7 +877,7 @@ describe('Game and Board expedition ownership', () => {
       const holding = patron.assets[0]!;
       const lair = createLair(rng, 'goblins', 5, 0, DEFAULT_COMPANY_ROSTER_CONFIG.companySize, DEFAULT_LAIR_CONFIG);
       lair.raidCooldown = 10_000;
-      const company = createParty(rng, 1, 4, 0, STARTING_GOLD);
+      const company = createParty(rng, 1, 4, 0, STARTING_GOLD, DEFAULT_POLICIES_CONFIG.potionSharing);
       const work = kind === 'contract'
         ? generateQuest(rng, { employer: patron, asset: holding, theme: 'goblins', level: 1, partySize: 4, tick: 0 }, QUEST_GENERATION)
         : generateAssault(rng, lair, serviceOf(scenario.town, 'guild'), 4, 0, 1, QUEST_GENERATION);

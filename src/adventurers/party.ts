@@ -4,7 +4,7 @@ import type { MagicItem } from '../items/items';
 import { HERO_CLASS_NAMES, type HeroClassName } from 'battlecast-engine';
 import type { DeepReadonly } from '../core/readonly';
 import { createHero, type Hero } from './hero';
-import { DEFAULT_POLICIES_CONFIG, drawPotionSharing, type CompanyPolicies, type PotionSharingWeight } from './policies';
+import { drawPotionSharing, type CompanyPolicies, type PotionSharingWeight } from './policies';
 import type { PotionPack } from './potions';
 
 export type PartyStatus =
@@ -91,9 +91,10 @@ export function createParty(
   size: number,
   tick: number,
   startingGoldPerLevel: number,
-  sharingWeights: readonly PotionSharingWeight[] = DEFAULT_POLICIES_CONFIG.potionSharing,
+  sharingWeights: readonly PotionSharingWeight[],
 ): Party {
   const members: Hero[] = rollClasses(rng, size).map((cls) => createHero(rng, level, cls));
+  const potionSharing = drawPotionSharing(rng, sharingWeights);
   const name = partyName(rng);
   return {
     id: rng.id('party'),
@@ -109,7 +110,7 @@ export function createParty(
     questsFailed: 0,
     arrivedAt: tick,
     potions: {},
-    policies: { potionSharing: drawPotionSharing(rng, sharingWeights) },
+    policies: { potionSharing },
     earned: 0,
     spent: 0,
     stash: [],

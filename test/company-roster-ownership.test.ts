@@ -25,8 +25,8 @@ void hourlyViews;
 
 it('refuses merges, burial and disbanding of companies outside the roster before changing them', () => {
   const rng = new Rng(1);
-  const host = createParty(rng, 1, 2, 0, STARTING_GOLD);
-  const outsider = createParty(rng, 1, 2, 0, STARTING_GOLD);
+  const host = createParty(rng, 1, 2, 0, STARTING_GOLD, DEFAULT_POLICIES_CONFIG.potionSharing);
+  const outsider = createParty(rng, 1, 2, 0, STARTING_GOLD, DEFAULT_POLICIES_CONFIG.potionSharing);
   killHero(outsider.members[0]!);
   const roster = new CompanyRoster(DEFAULT_COMPANY_ROSTER_CONFIG, DEFAULT_HERO_ECONOMY, DEFAULT_TOWN_CONFIG, DEFAULT_HOLDING_CONFIG, DEFAULT_POLICIES_CONFIG);
   roster.replaceForScenario([host]);
@@ -44,8 +44,8 @@ it('refuses merges, burial and disbanding of companies outside the roster before
 
 it('uses configured capacity when merging through read-only hourly views', () => {
   const rng = new Rng(2);
-  const host = createParty(rng, 1, 2, 0, STARTING_GOLD);
-  const donor = createParty(rng, 1, 3, 0, STARTING_GOLD);
+  const host = createParty(rng, 1, 2, 0, STARTING_GOLD, DEFAULT_POLICIES_CONFIG.potionSharing);
+  const donor = createParty(rng, 1, 3, 0, STARTING_GOLD, DEFAULT_POLICIES_CONFIG.potionSharing);
   const staying = donor.members.slice(1);
   const roster = new CompanyRoster({ ...DEFAULT_COMPANY_ROSTER_CONFIG, maxCompanySize: 3 }, DEFAULT_HERO_ECONOMY, DEFAULT_TOWN_CONFIG, DEFAULT_HOLDING_CONFIG, DEFAULT_POLICIES_CONFIG);
   roster.replaceForScenario([host, donor]);

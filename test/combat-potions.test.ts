@@ -9,6 +9,7 @@ import type { EncounterSpec } from '../src/quests/encounters';
 import type { Quest } from '../src/quests/quest';
 import { Game } from '../src/sim/game';
 import { createParty } from '../src/adventurers/party';
+import { DEFAULT_POLICIES_CONFIG } from '../src/adventurers/policies';
 import { COMBAT_RULES, STARTING_GOLD } from './helpers/supplied-config';
 
 /** 3 and 3 make 2d4+2 equal 8, the old heal of a 20 HP hero. */
@@ -195,7 +196,7 @@ describe('combat potion dice wired by the game', () => {
 });
 
 function fightThroughTheGame(potions: { basic?: number }): { before: { s: number }; after: { s: number }; drinks: number } {
-  const party = createParty(new Rng(1), 3, 4, 0, STARTING_GOLD);
+  const party = createParty(new Rng(1), 3, 4, 0, STARTING_GOLD, DEFAULT_POLICIES_CONFIG.potionSharing);
   party.members = company();
   party.potions = potions;
   party.status = 'questing';

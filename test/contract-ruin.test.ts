@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_COMPANY_ROSTER_CONFIG } from '../src/adventurers/company-roster';
 import { createParty } from '../src/adventurers/party';
+import { DEFAULT_POLICIES_CONFIG } from '../src/adventurers/policies';
 import { Rng } from '../src/core/rng';
 import { generateAssault, generateQuest, type Quest } from '../src/quests/quest';
 import { Game, TICKS_PER_DAY } from '../src/sim/game';
@@ -64,7 +65,7 @@ describe('employer ruin', () => {
         lair.questId = bounty.id;
         return bounty;
       });
-      const company = createParty(rng, 5, 4, scenario.tick, STARTING_GOLD);
+      const company = createParty(rng, 5, 4, scenario.tick, STARTING_GOLD, DEFAULT_POLICIES_CONFIG.potionSharing);
       const taken = bounties[1]!;
       taken.status = 'taken';
       taken.partyId = company.id;

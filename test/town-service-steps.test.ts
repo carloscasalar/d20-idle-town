@@ -1,5 +1,6 @@
 import { expect, it } from 'vitest';
 import { createParty } from '../src/adventurers/party';
+import { DEFAULT_POLICIES_CONFIG } from '../src/adventurers/policies';
 import { Rng } from '../src/core/rng';
 import { emptyGoldStatistics, openCoin } from '../src/town/coin';
 import { buyPotions, buyArmour, visitTownServices, type TownServiceStep, type TownServiceContext } from '../src/town/services';
@@ -11,7 +12,7 @@ import { DEFAULT_HOLDING_CONFIG } from '../src/town/assets';
 it('inserts a made-up service between potions and armour using only the supplied list', () => {
   const rng = new Rng(1);
   const town = generateTown(rng, DEFAULT_TOWN_CONFIG, DEFAULT_HOLDING_CONFIG);
-  const company = createParty(rng, 1, 4, 0, STARTING_GOLD);
+  const company = createParty(rng, 1, 4, 0, STARTING_GOLD, DEFAULT_POLICIES_CONFIG.potionSharing);
   company.gold = 10000;
   const events: string[] = [];
   const context: TownServiceContext = {

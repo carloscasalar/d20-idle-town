@@ -121,7 +121,7 @@ describe('a registered kind of work', () => {
     expect(work).toMatchObject({ kind: survey.id, status: 'open', countRevealed: true, revealed: 1 });
     expect(work.encounters).toHaveLength(1);
 
-    const company = createParty(new Rng(1), 1, 4, 0, STARTING_GOLD);
+    const company = createParty(new Rng(1), 1, 4, 0, STARTING_GOLD, DEFAULT_POLICIES_CONFIG.potionSharing);
     company.gold = 1000;
     const departure = board.take(company, work, boardContext);
     startExpedition(company, departure.travelTicks);

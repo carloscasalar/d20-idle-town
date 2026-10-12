@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createHero, resurrectionCost, DEFAULT_HERO_ECONOMY } from '../src/adventurers/hero';
 import { createParty } from '../src/adventurers/party';
+import { DEFAULT_POLICIES_CONFIG } from '../src/adventurers/policies';
 import { DEFAULT_POTION_CONFIG, type PotionPack, type PotionTier } from '../src/adventurers/potions';
 import { Rng } from '../src/core/rng';
 import { emptyGoldStatistics, openCoin } from '../src/town/coin';
@@ -22,7 +23,7 @@ function visit(options: {
   tiers?: readonly PotionTier[];
 }) {
   const rng = new Rng(3);
-  const party = createParty(rng, 1, 1, 0, STARTING_GOLD);
+  const party = createParty(rng, 1, 1, 0, STARTING_GOLD, DEFAULT_POLICIES_CONFIG.potionSharing);
   party.members = options.heroes.map((spec) => {
     const hero = createHero(rng, 1, 'Fighter');
     hero.maxHp = spec.maxHp;

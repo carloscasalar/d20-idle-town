@@ -3,6 +3,7 @@ import { rollDice } from '../src/core/dice';
 import { DEFAULT_POTION_CONFIG, potionCount, takePotion } from '../src/adventurers/potions';
 import { DEFAULT_COMPANY_ROSTER_CONFIG } from '../src/adventurers/company-roster';
 import { aliveMembers, createParty } from '../src/adventurers/party';
+import { DEFAULT_POLICIES_CONFIG } from '../src/adventurers/policies';
 import { runCombat } from '../src/combat/battlecast';
 import { Rng } from '../src/core/rng';
 import { generateAssault } from '../src/quests/quest';
@@ -24,7 +25,7 @@ for (const level of [5, 6, 8]) {
     for (let t = 0; t < trials; t++) {
       const lair = createLair(rng, rng.pick(LAIR_THEMES), level, 0, DEFAULT_COMPANY_ROSTER_CONFIG.companySize, DEFAULT_LAIR_CONFIG);
       const quest = generateAssault(rng, lair, guild, DEFAULT_COMPANY_ROSTER_CONFIG.companySize, 0, scale, QUEST_GENERATION);
-      const party = createParty(rng, level + partyLevelOffset, DEFAULT_COMPANY_ROSTER_CONFIG.companySize, 0, STARTING_GOLD);
+      const party = createParty(rng, level + partyLevelOffset, DEFAULT_COMPANY_ROSTER_CONFIG.companySize, 0, STARTING_GOLD, DEFAULT_POLICIES_CONFIG.potionSharing);
       party.potions = { basic: 4 };
       let ok = true;
       for (let i = 0; i < quest.encounters.length && ok; i++) {

@@ -93,7 +93,7 @@ function watchBooks(game: Game, config: DeepPartial<GameConfig> = {}) {
       if (!previousIndex.parties.has(p.id)) {
         // C01: derive opening gold from the public constructor, using an
         // independent RNG so observation cannot affect the simulation.
-        const purse = createParty(new Rng(0), partyLevel(p), p.members.length, p.arrivedAt, STARTING_GOLD).gold;
+        const purse = createParty(new Rng(0), partyLevel(p), p.members.length, p.arrivedAt, STARTING_GOLD, DEFAULT_POLICIES_CONFIG.potionSharing).gold;
         starting.set(p.id, purse);
         sources += purse;
       }
@@ -154,7 +154,7 @@ function watchBooks(game: Game, config: DeepPartial<GameConfig> = {}) {
 }
 
 function provisioned(rng: Rng, level = 1, gold = 1000): Party {
-  const p = createParty(rng, level, 4, 0, STARTING_GOLD);
+  const p = createParty(rng, level, 4, 0, STARTING_GOLD, DEFAULT_POLICIES_CONFIG.potionSharing);
   p.members = Array.from({ length: 4 }, () => createHero(rng, level, 'Fighter'));
   Object.assign(p, { gold, potions: { basic: 4 }, blessed: true, guildMember: true, duesPaidDay: 1 });
   for (const hero of p.members) hero.armorTier = 3;

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { resurrectionCost } from '../src/adventurers/hero';
 import { createParty, partyLevel, type Party } from '../src/adventurers/party';
+import { DEFAULT_POLICIES_CONFIG } from '../src/adventurers/policies';
 import { Rng } from '../src/core/rng';
 import type { EncounterSpec } from '../src/quests/encounters';
 import {
@@ -47,7 +48,7 @@ function contract() {
 }
 
 function scene(options: { gold?: number; level?: number; skillDc?: number; ruined?: ServiceKind } = {}) {
-  const company = createParty(new Rng(1), options.level ?? 1, 4, 0, STARTING_GOLD);
+  const company = createParty(new Rng(1), options.level ?? 1, 4, 0, STARTING_GOLD, DEFAULT_POLICIES_CONFIG.potionSharing);
   company.name = 'Lanterns';
   company.gold = options.gold ?? 1000;
   const town = generateTown(new Rng(2), DEFAULT_TOWN_CONFIG, DEFAULT_HOLDING_CONFIG);

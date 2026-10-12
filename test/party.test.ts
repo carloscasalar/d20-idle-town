@@ -39,8 +39,8 @@ describe('hero progression', () => {
 describe('party merging', () => {
   it('takes every donor survivor while there is room for six', () => {
     const rng = new Rng(5);
-    const host = createParty(rng, 3, 4, 0, STARTING_GOLD);
-    const donor = createParty(rng, 3, 4, 0, STARTING_GOLD);
+    const host = createParty(rng, 3, 4, 0, STARTING_GOLD, DEFAULT_POLICIES_CONFIG.potionSharing);
+    const donor = createParty(rng, 3, 4, 0, STARTING_GOLD, DEFAULT_POLICIES_CONFIG.potionSharing);
     killHero(host.members[0]!);
     killHero(host.members[1]!);
     killHero(donor.members[0]!);

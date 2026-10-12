@@ -3,6 +3,7 @@ import { DEFAULT_COMPANY_ROSTER_CONFIG } from '../src/adventurers/company-roster
 import { DEFAULT_HERO_ECONOMY } from '../src/adventurers/hero';
 import { DEFAULT_POTION_CONFIG } from '../src/adventurers/potions';
 import { createParty } from '../src/adventurers/party';
+import { DEFAULT_POLICIES_CONFIG } from '../src/adventurers/policies';
 import { Rng } from '../src/core/rng';
 import type { Quest } from '../src/quests/quest';
 import { configFieldPaths } from '../src/sim/config';
@@ -262,7 +263,7 @@ function raidClock(baseRaidInterval: number): Game {
 }
 
 function scaledFight(scaleRoundingBias: number): Game {
-  const party = createParty(new Rng(3), 1, 5, 0, STARTING_GOLD);
+  const party = createParty(new Rng(3), 1, 5, 0, STARTING_GOLD, DEFAULT_POLICIES_CONFIG.potionSharing);
   party.status = 'questing';
   party.questId = 'quest-scaled';
   const quest: Quest = {

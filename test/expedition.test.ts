@@ -52,7 +52,7 @@ function outcome(party: Party, winner: CombatOutcome['winner'], alive = party.me
 }
 
 function setup(level = 1) {
-  const party = createParty(new Rng(1), level, 4, 0, STARTING_GOLD);
+  const party = createParty(new Rng(1), level, 4, 0, STARTING_GOLD, DEFAULT_POLICIES_CONFIG.potionSharing);
   party.status = 'questing';
   party.questId = 'q1';
   party.gold = 1000;
@@ -98,7 +98,7 @@ function homecoming(success = true, level = 1) {
 
 /** One Short rest hour inside a real game, spending every die the pool still holds. */
 function shortRestThroughTheGame(hitDiceSpent: number, potions: Party['potions'] = {}): { before: { s: number }; after: { s: number }; rest: string; breath: string } {
-  const party = createParty(new Rng(1), 4, 1, 0, STARTING_GOLD);
+  const party = createParty(new Rng(1), 4, 1, 0, STARTING_GOLD, DEFAULT_POLICIES_CONFIG.potionSharing);
   const hero = party.members[0]!;
   hero.hp = 1;
   hero.maxHp = 1000;
@@ -243,7 +243,27 @@ describe('an expedition hour', () => {
 
     expect(options).toEqual({
       blessingHp: 3, noRetreat: true, lairDepth: { index: 1, total: 2 }, potions: {},
-      ...(party.policies?.potionSharing ? { potionSharing: party.policies.potionSharing } : {}),
+      potionSharing: 'company-order',
+    });
+  });
+
+  it('passes a most-hurt policy into the fight', () => {
+    const { party, quest, context } = setup();
+    quest.kind = 'assault';
+    party.progress = 1;
+    party.blessed = true;
+    party.policies = { potionSharing: 'most-hurt' };
+    let options: Parameters<ExpeditionContext['combat']>[3];
+    context.combat = (_heroes, _spec, _seed, received) => {
+      options = received;
+      return outcome(party, 'party');
+    };
+
+    advanceExpedition(party, context);
+
+    expect(options).toEqual({
+      blessingHp: 3, noRetreat: true, lairDepth: { index: 1, total: 2 }, potions: {},
+      potionSharing: 'most-hurt',
     });
   });
 
@@ -472,7 +492,7 @@ describe('expedition potions and short rests', () => {
     { size: 6, level: 5, spent: 1 },
   ])('uses one rest seed for $size heroes at level $level with $spent already spent', ({ size, level, spent }) => {
     const { party, quest, context, rng, events } = setup(level);
-    party.members = createParty(new Rng(4), level, size, 0, STARTING_GOLD).members;
+    party.members = createParty(new Rng(4), level, size, 0, STARTING_GOLD, DEFAULT_POLICIES_CONFIG.potionSharing).members;
     quest.countRevealed = true;
     context.config = { ...context.config, retreatHpFraction: 0 };
     for (const hero of party.members) hero.hitDiceSpent = spent;
