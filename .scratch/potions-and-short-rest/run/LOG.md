@@ -25,6 +25,8 @@ Branch `feature/potions-healing`. Run started 2026-10-12 at checkpoint `4774e43`
 
 Run finished 2026-10-12: issues 02 to 09 done; `pnpm typecheck` clean, 749 tests green with none skipped; final smoke `smoke/07-final.md` PASS at `98e1bae`. Left open: issue 01 and issue 10 (`needs-triage`).
 
+Run resumed 2026-10-12 at checkpoint `9c9a2f7` (typecheck clean, 754 tests green) for issues 11 and 12, triaged to `ready-for-agent` after the first finish.
+
 ## Lessons
 
 - `pnpm exec vite-node` (as written in `docs/agents/implementation.md`) fails with "Command not found"; `pnpm dlx vite-node` works. Prompts of this run use `pnpm dlx`.
