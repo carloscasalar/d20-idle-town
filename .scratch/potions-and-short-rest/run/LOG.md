@@ -17,6 +17,7 @@ Branch `feature/potions-healing`. Run started 2026-10-12 at checkpoint `4774e43`
 | 04 fix 1 | 05 | tests only | Cursor (same session) | `3952642` | PASS (orchestrator mutation re-check); issue done |
 | 05 | 06 Potion sharing policy | feature | Cursor | `1024ac1` | FAIL: a test weakened instead of moving the draw, a default for configuration, two unproven wirings, stale interfaces doc; long sweep clean |
 | 05 fix 1 | 06 | correction | Cursor (same session) | `cd06396` | PASS (orchestrator read and mutation re-check); issue done |
+| 06 | 07 apothecary production | feature | Codex | `b0e724e` | PASS first round (23 of 24 mutations killed, long sweep clean); issue done; issue 10 filed (`needs-triage`) |
 
 ## Lessons
 
@@ -27,3 +28,4 @@ Branch `feature/potions-healing`. Run started 2026-10-12 at checkpoint `4774e43`
 - A test that pins one small dice total can pass by coincidence on another generator: pin several rolls.
 - When a new draw breaks a seeded test, ask the implementer to try other fixed places for the draw before it edits the test; the reviewer found one in minutes.
 - `docs/ARCHITECTURE-INTERFACES.md` goes stale on every issue that changes a signature: name it in each prompt.
+- Listing in the prompt the mutations the reviewer will try (from earlier failed rounds) gave the first PASS in one round.

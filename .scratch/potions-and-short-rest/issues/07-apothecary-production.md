@@ -1,6 +1,6 @@
 # Apothecary production
 
-Status: ready-for-agent
+Status: done
 
 Blocked-by: [04 - Tiered potions with real dice](04-tiered-potions-with-real-dice.md)
 
@@ -101,3 +101,9 @@ Prior art: the coin movement tests that hold each treasury equal to opening plus
   Standards and Spec reviews have no remaining findings. Browser smoke is
   unavailable because there is no connected browser and native browser access
   was denied. Full report: `../run/turns/06-07-apothecary-production-report.md`.
+
+### Closed by the orchestrator (2026-10-12)
+
+Commit `b0e724e` (Codex). Review: PASS in the first round. The slice reviewer found evidence for every acceptance criterion, killed 23 of 24 mutations (the survivor is the Town row of `src/ui/main.ts`, which no UI test covers), confirmed that edited tests moved only by the production cost (25 per potion) and that the guard tests have no diff, and ran the long sweep (`no crashes in seeds 1-150 for 1500 hours`). 727 tests green, 6 skipped. The treasury can dip below zero between the sink and the sale of one potion; ruin is decided at day close, so this is the no-gate behaviour the issue asks for.
+
+Left open: a fractional selling price is accepted by validation and throws after the sink, filed as [issue 10](10-fractional-potion-price-throws-after-the-sink.md); `void purchase.tier.productionTicks` in `src/town/services.ts` is a read with no behaviour, as the issue asks; `scripts/tune-baseline.json` still says the game does not expose `goldSpentOnProduction` yet (for issue 09).
