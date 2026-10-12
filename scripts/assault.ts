@@ -1,6 +1,6 @@
 import { healHero } from '../src/adventurers/hero';
 import { rollDice } from '../src/core/dice';
-import { basicTier, DEFAULT_POTION_CONFIG, potionCount, takePotion } from '../src/adventurers/potions';
+import { DEFAULT_POTION_CONFIG, potionCount, takePotion } from '../src/adventurers/potions';
 import { DEFAULT_COMPANY_ROSTER_CONFIG } from '../src/adventurers/company-roster';
 import { aliveMembers, createParty } from '../src/adventurers/party';
 import { runCombat } from '../src/combat/battlecast';
@@ -11,7 +11,7 @@ import { createLair, DEFAULT_LAIR_CONFIG, LAIR_THEMES } from '../src/town/lairs'
 import { DEFAULT_TOWN_CONFIG, generateTown, serviceOf } from '../src/town/town';
 import { COMBAT_RULES, QUEST_GENERATION, STARTING_GOLD } from '../test/helpers/supplied-config';
 
-const basic = basicTier(DEFAULT_POTION_CONFIG.tiers);
+const basic = DEFAULT_POTION_CONFIG.tiers.find((tier) => tier.name === 'basic');
 const trials = Number(process.env.TRIALS ?? 40);
 const scale = Number(process.env.SCALE ?? 1.25);
 const rng = new Rng(Number(process.env.SEED ?? 7));

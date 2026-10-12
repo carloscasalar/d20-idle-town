@@ -10,6 +10,13 @@ Everything below is part of the first release, which has not been tagged yet.
 
 ### 2026-10-12
 
+- A company restocks at the apothecary until the pack can cover half of each
+  living hero's maximum hit points (`services.potionCoverFraction`, default
+  0.5), with at least one potion per living hero, favouring the lower tiers.
+  One visit buys one tier. A purse that cannot pay that count and still keep
+  one resurrection steps down to a cheaper tier, or buys as many of the
+  cheapest tier as it affords. A ruined apothecary sells nothing.
+
 - Healing potions come in four tiers — basic, greater, superior and supreme —
   rolled with real dice (2d4+2, 4d4+4, 8d4+8, 10d4+20) and sold at 50, 200,
   2,000 and 20,000 gp. A company's pack holds a count per tier. A Bloodied

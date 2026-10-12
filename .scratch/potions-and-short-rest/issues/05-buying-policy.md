@@ -63,3 +63,14 @@ Rewritten:
 - `CHANGELOG.md`: the buying policy.
 
 ## Comments
+
+Decisions left to this slice:
+
+- `potionCoverFraction` lives on `services` in `src/town/services.ts`, the module that owns the apothecary visit. It is a share from 0 to 1 inclusive, the same check as the other hit-point shares. The default is 0.5.
+- The tier cap is the literal `N / 2` inside the potions step. It is not a configuration field.
+- An empty catalogue buys nothing and the step returns false.
+- "Lowest tier" is the smallest assured healing. Catalogue order breaks a tie: the earlier entry is the lower one. "Cheaper" is a strictly lower price. The budget floor ("basic" in the issue text) is the lowest price, then the lowest assured healing, then catalogue order. The step does not look up a tier by the name `basic`.
+- Step-down walks cheaper tiers that are no stronger than the chosen tier, strongest first, and buys the first whose full count the purse can pay above one resurrection. If none fits, it buys as many of the floor tier as that budget pays, up to that tier's full count.
+- A price of 0 is free, so the step does not divide the purse by zero. The purchase still keeps the reserve, because the purse does not move.
+- The shop line stays `${company} buy ${count} ${tier} healing potion(s) from ${apothecary} for ${cost} gp.` One line, and no adventurer is named on the `service` movement.
+- `scripts/assault.ts` looks up the tier named `basic` in the default catalogue itself, so it still typechecks after `basicTier` is removed. The script's drinking is unchanged.

@@ -30,6 +30,26 @@ describe('game configuration', () => {
     }
   });
 
+  it('covers half of maximum hit points by default and rejects a cover fraction outside 0 to 1', () => {
+    expect(DEFAULT_CONFIG.services.potionCoverFraction).toBe(0.5);
+    const low = resolveGameConfig({ services: { potionCoverFraction: -0.1 } });
+    expect(low.ok).toBe(false);
+    if (!low.ok) expect(low.errors).toContain('services.potionCoverFraction: expected a number >= 0, got -0.1');
+    const high = resolveGameConfig({ services: { potionCoverFraction: 1.5 } });
+    expect(high.ok).toBe(false);
+    if (!high.ok) expect(high.errors).toContain('services.potionCoverFraction: expected a number <= 1, got 1.5');
+    const missing = document();
+    delete (missing.services as { potionCoverFraction?: number }).potionCoverFraction;
+    const gone = validateGameConfig(missing);
+    expect(gone.ok).toBe(false);
+    if (!gone.ok) expect(gone.errors).toContain('missing field services.potionCoverFraction');
+    const kept = resolveGameConfig({ services: { potionCoverFraction: 1 } });
+    expect(kept.ok).toBe(true);
+    if (!kept.ok) return;
+    expect(kept.config.services.potionCoverFraction).toBe(1);
+    expect(kept.config.services.blessingReserveFactor).toBe(DEFAULT_CONFIG.services.blessingReserveFactor);
+  });
+
   it('offers the four healing potion tiers and lets a tier be dropped or repriced', () => {
     expect(DEFAULT_HERO_ECONOMY.startingGoldPerLevel).toBe(50);
     expect(DEFAULT_POTION_CONFIG.tiers).toEqual([

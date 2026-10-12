@@ -29,11 +29,6 @@ export function potionCount(pack: PotionPack, name: string): number {
   return pack[name] ?? 0;
 }
 
-/** The temporary buying rule of this slice: the tier named basic, if the catalogue still has it. */
-export function basicTier(catalogue: readonly PotionTier[]): PotionTier | undefined {
-  return catalogue.find((tier) => tier.name === 'basic');
-}
-
 /**
  * Smallest stocked tier whose assured healing covers the missing hit points,
  * or the strongest stocked tier when none does. A fallen hero is missing their

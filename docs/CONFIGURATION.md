@@ -160,7 +160,22 @@ An idle hour in town. Defined in `src/town/services.ts`.
 | `blessingCostPerLevel` | 40 | Gold per company level for a blessing |
 | `blessingHpPerLevel` | 3 | Bonus hit points per level while blessed. Expedition receives this. |
 | `blessingReserveFactor` | 1.5 | Resurrection prices that must remain after a blessing |
+| `potionCoverFraction` | 0.5 | Share of each living hero's maximum hit points the pack should cover. From 0 to 1 |
 | `steps` | potions, loot, items, dues, blessing, retirement, armour | Idle-hour order, by step name. Any name in the town-service registry, including `retirement` |
+
+On a visit to an apothecary that is not ruined, the company buys one tier, once.
+For each living hero the need is `ceil(maxHp × potionCoverFraction)`. The pack
+should assure that much healing in total, and hold at least one potion per
+living hero. With `N` the average need, the tier is the strongest whose assured
+healing is at most `N / 2`, or the lowest tier when none is. That half is fixed
+in the step; it is not a field. The count is the fewest of that tier that meet
+the target. If the purse cannot pay it and still keep one resurrection, the
+company steps down to a cheaper tier whose count it can pay. If even the
+cheapest tier's count does not fit, it buys as many of that tier as the purse
+affords. Lowest follows assured healing. Cheaper and cheapest follow price.
+Catalogue order breaks a tie. A tier's name is not consulted. A ruined
+apothecary sells nothing, and that is the only limit the shop places on the
+purchase. The purse pays the treasury the full price as a `service`.
 
 ## `lairs`
 

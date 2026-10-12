@@ -387,7 +387,11 @@ describe('homecoming payments', () => {
 
 describe('retirement capital', () => {
   it('spends 25000 gp and starts the veteran’s business with 5000 gp', () => {
-    const game = scene((s, rng) => { s.parties = [provisioned(rng, 8, 30000)]; });
+    const game = scene((s, rng) => {
+      const party = provisioned(rng, 8, 30000);
+      party.potions = { supreme: 4 }; // already at the stock target, so this hour is retirement
+      s.parties = [party];
+    });
     watchBooks(game).step();
     expect(game.view().parties[0]).toMatchObject({ gold: 5000, earned: 0, spent: 25000 });
     const veteran = game.view().town.employers.find((e) => e.title === 'Retired adventurer')!;

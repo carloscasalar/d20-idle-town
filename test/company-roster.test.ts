@@ -82,7 +82,8 @@ function company(rng: Rng, level: number, living: string[], dead: string[] = [])
   });
   for (const hero of party.members) if (dead.includes(hero.name)) killHero(hero);
   party.gold = 0;
-  party.potions = { basic: 6 };
+  // Six supreme cover six level-8 fighters, so this helper still skips the apothecary.
+  party.potions = { supreme: 6 };
   party.blessed = true;
   party.guildMember = true;
   party.duesPaidDay = DAY;

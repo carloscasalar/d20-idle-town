@@ -167,6 +167,7 @@ const servicesSpec = withFields(sectionField(GAME_SPEC, 'services'), {
   blessingCostPerLevel: price,
   blessingHpPerLevel: count,
   blessingReserveFactor: fraction,
+  potionCoverFraction: chance,
   steps: { kind: 'strings' },
 });
 

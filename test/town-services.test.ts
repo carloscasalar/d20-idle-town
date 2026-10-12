@@ -36,9 +36,10 @@ const itemRng = new Rng(9);
 const item = (name: string) => instantiate(itemRng, ITEM_CATALOGUE.find((i) => i.name === name)!);
 
 describe('town services through an hourly tick', () => {
-  it('buys basic potions at 50 gp, up to one per living hero, and keeps the resurrection reserve', () => {
+  it('buys two basic for four level-1 fighters when four would meet the stock target and the purse keeps one resurrection', () => {
     const { game, party, reserve, shop } = setup();
     expect(reserve).toBe(190);
+    expect(party.members.map((hero) => hero.maxHp)).toEqual([12, 12, 12, 12]);
     party.potions = {};
     party.guildMember = false;
     party.duesPaidDay = -1;
@@ -54,17 +55,22 @@ describe('town services through an hourly tick', () => {
     expect(apothecary.treasury).toBe(treasury + party.spent);
     expect(apothecary.earned).toBe(earned + party.spent);
     expect(party.guildMember).toBe(false);
-    expect(game.view().events.some((event) => event.text.includes('buy 2 basic healing potions') && event.text.includes('for 100 gp'))).toBe(true);
+    expect(game.view().events.filter((event) => event.text.includes('healing potion')).map((event) => event.text)).toEqual([
+      `${party.name} buy 2 basic healing potions from ${apothecary.name} for 100 gp.`,
+    ]);
   });
 
-  it('buys only basic potions, and no more than one per living hero, when the purse could pay for a greater one', () => {
-    const { game, party } = setup();
+  it('counts a greater already in the pack, and buys three basic rather than one basic per hero', () => {
+    const { game, party, shop } = setup();
     party.potions = { greater: 1 };
     party.gold = 100000;
     game.step();
-    expect(party.potions).toEqual({ basic: 4, greater: 1 });
-    expect(party.spent).toBe(200);
+    expect(party.potions).toEqual({ basic: 3, greater: 1 });
+    expect(party.spent).toBe(150);
     expect(Object.keys(game.view().parties[0]!.potions)).toEqual(['basic', 'greater']);
+    expect(game.view().events.filter((event) => event.text.includes('healing potion')).map((event) => event.text)).toEqual([
+      `${party.name} buy 3 basic healing potions from ${shop('apothecary').name} for 150 gp.`,
+    ]);
   });
 
   it('leaves a new level-1 purse of 50 gp untouched, because one resurrection costs 190 gp', () => {
@@ -243,6 +249,7 @@ describe('town services through an hourly tick', () => {
 
   it('retires a veteran before fitting armour, preserving the existing spending rules', () => {
     const { game, party, reserve } = setup(8);
+    party.potions = { supreme: 4 }; // already at the stock target, so this hour is retirement
     for (const hero of party.members) hero.armorTier = 0;
     const veteran = party.members[0]!;
     party.gold = DEFAULT_COMPANY_ROSTER_CONFIG.retirementPrice + reserve;
