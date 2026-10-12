@@ -1,6 +1,6 @@
 # Tiered potions with real dice
 
-Status: ready-for-agent
+Status: done
 
 Blocked-by: [03 - Hit Dice at the Short rest](03-hit-dice-at-the-short-rest.md)
 
@@ -119,3 +119,9 @@ Decisions left to this slice:
 - `heroes` stays a required `runCombat` argument. Combat no longer reads the old potion economy fields from it.
 - The budget check: resurrection at level 1 is `150 + 1² × 40` = 190 gp. A new company with 50 gp per level still cannot buy before its first reward. That reason is not written in `docs/CONFIGURATION.md` or `CHANGELOG.md`.
 - `scripts/assault.ts` had to change so it still typechecks: the pack is a map, and a Bloodied hero between fights drinks one basic potion rolled as 2d4+2 on a private generator, so the script's combat seeds stay put. `scripts/tune*.ts`, `scripts/tune-baseline.json` and `test/tune.test.ts` did not change.
+
+### Closed by the orchestrator (2026-10-12)
+
+Commits `2b1c3fc` (the feature), `b9e3260` (correction 1) and `59530a0` (correction 2), all by Cursor. Review: the slice reviewer found the behaviour correct and the long sweep clean (`no crashes in seeds 1-150 for 1500 hours`), and failed the first round on unproven wiring (selection in combat and at the rest, the combat child generator, one rest generator), a scripted d4 rolling 6, a stale `docs/ARCHITECTURE-INTERFACES.md` and an unforced threshold change in `scripts/assault.ts`. The cheap reviewer (opencode) re-checked correction 1 with six mutations and found one survivor (potions rolled from the fight's setup generator); correction 2 pinned a second fight and the orchestrator confirmed that mutation now fails. 676 tests green, 6 skipped.
+
+Reviewer notes, not corrected: an empty catalogue and one without `basic` both validate (nothing is bought; with no tiers, held potions are neither drunk nor shown); a formula such as `1d4-20` validates; duplicate tier names have no test; `runCombat` still requires `heroes`, which it no longer reads; the pack text in `src/ui/main.ts` has no test.
