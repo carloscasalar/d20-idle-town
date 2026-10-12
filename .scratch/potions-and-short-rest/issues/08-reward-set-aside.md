@@ -1,6 +1,6 @@
 # Reward set-aside
 
-Status: ready-for-agent
+Status: done
 
 Blocked-by: [05 - Buying policy](05-buying-policy.md), [07 - Apothecary production](07-apothecary-production.md)
 
@@ -150,3 +150,9 @@ moves, no second run is required.
   exit 0; final output: `no crashes in seeds 1-150 for 1500 hours`.
 - Turn commit message: `Implement configured reward set-aside for outstanding Contracts`.
   The orchestrator records the commit hash when closing this issue.
+
+### Closed by the orchestrator (2026-10-12)
+
+Commit `23c5c2b` (Codex). Review: PASS in the first round. The slice reviewer found evidence for every acceptance criterion, killed every named mutation, showed that with an empty list the per-tick world hashes equal the parent's on five seeds over 1,200 ticks, reproduced final check 3 exactly (ruined 0 of 40, lowest treasury 198 gp, against the baseline's 2 of 40 and -1,957 gp), and ran the long sweep (`no crashes in seeds 1-150 for 1500 hours`). 743 tests green, 6 skipped. The posting threshold is unchanged, as the check passed without it.
+
+For issue 09: `CONTEXT.md` still says paying a reward "never leaves the treasury negative", while a 20 gp minimum reward can exceed what is left after the rewards owed (the issue allows it and `docs/CONFIGURATION.md` says so). Reviewer notes, not corrected: the threshold read in `raids()` has no test; `Board.rewardTreasury` could be private; `SERVICE_KINDS` would not catch a service added to the union but not to the list.

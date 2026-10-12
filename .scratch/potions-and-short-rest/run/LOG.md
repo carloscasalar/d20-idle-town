@@ -18,6 +18,7 @@ Branch `feature/potions-healing`. Run started 2026-10-12 at checkpoint `4774e43`
 | 05 | 06 Potion sharing policy | feature | Cursor | `1024ac1` | FAIL: a test weakened instead of moving the draw, a default for configuration, two unproven wirings, stale interfaces doc; long sweep clean |
 | 05 fix 1 | 06 | correction | Cursor (same session) | `cd06396` | PASS (orchestrator read and mutation re-check); issue done |
 | 06 | 07 apothecary production | feature | Codex | `b0e724e` | PASS first round (23 of 24 mutations killed, long sweep clean); issue done; issue 10 filed (`needs-triage`) |
+| 07 | 08 Reward set-aside | feature | Codex | `23c5c2b` | PASS first round (final check 3 reproduced: 0 of 40 ruined, lowest treasury 198; long sweep clean); issue done |
 
 ## Lessons
 
