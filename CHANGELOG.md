@@ -10,11 +10,11 @@ Everything below is part of the first release, which has not been tagged yet.
 
 ### 2026-10-12
 
-- The six regression hashes are recorded again, once, for the Hit Dice, healing
-  potion, sharing, production and reward set-aside rules: three whole-world
-  snapshots and three stripped-world hashes. The earlier hashes are the
-  deliberate break. No tuning default moved; the acceptance, scale-shape and
-  3,000-tick apothecary checks passed on the values the earlier slices left.
+- The six regression hashes were re-recorded once, on purpose, because the
+  healing rules change every seeded trajectory: three whole-world snapshots
+  and three stripped-world hashes. No tuning default moved; the acceptance,
+  scale-shape and 3,000-tick apothecary checks passed on the values the
+  earlier slices left.
 
 - The apothecary sets aside rewards promised on open and taken Contracts when
   sizing new rewards. Payment, failure and expiry release the amount.

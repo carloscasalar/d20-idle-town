@@ -102,3 +102,34 @@ The first pass found the core file table still describing `seed()` as combat-onl
 Questions: none. Choices are under the issue Comments. New bugs found: none.
 
 Not done: the issue `Status:` is still `ready-for-agent`; the orchestrator sets `done`. Issue 08's reviewer notes (an untested threshold read in `raids()`, `Board.rewardTreasury` visibility, and `SERVICE_KINDS` not covering a service added only to the union) stay as recorded there. This issue does not change that code. The orchestrator pushes.
+
+## Correction 1
+
+Documents only. Read against `src/sim/config.ts` before writing. The code matches this correction: `GameConfig` has `kinds`, then `potions` and `policies` after `heroes`; `NAME_LISTS` checks `board.rewardSetAsideFor` against employer kinds and town services together; `checkPotionFormulas` rejects a formula `parseDice` cannot parse and a repeated tier name (`potions.tiers: duplicate tier "..."`). Nothing in the correction list disagreed with the code.
+
+### What changed
+
+- `docs/ARCHITECTURE.md`: the section list is `kinds`, `board`, `roster`, `intel`, `expedition`, `services`, `lairs`, `quests`, `encounters`, `heroes`, `potions`, `policies`, `town`, `holdings`, `items`, `combat`, `world`. The validator sentence also names a town service in `board.rewardSetAsideFor`, a potion formula that does not parse, and a duplicate potion tier name.
+- `docs/ARCHITECTURE-INTERFACES.md`: the same three rejections.
+- `docs/CONFIGURATION.md`: the name-check list includes `board.rewardSetAsideFor` against employer kinds and town services. Beside the catalogue table, a duplicate tier name is rejected, for example `potions.tiers: duplicate tier "basic"`.
+- `CHANGELOG.md`: the six regression hashes were re-recorded once, on purpose, because the healing rules change every seeded trajectory.
+
+No code, test, hash, or tuning value changed.
+
+### Checks
+
+| Command | Result |
+| --- | --- |
+| `pnpm typecheck` | PASS. |
+| `pnpm test` | PASS: 37 files, 749 tests, none skipped. |
+
+Regression guard: unchanged. No hash, snapshot, or seeded expectation was edited.
+
+| Point | Where it is written |
+| --- | --- |
+| Section list includes `kinds`, `potions` and `policies` | `docs/ARCHITECTURE.md`, the `GameConfig` section list, in the order of `GameConfig` |
+| Validator also rejects an unknown `board.rewardSetAsideFor` name, a formula that does not parse, and a duplicate tier name | `docs/ARCHITECTURE.md` and `docs/ARCHITECTURE-INTERFACES.md`, the `validateGameConfig` sentences |
+| Name checks include `board.rewardSetAsideFor`; duplicate tier name is documented | `docs/CONFIGURATION.md`, the name-check list and the sentence beside the catalogue table |
+| Changelog says the hashes were re-recorded once, on purpose | `CHANGELOG.md`, the 2026-10-12 hash entry |
+
+Questions: none. Bugs: none. Not done: none of the four points.

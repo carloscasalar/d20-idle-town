@@ -199,8 +199,9 @@ returns the configuration or a list of readable errors: a missing section, a
 missing field, an unknown field, a section that is not an object, a wrong
 type, a count that is not a whole number, an empty weight list, a weight list
 whose weights are all zero, a name that is not in its catalogue (holding,
-employer kind, or step), a negative price, or a range whose minimum exceeds
-its maximum. `new Game` and
+employer kind, a town service in `board.rewardSetAsideFor`, or step), a potion
+formula that does not parse, a duplicate potion tier name, a negative price,
+or a range whose minimum exceeds its maximum. `new Game` and
 `Game.forTesting` use `resolveGameConfig` and throw the joined errors.
 Production code takes each section as a required argument. The raid clock
 passes the lairs section into `raidInterval`, and Expedition passes the

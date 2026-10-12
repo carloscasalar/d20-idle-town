@@ -256,14 +256,17 @@ Its configuration is one plain object, `GameConfig`, composed in
 `src/sim/config.ts` from each module's own frozen default. `seed` sits at the
 top. A day is `TICKS_PER_DAY` (24) in `src/sim/game-rules.ts`, a calendar
 constant, not a tunable field. Every other value is a section
-(`board`, `roster`, `intel`, `expedition`, `services`, `lairs`, `quests`,
-`encounters`, `heroes`, `town`, `holdings`, `items`, `combat`, `world`).
+(`kinds`, `board`, `roster`, `intel`, `expedition`, `services`, `lairs`,
+`quests`, `encounters`, `heroes`, `potions`, `policies`, `town`, `holdings`,
+`items`, `combat`, `world`).
 `new Game(partial)` and `Game.forTesting` deep-merge that partial onto the
 defaults, replacing arrays and `[min, max]` pairs whole, then reject a result
 that is missing a section, has an unknown field, a section that is not an
 object, the wrong type, a count that is not a whole number, an empty weight
 list, a weight list whose weights are all zero, a name that is not in the
-catalogue it names (a holding, an employer kind, or a step), a negative price,
+catalogue it names (a holding, an employer kind, a town service in
+`board.rewardSetAsideFor`, or a step), a potion formula that does not parse,
+a duplicate potion tier name, a negative price,
 or a range whose minimum exceeds its maximum. A
 function that uses a section takes that section as a required argument, so
 forgetting it is a type error and an override reaches every use. Nothing in the object is a function, a

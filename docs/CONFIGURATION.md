@@ -29,6 +29,7 @@ a missing field, an unknown field, a section that is not an object, a wrong
 type, a count that is not a whole number, an empty weight list, a weight list
 whose weights are all zero, a negative price, or a range whose minimum exceeds
 its maximum. It also checks every name against the catalogue that defines it:
+`board.rewardSetAsideFor` against employer kinds and town services,
 `town.retiredHoldings` and `quests.relicHoldings` against holding kinds,
 `quests.guildOnlyKinds` against employer kinds, `services.steps` against the
 town-service registry (including `retirement`), and `intel.steps` against the
@@ -288,7 +289,8 @@ whole gold pieces; ticks are finite, non-negative whole numbers. The name is the
 in a company's pack. Assured healing is not stored: the dice module derives it
 from the formula, and a smaller tier is one with lower assured healing.
 Replacing `tiers` replaces the whole list, so a tier can be dropped or changed.
-A formula that does not parse is rejected.
+A formula that does not parse is rejected. A duplicate tier name is rejected,
+for example `potions.tiers: duplicate tier "basic"`.
 
 | Tier | Formula | Price (gp) | Production cost (gp) | Assured healing |
 | --- | --- | --- | --- | --- |
