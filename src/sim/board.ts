@@ -136,8 +136,13 @@ export class Board {
     return Object.freeze(this.work.filter((work) => work.status === 'taken'));
   }
 
+  /** Whether new Bounty funding meets the Game's threshold and can pay a positive reward. */
+  canFundBounty(employer: Employer, threshold: number, quests: QuestConfig): boolean {
+    return this.rewardTreasury(employer) >= threshold && this.bountyRewardCap(employer, quests) > 0;
+  }
+
   /** Treasury available for sizing new work rewards; no gold is moved. */
-  rewardTreasury(employer: Employer): number {
+  private rewardTreasury(employer: Employer): number {
     if (!this.setsAsideRewards(employer)) return employer.treasury;
     const owed = this.work.reduce((total, work) => total + (
       work.giverId === employer.id && (work.status === 'open' || work.status === 'taken')
@@ -147,7 +152,7 @@ export class Board {
   }
 
   /** Listed Bounties use the Contract treasury share, without its minimum. */
-  bountyRewardCap(employer: Employer, quests: QuestConfig): number {
+  private bountyRewardCap(employer: Employer, quests: QuestConfig): number {
     return this.setsAsideRewards(employer)
       ? Math.floor(this.rewardTreasury(employer) * quests.treasuryShare)
       : employer.treasury;

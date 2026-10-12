@@ -306,12 +306,12 @@ encounters and rewards. `knowledge` hands back learn-next and reveal-all;
 those operations live in job intelligence, and knowledge only grows. `recordsForScenario` and
 `replaceForScenario` are test-only, used by scenario setup; regression serialization uses `all()`.
 
-The Board's `rewardTreasury(employer)` reads that employer's current treasury
+The Board's private `rewardTreasury(employer)` reads that employer's current treasury
 and, for an entry in `board.rewardSetAsideFor`, subtracts rewards on all its
 `open` and `taken` work, Contracts and Bounties. A service entry reaches its
 operator; a kind entry reaches every employer of that kind. Only the apothecary
 is enabled by default. `WorkContext` supplies this query to Contract generation.
-`bountyRewardCap(employer, quests)` applies the rounded-down treasury share for
+Its private `bountyRewardCap(employer, quests)` applies the rounded-down treasury share for
 listed employers and uses exactly the whole treasury otherwise; Bounty creation
 passes this cap to `generateAssault`, which also limits it by the per-level
 reward. No minimum applies to Bounties. Generation owns this formula; Board
@@ -321,9 +321,10 @@ posting.
 No duplicate employer-to-work link or stored balance is introduced: terminal
 status releases the amount on payment, failure or Contract expiry. Posting moves
 no gold; Contract minimum rewards and upkeep retain their existing rules.
-Game checks a listed guild's Bounty threshold against `rewardTreasury` for each
-lair, so earlier postings in the same hour can defer later ones. It skips any
-Bounty that cannot pay a positive reward before drawing randomness. An unlisted
+Game asks `Board.canFundBounty(employer, threshold, quests)` for each lair:
+the reward-sizing treasury must meet the supplied threshold and the Bounty cap
+must be positive. Earlier postings in the same hour can defer later ones.
+Insufficient funding ends posting for that hour before drawing randomness. An unlisted
 guild keeps its whole-treasury threshold. Contract thresholds, both hourly and
 raids, still read the whole treasury. The default apothecary-only list never
 reaches Bounty posting; the default random draws and regression hashes remain
@@ -495,6 +496,7 @@ seeds 1 and 2 keep those fights, with a scripted 2d4+2 of 8.
 | Path | What it covers |
 | --- | --- |
 | `test/reward-set-aside.test.ts` | Board and hourly-game reward sizing with exact treasuries, open/taken obligations, Contract and Bounty endings, every configured merchant, service/kind isolation, empty and missing lists, mixed work accounting, fractional Bounty caps without a minimum, hourly threshold deferral, whole-treasury unlisted guilds, zero-reward rejection and unchanged upkeep |
+| `test/raid-posting-threshold.test.ts` | Hourly raids reject a treasury below the configured threshold, post at equality, and use a listed employer’s whole treasury despite rewards owed; exact rewards, raid counts and holding status |
 | `test/potions.test.ts` | Smallest covering tier, strongest fallback, a fallen hero's maximum, pack wording |
 | `test/apothecary-production.test.ts` | Exact per-potion sink/sale order and balances, one receipt after all pairs, independent configured costs, instant nonzero ticks, every tier from a treasury in debt, permanent ruin, game-view statistics and tuning report |
 | `test/coin.test.ts` | Coin reasons and holder accounting, including production moving only spent and lifetime production spending |

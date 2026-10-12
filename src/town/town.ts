@@ -15,6 +15,11 @@ export type ServiceKind = 'tavern' | 'temple' | 'smith' | 'apothecary' | 'enchan
 /** Every town service a configuration may name. */
 export const SERVICE_KINDS = ['tavern', 'temple', 'smith', 'apothecary', 'enchanter', 'guild'] as const satisfies readonly ServiceKind[];
 
+// `satisfies` rejects unknown names; these compile-time assertions reject missing ones.
+type AssertNever<Missing extends never> = Missing;
+type UnlistedEmployerKinds = AssertNever<Exclude<EmployerKind, (typeof EMPLOYER_KINDS)[number]>>;
+type UnlistedServiceKinds = AssertNever<Exclude<ServiceKind, (typeof SERVICE_KINDS)[number]>>;
+
 export interface Employer {
   id: string;
   name: string;

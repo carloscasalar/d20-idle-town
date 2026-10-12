@@ -644,9 +644,8 @@ export class Game {
     const guild = serviceOf(this.town, 'guild');
     if (guild.ruined || this.config.kinds.assault.rewardPerLevel <= 0) return;
     for (const lair of this.activeLairs) {
-      if (this.board.rewardTreasury(guild) < this.config.world.postingThreshold) return;
+      if (!this.board.canFundBounty(guild, this.config.world.postingThreshold, this.config.quests)) return;
       if (lair.questId) continue;
-      if (this.board.bountyRewardCap(guild, this.config.quests) <= 0) continue;
       const strongest = Math.max(0, ...this.activeParties.map(partyLevel));
       if (strongest < lair.level - this.config.kinds.assault.levelGap) continue;
       this.board.postBounty(lair, this.boardContext());
