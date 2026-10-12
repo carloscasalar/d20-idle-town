@@ -21,6 +21,7 @@ Branch `feature/potions-healing`. Run started 2026-10-12 at checkpoint `4774e43`
 | 07 | 08 Reward set-aside | feature | Codex | `23c5c2b` | PASS first round (final check 3 reproduced: 0 of 40 ruined, lowest treasury 198; long sweep clean); issue done |
 | 08 | 09 retune confirmation | checks, hashes, documents | Codex (LIMIT before any change, back 11:12), then Cursor (new session) | `e63b1e8`, `21291d8` | FAIL: documentation only; the three checks pass with no retune, hashes sound |
 | 08 fix 1 | 09 | documents | Cursor (same session) | `827e863` | PASS (orchestrator read against the code); issue done |
+| 09 | 10 fractional potion price and formula floor | feature (configuration validation) | Codex (LIMIT before any change, back 11:12), then Cursor (new session) | `6235cf0` | PASS first round (orchestrator read the diff, two mutations killed); issue done |
 
 Run finished 2026-10-12: issues 02 to 09 done; `pnpm typecheck` clean, 749 tests green with none skipped; final smoke `smoke/07-final.md` PASS at `98e1bae`. Left open: issue 01 and issue 10 (`needs-triage`).
 

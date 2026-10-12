@@ -1,6 +1,6 @@
 # A fractional potion price throws after the production sink
 
-Status: ready-for-agent
+Status: done
 
 Found during the implementation run of this PRD (turn 06, [issue 07](07-apothecary-production.md)), by the implementer and confirmed by the reviewer. Not reachable with the default configuration.
 
@@ -23,3 +23,4 @@ A healing formula whose total can be negative, such as `1d4-20`, also passes val
 - `src/core/dice.ts` is unchanged, so a Hit Die can still carry a negative bonus.
 - Review fixed point: the starting HEAD `c1c5623`.
 - Final checks: `pnpm typecheck` passes; `pnpm test` passes with 754 tests and none skipped. The six hash files are untouched. Full report: `../run/turns/09-10-fractional-potion-price-report.md`.
+- Closed by the orchestrator: commit `6235cf0` (Cursor, turn 09, after Codex hit its usage limit before any change). Review by the orchestrator, who read the whole diff (one source file, one test file, documents) and re-ran two mutations: dropping `integer: true` from the tier `price` fails "rejects a fractional selling price on a later potion tier"; changing `lowestTotal < 1` to `< 0` fails the `1d4-1` case. `pnpm typecheck` clean, 754 tests green. No behaviour of a valid configuration changes, so no smoke check and no long sweep were run.
