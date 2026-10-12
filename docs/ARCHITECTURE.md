@@ -211,7 +211,7 @@ enchanter buys back.
   `generateQuest` prices a contract from the holding's income, the difficulty
   mix, the employer's generosity and desperation, limited by `treasuryShare`
   of the required `QuestTerms.rewardTreasury` supplied by the Board before
-  applying `minimumReward`. `generateAssault` builds the standing bounty on a lair from the Board-supplied `AssaultFunding.rewardTreasury` cap. Standalone callers can still supply whole-treasury funding.
+  applying `minimumReward`. `generateAssault` builds the standing bounty on a lair from the Board-supplied `AssaultFunding.rewardCap`. Standalone callers explicitly supply their whole treasury as that cap.
 - **`job-intel.ts`** — job intelligence. It is the only writer, after a job is
   created, of the two public facts (whether the encounter count is known, and
   how many encounters are revealed) and of what each company has tried: a free
@@ -314,8 +314,9 @@ is enabled by default. `WorkContext` supplies this query to Contract generation.
 `bountyRewardCap(employer, quests)` applies the rounded-down treasury share for
 listed employers and uses exactly the whole treasury otherwise; Bounty creation
 passes this cap to `generateAssault`, which also limits it by the per-level
-reward. No minimum applies to Bounties. Board creation rejects a nonpositive
-Bounty reward before generation or posting.
+reward. No minimum applies to Bounties. Generation owns this formula; Board
+creation checks the returned reward and rejects a nonpositive amount before
+posting.
 
 No duplicate employer-to-work link or stored balance is introduced: terminal
 status releases the amount on payment, failure or Contract expiry. Posting moves

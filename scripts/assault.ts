@@ -24,7 +24,7 @@ for (const level of [5, 6, 8]) {
     let wins = 0, deaths = 0, reachedBoss = 0;
     for (let t = 0; t < trials; t++) {
       const lair = createLair(rng, rng.pick(LAIR_THEMES), level, 0, DEFAULT_COMPANY_ROSTER_CONFIG.companySize, DEFAULT_LAIR_CONFIG);
-      const quest = generateAssault(rng, lair, guild, DEFAULT_COMPANY_ROSTER_CONFIG.companySize, 0, scale, QUEST_GENERATION);
+      const quest = generateAssault(rng, lair, { id: guild.id, rewardCap: guild.treasury }, DEFAULT_COMPANY_ROSTER_CONFIG.companySize, 0, scale, QUEST_GENERATION);
       const party = createParty(rng, level + partyLevelOffset, DEFAULT_COMPANY_ROSTER_CONFIG.companySize, 0, STARTING_GOLD, DEFAULT_POLICIES_CONFIG.potionSharing);
       party.potions = { basic: 4 };
       let ok = true;

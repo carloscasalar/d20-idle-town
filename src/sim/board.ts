@@ -372,11 +372,9 @@ function postContract(quest: ReadonlyQuest, { employer, holding, lair: origin }:
 function createBounty(kind: QuestKind, { employer, lair }: WorkPosting, context: WorkContext): Quest {
   if (!lair) throw new Error('A Bounty needs a lair.');
   if (lair.questId !== null) throw new Error(`Cannot post a bounty on ${lair.name}: it already has one.`);
-  const rewardTreasury = context.bountyRewardCap(employer);
-  if (Math.min(rewardTreasury, context.kindTuning.assault.rewardPerLevel * lair.level) <= 0) {
-    throw new Error('A Bounty needs a positive reward.');
-  }
-  const work = generateAssault(context.rng, lair, { id: employer.id, rewardTreasury }, context.companySize, context.tick, context.config.difficultyScale, generationOf(context));
+  const rewardCap = context.bountyRewardCap(employer);
+  const work = generateAssault(context.rng, lair, { id: employer.id, rewardCap }, context.companySize, context.tick, context.config.difficultyScale, generationOf(context));
+  if (work.reward <= 0) throw new Error('A Bounty needs a positive reward.');
   return { ...work, kind };
 }
 

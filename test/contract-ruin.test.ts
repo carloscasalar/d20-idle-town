@@ -23,7 +23,7 @@ describe('employer ruin', () => {
       scenario.parties = [];
       const lair = createLair(rng, 'goblins', 5, scenario.tick, DEFAULT_COMPANY_ROSTER_CONFIG.companySize, DEFAULT_LAIR_CONFIG);
       lair.raidCooldown = 100;
-      const bounty = generateAssault(rng, lair, serviceOf(scenario.town, 'guild'), 4, scenario.tick, 1, QUEST_GENERATION);
+      const bounty = generateAssault(rng, lair, { id: serviceOf(scenario.town, 'guild').id, rewardCap: serviceOf(scenario.town, 'guild').treasury }, 4, scenario.tick, 1, QUEST_GENERATION);
       lair.questId = bounty.id;
       scenario.lairs = [lair];
       scenario.quests = [bounty, ...employer.assets.map((asset) => {
@@ -61,7 +61,7 @@ describe('employer ruin', () => {
       const lairs = [createLair(rng, 'goblins', 5, scenario.tick, DEFAULT_COMPANY_ROSTER_CONFIG.companySize, DEFAULT_LAIR_CONFIG), createLair(rng, 'undead', 5, scenario.tick, DEFAULT_COMPANY_ROSTER_CONFIG.companySize, DEFAULT_LAIR_CONFIG)];
       const bounties = lairs.map((lair) => {
         lair.raidCooldown = 100;
-        const bounty = generateAssault(rng, lair, guild, 4, scenario.tick, 1, QUEST_GENERATION);
+        const bounty = generateAssault(rng, lair, { id: guild.id, rewardCap: guild.treasury }, 4, scenario.tick, 1, QUEST_GENERATION);
         lair.questId = bounty.id;
         return bounty;
       });

@@ -21,7 +21,7 @@ describe('lairs', () => {
     const lair = createLair(rng, 'goblins', 6, 0, DEFAULT_COMPANY_ROSTER_CONFIG.companySize, DEFAULT_LAIR_CONFIG);
     expect(pickBoss('goblins', 6, DEFAULT_COMPANY_ROSTER_CONFIG.companySize).name).toBe(lair.boss);
     const town = generateTown(rng, DEFAULT_TOWN_CONFIG, DEFAULT_HOLDING_CONFIG);
-    const q = generateAssault(rng, lair, serviceOf(town, 'guild'), 4, 0, 1, QUEST_GENERATION);
+    const q = generateAssault(rng, lair, { id: serviceOf(town, 'guild').id, rewardCap: serviceOf(town, 'guild').treasury }, 4, 0, 1, QUEST_GENERATION);
     expect(q.kind).toBe('assault');
     expect(q.encounters.length).toBeGreaterThanOrEqual(4);
     expect(q.encounters.length).toBeLessThanOrEqual(7);
@@ -44,7 +44,7 @@ describe('lairs', () => {
       const rng = new Rng(23);
       const lair = createLair(rng, 'goblins', 5, 0, DEFAULT_COMPANY_ROSTER_CONFIG.companySize, DEFAULT_LAIR_CONFIG);
       lair.raidCooldown = 100;
-      const bounty = generateAssault(rng, lair, serviceOf(scenario.town, 'guild'), 4, 0, 1, QUEST_GENERATION);
+      const bounty = generateAssault(rng, lair, { id: serviceOf(scenario.town, 'guild').id, rewardCap: serviceOf(scenario.town, 'guild').treasury }, 4, 0, 1, QUEST_GENERATION);
       const company = createParty(rng, 5, 4, 0, STARTING_GOLD, DEFAULT_POLICIES_CONFIG.potionSharing);
       bounty.status = 'taken';
       bounty.partyId = company.id;
