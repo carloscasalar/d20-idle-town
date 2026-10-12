@@ -56,3 +56,47 @@ Questions: none.
 Bugs: none. The mutations failed in the tests and the production wiring was left as it was.
 
 Not done: nothing from this correction. No push; the orchestrator pushes.
+
+## Correction 2
+
+The setup-generator mutation with the `seed()` draw kept still passed, because seed 2's one drink totals 6 on both generators. The same test now also runs seed 4, which drinks twice, and pins those lines and the hit points. No existing expected value changed. Nothing under `src/` changed.
+
+Seed 4, through `runCombat` with no injected dice, expects:
+
+- `Lysander Redmoor drinks a basic healing potion (2d4+2: 5).`
+- `Nym Coldwater gives Lysander Redmoor a basic healing potion (2d4+2: 10).`
+- hit points `[24, 24, 10, 8]`
+
+The mutation was `opts.dice ?? rng` with `rng.seed()` still called. The test failed, and the mutation was undone:
+
+```
+FAIL  test/combat-potions.test.ts > potions in a real encounter > rolls the drink on the child generator taken after placement
+AssertionError: expected [ …(2) ] to deeply equal [ …(2) ]
+
+- Expected
++ Received
+
+  [
+-   "Lysander Redmoor drinks a basic healing potion (2d4+2: 5).",
+-   "Nym Coldwater gives Lysander Redmoor a basic healing potion (2d4+2: 10).",
++   "Lysander Redmoor drinks a basic healing potion (2d4+2: 7).",
++   "Nym Coldwater gives Lysander Redmoor a basic healing potion (2d4+2: 8).",
+  ]
+```
+
+Seed 2's original line still matched under that mutation. The failure is the second fight.
+
+Checks:
+
+| Command | Result |
+| --- | --- |
+| `pnpm typecheck` | Pass. |
+| `pnpm test` | Pass: 31 files passed, 2 skipped; 676 tests passed, 6 skipped (682). |
+
+The regression guard did not change. The six hash tests stay skipped.
+
+| Point | Coverage |
+| --- | --- |
+| Potion rolls come from the child generator, not the setup generator after `seed()` | `test/combat-potions.test.ts` "rolls the drink on the child generator taken after placement", seed 4's two drink lines and hit points. The quoted failure is that mutation. |
+
+Questions: none. Bugs: none. Not done: nothing from this correction. No push.

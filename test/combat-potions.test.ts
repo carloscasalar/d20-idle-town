@@ -170,6 +170,15 @@ describe('potions in a real encounter', () => {
     ]);
     expect(result.heroes.map((hero) => hero.hp)).toEqual([24, 24, 16, 20]);
     expect(result.potionsDrunk).toEqual({ basic: 1 });
+
+    // Seed 2's single 2d4+2 totals 6 on the setup generator too. Seed 4 drinks twice.
+    const longer = runCombat(company(), goblins, 4, { ...COMBAT_RULES, potions: { basic: 8 }, noRetreat: true });
+    expect(longer.lines.filter((line) => line.includes('healing potion'))).toEqual([
+      `${heroes[2]!.name} drinks a basic healing potion (2d4+2: 5).`,
+      `${heroes[0]!.name} gives ${heroes[2]!.name} a basic healing potion (2d4+2: 10).`,
+    ]);
+    expect(longer.heroes.map((hero) => hero.hp)).toEqual([24, 24, 10, 8]);
+    expect(longer.potionsDrunk).toEqual({ basic: 2 });
   });
 });
 
