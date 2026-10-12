@@ -82,11 +82,16 @@ RNG argument. Interleaving two worlds cannot change either world's IDs.
   magic items and a kill count. The class chassis (hit points, attacks) comes
   from the engine's `buildHero`; this module layers the game's own progression
   on top: `gainXp`, `healHero`, `killHero`, `resurrectHero`, armour tiers and
-  their costs, potion costs and healing, and `combinedEffect`, which folds every
+  their costs, and `combinedEffect`, which folds every
   equipped item into one bundle of AC / weapon / HP / speed / resistance
   modifiers. It also owns out-of-combat skill checks (`rollSkill`,
   `SKILL_ADVANTAGE`) used for tavern investigation and reading the road.
-- **`party.ts`** — a `Party` is members, shared gold, potions, stash, renown,
+- **`potions.ts`** — the Healing potion catalogue (name, formula, price) and the
+  shared pack, a count per tier. It chooses the potion a Bloodied hero drinks
+  and describes the pack for the log. The game view copies that pack in catalogue
+  order; the party card joins the view and does not import the catalogue. Combat, the Short rest
+  and the apothecary ask it; none of them owns a second price or heal formula.
+- **`party.ts`** — a `Party` is members, shared gold, the potion pack, stash, renown,
   guild membership and a `PartyStatus`. Four to six strong. `rollClasses` fills
   the four classic roles (front line, support, skirmisher, arcane).
   Pure queries also accept deeply read-only companies. Company size and the
@@ -214,7 +219,7 @@ enchanter buys back.
    items become `acOverride`, `hpOverride`, `speedOverride`,
    `additionalResistances`; a +1 weapon is rebuilt from the class's own main
    attack with the bonus folded into attack and damage.
-4. Runs the engine's `Encounter` to a conclusion or a round cap, using potions from the supplied pack between unfinished rounds, before checking whether to flee. Conscious Bloodied heroes drink; a fallen hero at 0 HP receives one from the first conscious companion in company order. If nobody is conscious, no potion is used.
+4. Runs the engine's `Encounter` to a conclusion or a round cap. Between unfinished rounds, before checking whether to flee, a Bloodied hero drinks one potion from the supplied pack: the smallest tier whose assured healing covers the hit points they are missing, or the strongest tier in the pack. A fallen hero counts their fight maximum, blessings and items included, and receives the potion from the first conscious companion in company order. If nobody is conscious, no potion is used. The adapter rolls the formula itself and passes the total to `heal`.
 5. Maps the result back to a `CombatOutcome`: winner (`party | monsters |
    retreat | stalemate`), rounds, per-hero HP / alive / kills, XP earned, potions
    drunk, and the engine's narration plus potion-drinking lines.
@@ -342,8 +347,9 @@ The profile's `encounterCountSource` selects the configured upper bound when the
 count is unknown (Contract counts, or Bounty upper bound plus the boss), never
 below what job intelligence has revealed. A known count uses the exact total.
 The rest logs rolls, checks retreat using the resulting HP, then gives each
-still-Bloodied living hero one old flat-healing potion in company order if the
-company continues. An unhurt company checks losses in the combat tick and skips
+still-Bloodied living hero one rolled Healing potion in company order if the
+company continues. Those potion rolls use the same local generator as the Hit
+Dice, after every Hit Die. An unhurt company checks losses in the combat tick and skips
 the rest. Level-up adds a remaining die without changing `hitDiceSpent`; death
 and resurrection preserve the pool. The town Long rest resets living heroes'
 spent dice alongside full HP at the end of eight hours, even without paid rooms
@@ -400,9 +406,17 @@ fight badly hurt abandons the contract and walks home.
   reproducible on its own and the engine's internal rolls never disturb the
   world stream.
 - Every actual Short rest consumes exactly one world `seed()` and makes one
-  local `Rng` for all heroes' Hit Dice, in company order. Spending, company size
-  and pacing never alter that world-stream cost. An unhurt company consumes no
-  rest seed. Trajectories change with these new seeds but reproduce themselves.
+  local `Rng` for all heroes' Hit Dice, in company order, and then for the
+  potions drunk by heroes still Bloodied. Spending, company size, pacing and
+  how many potions are drunk never alter that world-stream cost. An unhurt
+  company consumes no rest seed. Trajectories change with these new seeds but
+  reproduce themselves.
+- Each fight takes one child seed from the world, then the adapter takes one
+  further `seed()` from its own generator after placement and after every
+  setup draw. Potion rolls use that child, or the dice source on the combat
+  options when a test supplies one. The engine receives a number from `heal`
+  and does not roll the potion, so a low roll and a high roll leave the same
+  engine log until the first drink.
 - The engine is itself deterministic under a seed, so `seed + tick order` fixes
   the entire run.
 
@@ -411,17 +425,20 @@ every seeded expectation downstream, including the smoke test. That is
 intentional — it is how a whole-world regression gets noticed. The smoke test
 checks repeatability. The three whole-world hashes and three stripped-world
 hashes are temporarily skipped until issue 09 of the potions and Short rest
-effort re-records them once. Until then, the unchanged smoke, combat-space,
-lairs, deployment, company roster seeded loops and combat potion tests are the
-regression guard; their fixtures and expectations remain unchanged.
+effort re-records them once. Until then, smoke, combat-space seed 75, lairs
+seed 14, deployment and the company roster seeded loops are the regression
+guard. The combat potion tests on seeds 1 and 2 keep those fights, with a
+scripted 2d4+2 of 8.
 
 ## Tests and calibration
 
 | Path | What it covers |
 | --- | --- |
+| `test/potions.test.ts` | Smallest covering tier, strongest fallback, a fallen hero's maximum, pack wording |
 | `test/dice.test.ts` | Formula parsing, scripted and seeded rolls, bounds, invalid formulas, derived Assured healing |
 | `test/hit-dice.test.ts` | Engine HP parser, minimum healing, pure spending, quota, full-HP stopping, exhausted heroes, level-up, death and resurrection |
-| `test/expedition.test.ts` | Separate Short rest hour, dice/retreat/potion order, shared local rolls, world seed isolation, encounter bounds, Long rest in every lodging case |
+| `test/expedition.test.ts` | Separate Short rest hour, dice/retreat/potion order, shared local rolls including rest potions, world seed isolation, encounter bounds, Long rest in every lodging case |
+| `test/combat-potions.test.ts` | Between-round drinking, scripted 2d4+2, engine log stable until the first drink, and one world seed per fight however many potion dice are rolled |
 | `test/smoke.test.ts` | A deterministic 400-hour run: no crashes, and the world produces contracts, deaths and coin |
 | `test/town-services.test.ts` | Public hourly ticks: purchase priorities, reserve thresholds, ledgers, stock, equipment allocation, guild renewal, blessings and retirement ordering |
 | `test/game-access.test.ts` | State boundary: scenario setup expires before the game runs, and event subscribers receive immutable data |

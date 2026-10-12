@@ -10,6 +10,14 @@ Everything below is part of the first release, which has not been tagged yet.
 
 ### 2026-10-12
 
+- Healing potions come in four tiers — basic, greater, superior and supreme —
+  rolled with real dice (2d4+2, 4d4+4, 8d4+8, 10d4+20) and sold at 50, 200,
+  2,000 and 20,000 gp. A company's pack holds a count per tier. A Bloodied
+  hero drinks the smallest tier that covers the hit points they are missing.
+  New companies start with 50 gp per level. Removed `heroes.potionBase`,
+  `heroes.potionPerLevel`, `heroes.potionHealMinimum` and
+  `heroes.potionHealDivisor`.
+
 - Hurt companies take a logged Short rest hour between encounters, spending
   level-based Hit Dice before checking retreat and sharing potions. Die size
   and Constitution come from the engine's class HP formula; each rest has one

@@ -1,4 +1,6 @@
-import { DEFAULT_HERO_ECONOMY, healHero, potionHeal } from '../src/adventurers/hero';
+import { healHero, isBloodied } from '../src/adventurers/hero';
+import { rollDice } from '../src/core/dice';
+import { basicTier, DEFAULT_POTION_CONFIG, potionCount, takePotion } from '../src/adventurers/potions';
 import { DEFAULT_COMPANY_ROSTER_CONFIG } from '../src/adventurers/company-roster';
 import { aliveMembers, createParty } from '../src/adventurers/party';
 import { runCombat } from '../src/combat/battlecast';
@@ -9,6 +11,7 @@ import { createLair, DEFAULT_LAIR_CONFIG, LAIR_THEMES } from '../src/town/lairs'
 import { DEFAULT_TOWN_CONFIG, generateTown, serviceOf } from '../src/town/town';
 import { COMBAT_RULES, QUEST_GENERATION, STARTING_GOLD } from '../test/helpers/supplied-config';
 
+const basic = basicTier(DEFAULT_POTION_CONFIG.tiers);
 const trials = Number(process.env.TRIALS ?? 40);
 const scale = Number(process.env.SCALE ?? 1.25);
 const rng = new Rng(Number(process.env.SEED ?? 7));
@@ -22,7 +25,7 @@ for (const level of [5, 6, 8]) {
       const lair = createLair(rng, rng.pick(LAIR_THEMES), level, 0, DEFAULT_COMPANY_ROSTER_CONFIG.companySize, DEFAULT_LAIR_CONFIG);
       const quest = generateAssault(rng, lair, guild, DEFAULT_COMPANY_ROSTER_CONFIG.companySize, 0, scale, QUEST_GENERATION);
       const party = createParty(rng, level + partyLevelOffset, DEFAULT_COMPANY_ROSTER_CONFIG.companySize, 0, STARTING_GOLD);
-      party.potions = 4;
+      party.potions = { basic: 4 };
       let ok = true;
       for (let i = 0; i < quest.encounters.length && ok; i++) {
         const fighters = aliveMembers(party);
@@ -39,7 +42,10 @@ for (const level of [5, 6, 8]) {
         if (alive.length <= fighters.length / 2) { ok = false; break; }
         for (const h of alive) {
           healHero(h, Math.ceil(h.maxHp * 0.5));
-          if (party.potions > 0 && h.hp < h.maxHp * 0.5) { party.potions--; healHero(h, potionHeal(h, DEFAULT_HERO_ECONOMY)); }
+          if (basic && potionCount(party.potions, basic.name) > 0 && isBloodied(h)) {
+            takePotion(party.potions, basic.name);
+            healHero(h, rollDice(basic.formula, new Rng(1)).total);
+          }
         }
       }
       if (ok) wins++;

@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_COMPANY_ROSTER_CONFIG } from '../src/adventurers/company-roster';
+import { DEFAULT_HERO_ECONOMY } from '../src/adventurers/hero';
+import { DEFAULT_POTION_CONFIG } from '../src/adventurers/potions';
 import { createParty } from '../src/adventurers/party';
 import { Rng } from '../src/core/rng';
 import type { Quest } from '../src/quests/quest';
@@ -18,6 +20,56 @@ describe('game configuration', () => {
     expect(resolveGameConfig({ expedition: { shortRestHealFraction: 0.5 } })).toEqual({
       ok: false, errors: ['unknown field expedition.shortRestHealFraction'],
     });
+  });
+
+  it('rejects the removed potion price and heal keys as unknown', () => {
+    for (const key of ['potionBase', 'potionPerLevel', 'potionHealMinimum', 'potionHealDivisor'] as const) {
+      expect(resolveGameConfig({ heroes: { [key]: 1 } })).toEqual({
+        ok: false, errors: [`unknown field heroes.${key}`],
+      });
+    }
+  });
+
+  it('offers the four healing potion tiers and lets a tier be dropped or repriced', () => {
+    expect(DEFAULT_HERO_ECONOMY.startingGoldPerLevel).toBe(50);
+    expect(DEFAULT_POTION_CONFIG.tiers).toEqual([
+      { name: 'basic', formula: '2d4+2', price: 50 },
+      { name: 'greater', formula: '4d4+4', price: 200 },
+      { name: 'superior', formula: '8d4+8', price: 2000 },
+      { name: 'supreme', formula: '10d4+20', price: 20000 },
+    ]);
+    const dropped = resolveGameConfig({
+      potions: { tiers: [{ name: 'basic', formula: '2d4+2', price: 40 }] },
+    });
+    expect(dropped.ok).toBe(true);
+    if (!dropped.ok) return;
+    expect(dropped.config.potions.tiers).toEqual([{ name: 'basic', formula: '2d4+2', price: 40 }]);
+  });
+
+  it('rejects a potion tier with a bad formula, a negative price, an unknown field, or a missing field', () => {
+    const priced = document();
+    (priced.potions as { tiers: { price: number }[] }).tiers[0]!.price = -5;
+    const negative = validateGameConfig(priced);
+    expect(negative.ok).toBe(false);
+    if (!negative.ok) expect(negative.errors).toContain('potions.tiers[0].price: negative price');
+
+    const formula = document();
+    (formula.potions as { tiers: { formula: string }[] }).tiers[1]!.formula = 'lots';
+    const parsed = validateGameConfig(formula);
+    expect(parsed.ok).toBe(false);
+    if (!parsed.ok) expect(parsed.errors).toContain('potions.tiers[1].formula: Invalid dice formula "lots"; expected NdM+K.');
+
+    const extra = document();
+    (extra.potions as { tiers: Record<string, unknown>[] }).tiers[0]!.productionCost = 25;
+    const unknown = validateGameConfig(extra);
+    expect(unknown.ok).toBe(false);
+    if (!unknown.ok) expect(unknown.errors).toContain('unknown field potions.tiers[0].productionCost');
+
+    const incomplete = document();
+    delete (incomplete.potions as { tiers: { formula?: string }[] }).tiers[2]!.formula;
+    const missing = validateGameConfig(incomplete);
+    expect(missing.ok).toBe(false);
+    if (!missing.ok) expect(missing.errors).toContain('missing field potions.tiers[2].formula');
   });
   it('is plain data: a JSON round trip is the same configuration', () => {
     const parsed = document();

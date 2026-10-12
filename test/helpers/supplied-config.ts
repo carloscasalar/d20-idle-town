@@ -1,4 +1,5 @@
 import { DEFAULT_HERO_ECONOMY } from '../../src/adventurers/hero';
+import { DEFAULT_POTION_CONFIG } from '../../src/adventurers/potions';
 import { DEFAULT_COMBAT_CONFIG } from '../../src/combat/battlecast';
 import { DEFAULT_ENCOUNTER_CONFIG } from '../../src/quests/encounters';
 import { DEFAULT_JOB_INTEL_CONFIG } from '../../src/quests/job-intel';
@@ -19,11 +20,12 @@ export const QUEST_GENERATION: QuestGeneration = {
   kinds: DEFAULT_KIND_CONFIGS,
 };
 
-export const COMBAT_RULES = { rules: DEFAULT_COMBAT_CONFIG, heroes: DEFAULT_HERO_ECONOMY };
+export const COMBAT_RULES = { rules: DEFAULT_COMBAT_CONFIG, heroes: DEFAULT_HERO_ECONOMY, catalogue: DEFAULT_POTION_CONFIG };
 
 export const SERVICE_SUPPLIES = {
   services: DEFAULT_TOWN_SERVICE_CONFIG,
   heroes: DEFAULT_HERO_ECONOMY,
+  potions: DEFAULT_POTION_CONFIG,
   items: DEFAULT_ITEM_CONFIG,
   maxStock: DEFAULT_TOWN_CONFIG.maxStock,
 };

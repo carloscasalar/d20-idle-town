@@ -1,6 +1,7 @@
 import { freeze } from '../core/freeze';
 import { describeHero, resurrectHero, resurrectionCost, type Hero, type HeroEconomyConfig } from './hero';
 import { aliveMembers, createParty, deadMembers, describeParty, partyLevel, type Party, type ReadonlyParty } from './party';
+import { mergePotionPacks } from './potions';
 import { listNames } from '../core/names';
 import type { DeepReadonly } from '../core/readonly';
 import type { Rng } from '../core/rng';
@@ -315,8 +316,7 @@ function mergeMembers(host: Party, donor: Party, maxCompanySize: number, coin: C
   }
   donor.members = donor.members.filter((h) => !moved.includes(h));
   coin.transfer(purse(donor), purse(host), donor.gold, 'merger');
-  host.potions += donor.potions;
-  donor.potions = 0;
+  mergePotionPacks(host.potions, donor.potions);
   host.stash.push(...donor.stash);
   donor.stash = [];
   host.renown = Math.max(host.renown, donor.renown);

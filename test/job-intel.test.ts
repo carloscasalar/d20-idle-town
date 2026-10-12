@@ -51,7 +51,7 @@ function company(rng: Rng, level = 1, gold = 300, name = 'Lanterns'): Party {
     hero.armorTier = 3;
     return hero;
   });
-  Object.assign(result, { gold, potions: 4, blessed: true, guildMember: true, duesPaidDay: 1 });
+  Object.assign(result, { gold, potions: { basic: 4 }, blessed: true, guildMember: true, duesPaidDay: 1 });
   return result;
 }
 

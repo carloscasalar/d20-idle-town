@@ -36,7 +36,7 @@ function outcome(party: Party, winner: CombatOutcome['winner'], alive = party.me
     lines: ['A short fight.'],
     heroes: party.members.map((hero, index) => ({ heroId: hero.id, hp: alive[index] ? hero.maxHp : 0, alive: alive[index]!, kills: 0 })),
     xpEarned: winner === 'party' ? 200 : 0,
-    potionsDrunk: 0,
+    potionsDrunk: {},
   };
 }
 
@@ -86,12 +86,13 @@ function homecoming(success = true, level = 1) {
 }
 
 /** One Short rest hour inside a real game, spending every die the pool still holds. */
-function shortRestThroughTheGame(hitDiceSpent: number): { before: { s: number }; after: { s: number }; rest: string } {
+function shortRestThroughTheGame(hitDiceSpent: number, potions: Party['potions'] = {}): { before: { s: number }; after: { s: number }; rest: string; breath: string } {
   const party = createParty(new Rng(1), 4, 1, 0, STARTING_GOLD);
   const hero = party.members[0]!;
   hero.hp = 1;
   hero.maxHp = 1000;
   hero.hitDiceSpent = hitDiceSpent;
+  party.potions = potions;
   party.status = 'short-resting';
   party.ticksLeft = 1;
   party.shortRestStartedWith = 1;
@@ -107,6 +108,7 @@ function shortRestThroughTheGame(hitDiceSpent: number): { before: { s: number };
     seed: 9,
     roster: { maxCompanies: 1, firstArrivalTick: 1000 },
     world: { maxOpenQuests: 0 },
+    expedition: { retreatHpFraction: 0 },
   }, (scenario) => {
     scenario.lairs = [];
     scenario.parties = [party];
@@ -118,9 +120,11 @@ function shortRestThroughTheGame(hitDiceSpent: number): { before: { s: number };
   });
   const before = JSON.parse(game.regressionState()).rng as { s: number };
   game.step();
-  const rest = game.view().events.find((event) => event.text.includes('Short rest'))?.text ?? '';
+  const events = game.view().events.map((event) => event.text);
+  const rest = events.find((text) => text.includes('Short rest')) ?? '';
+  const breath = events.find((text) => text.includes('catch their breath')) ?? '';
   const after = JSON.parse(game.regressionState()).rng as { s: number };
-  return { before, after, rest };
+  return { before, after, rest, breath };
 }
 
 describe('an expedition hour', () => {
@@ -226,7 +230,7 @@ describe('an expedition hour', () => {
 
     advanceExpedition(party, context);
 
-    expect(options).toEqual({ blessingHp: 3, noRetreat: true, lairDepth: { index: 1, total: 2 }, potions: 0 });
+    expect(options).toEqual({ blessingHp: 3, noRetreat: true, lairDepth: { index: 1, total: 2 }, potions: {} });
   });
 
   it('leaves fallen gear on retreat and defers settlement until homecoming', () => {
@@ -504,7 +508,7 @@ describe('expedition potions and short rests', () => {
 
   it('checks losses against the original line after the rest, then keeps potions on retreat', () => {
     const { party, context } = setup();
-    party.potions = 4;
+    party.potions = { basic: 4 };
     context.restDice = () => ({ int: () => 1 });
     context.combat = () => {
       const result = outcome(party, 'party', [true, true, false, false]);
@@ -516,7 +520,7 @@ describe('expedition potions and short rests', () => {
     expect(party.status).toBe('short-resting');
     advanceExpedition(party, context);
     expect(party.status).toBe('returning');
-    expect(party.potions).toBe(4);
+    expect(party.potions).toEqual({ basic: 4 });
     expect(party.members.map((hero) => hero.hitDiceSpent)).toEqual([1, 0, 0, 0]);
   });
 
@@ -535,28 +539,28 @@ describe('expedition potions and short rests', () => {
   });
   it.each(['party', 'monsters', 'retreat', 'stalemate'] as const)('accounts for combat potions after a %s outcome', (winner) => {
     const { party, context } = setup();
-    party.potions = 4;
+    party.potions = { basic: 4 };
     context.combat = (_heroes, _spec, _seed, options) => {
-      expect(options?.potions).toBe(4);
-      return { ...outcome(party, winner), potionsDrunk: 2 };
+      expect(options?.potions).toEqual({ basic: 4 });
+      return { ...outcome(party, winner), potionsDrunk: { basic: 2 } };
     };
 
     advanceExpedition(party, context);
 
-    expect(party.potions).toBe(2);
+    expect(party.potions).toEqual({ basic: 2 });
   });
 
   it.each([
-    { potions: 4, hp: [84, 35, 57, 100], left: 2 },
-    { potions: 2, hp: [84, 35, 57, 100], left: 0 },
-    { potions: 1, hp: [84, 1, 57, 100], left: 0 },
-    { potions: 0, hp: [50, 1, 57, 100], left: 0 },
-  ])('rolls Hit Dice, then shares $potions potions in company order, including an exhausted hero', ({ potions, hp, left }) => {
+    { potions: 4, hp: [58, 9, 57, 100], left: 2, faces: [2, 4, 3, 3, 3, 3] },
+    { potions: 2, hp: [58, 9, 57, 100], left: 0, faces: [2, 4, 3, 3, 3, 3] },
+    { potions: 1, hp: [58, 1, 57, 100], left: 0, faces: [2, 4, 3, 3] },
+    { potions: 0, hp: [50, 1, 57, 100], left: 0, faces: [2, 4] },
+  ])('rolls Hit Dice, then shares $potions basic potions in company order, including an exhausted hero', ({ potions, hp, left, faces }) => {
     const { party, context, events } = setup();
     for (const hero of party.members) { hero.maxHp = 100; hero.heroClass = 'Fighter'; }
     party.members[1]!.hitDiceSpent = 1;
-    party.potions = potions;
-    const rolls = [2, 4];
+    party.potions = potions > 0 ? { basic: potions } : {};
+    const rolls = [...faces];
     context.restDice = () => ({ int: () => rolls.shift()! });
     context.combat = () => {
       const result = outcome(party, 'party');
@@ -567,13 +571,13 @@ describe('expedition potions and short rests', () => {
 
     advanceExpedition(party, context);
     expect(party.status).toBe('short-resting');
-    expect(party.potions).toBe(potions);
+    expect(party.potions).toEqual(potions > 0 ? { basic: potions } : {});
     advanceExpedition(party, context);
 
     expect(party.status).toBe('questing');
     expect(party.members.map((hero) => hero.hp)).toEqual(hp);
     expect(party.members.map((hero) => hero.hitDiceSpent)).toEqual([1, 1, 1, 0]);
-    expect(party.potions).toBe(left);
+    expect(party.potions).toEqual(left > 0 ? { basic: left } : {});
     expect(rolls).toEqual([]);
     expect(events.some((event) => event.text.includes('potion'))).toBe(potions > 0);
     const rest = events.findIndex((event) => event.text.includes('Short rest'));
@@ -591,8 +595,8 @@ describe('expedition potions and short rests', () => {
     hero.heroClass = 'Fighter';
     hero.maxHp = 30;
     hero.hitDiceSpent = 0;
-    party.potions = 1;
-    const rolls = [2];
+    party.potions = { basic: 1 };
+    const rolls = [2, 3, 3];
     context.restDice = () => ({ int: () => rolls.shift()! });
     context.combat = () => {
       const result = outcome(party, 'party');
@@ -605,17 +609,17 @@ describe('expedition potions and short rests', () => {
     advanceExpedition(party, context);
 
     expect(party.status).toBe('questing');
-    expect([hero.level, hero.hitDiceSpent, hero.hp]).toEqual([2, 1, 18]);
-    expect(party.potions).toBe(0);
+    expect([hero.level, hero.hitDiceSpent, hero.hp]).toEqual([2, 1, 16]);
+    expect(party.potions).toEqual({});
     expect(rolls).toEqual([]);
     expect(events.at(-2)?.text).toBe(`${party.name} take a Short rest (1 hour). ${hero.name}: 2+2=4; 8/30 HP.`);
-    expect(events.at(-1)?.text).toBe(`${party.name} catch their breath. 1 potion drunk; 0 left.`);
+    expect(events.at(-1)?.text).toBe(`${party.name} catch their breath. ${hero.name} drinks a basic healing potion (2d4+2: 8). 0 potions left.`);
   });
 
   it('uses the HP after Hit Dice to continue when the company was below the retreat threshold', () => {
     const { party, quest, context } = setup();
     quest.countRevealed = true;
-    party.potions = 4;
+    party.potions = { basic: 4 };
     for (const hero of party.members) { hero.heroClass = 'Fighter'; hero.maxHp = 20; }
     context.restDice = () => ({ int: () => 6 });
     context.combat = () => ({ ...outcome(party, 'party'), xpEarned: 0,
@@ -625,15 +629,16 @@ describe('expedition potions and short rests', () => {
     expect(party.members.map((hero) => hero.hp)).toEqual([2, 2, 2, 2]);
     advanceExpedition(party, context);
     expect(party.status).toBe('questing');
-    expect(party.members.map((hero) => hero.hp)).toEqual([18, 18, 18, 18]);
-    expect(party.potions).toBe(0);
+    expect(party.members.map((hero) => hero.hp)).toEqual([20, 20, 20, 20]);
+    expect(party.potions).toEqual({});
   });
 
   it('keeps every potion when HP after Hit Dice still requires retreat', () => {
     const { party, context, events } = setup();
     for (const hero of party.members) { hero.heroClass = 'Fighter'; hero.maxHp = 100; }
-    party.potions = 4;
-    context.restDice = () => ({ int: () => 1 });
+    party.potions = { basic: 4 };
+    let draws = 0;
+    context.restDice = () => ({ int: () => { if (++draws > 4) throw new Error('potion rolled on retreat'); return 1; } });
     context.combat = () => ({ ...outcome(party, 'party'), xpEarned: 0,
       heroes: party.members.map((hero) => ({ heroId: hero.id, hp: 1, alive: true, kills: 0 })),
     });
@@ -641,7 +646,7 @@ describe('expedition potions and short rests', () => {
     advanceExpedition(party, context);
     expect(party.status).toBe('returning');
     expect(party.members.map((hero) => hero.hp)).toEqual([4, 4, 4, 4]);
-    expect(party.potions).toBe(4);
+    expect(party.potions).toEqual({ basic: 4 });
     expect(events.slice(1).map((event) => event.text)).toEqual([
       expect.stringContaining('Short rest'), expect.stringContaining('turn back'),
     ]);
@@ -649,12 +654,12 @@ describe('expedition potions and short rests', () => {
 
   it('keeps the supply at zero when a scripted resolver reports excessive consumption', () => {
     const { party, context } = setup();
-    party.potions = 2;
-    context.combat = () => ({ ...outcome(party, 'party'), potionsDrunk: 7 });
+    party.potions = { basic: 2 };
+    context.combat = () => ({ ...outcome(party, 'party'), potionsDrunk: { basic: 7 } });
 
     advanceExpedition(party, context);
 
-    expect(party.potions).toBe(0);
+    expect(party.potions).toEqual({});
   });
 });
 
@@ -667,6 +672,16 @@ describe('Short rest dice wired by the game', () => {
     expect(fourDice.rest.match(/=\d+/g)).toHaveLength(4);
     expect(oneDie.before).toEqual(fourDice.before);
     expect(oneDie.after).toEqual(fourDice.after);
+  });
+
+  it('rolls rest potions from that same seed, with no further world draw', () => {
+    const dry = shortRestThroughTheGame(0);
+    const supplied = shortRestThroughTheGame(0, { basic: 1 });
+
+    expect(supplied.breath).toContain('drinks a basic healing potion');
+    expect(dry.breath).toBe('');
+    expect(dry.before).toEqual(supplied.before);
+    expect(dry.after).toEqual(supplied.after);
   });
 });
 

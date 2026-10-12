@@ -85,7 +85,7 @@ function outcome(party: Party): CombatOutcome {
     lines: ['A short survey.'],
     heroes: party.members.map((hero) => ({ heroId: hero.id, hp: hero.maxHp, alive: true, kills: 0 })),
     xpEarned: 0,
-    potionsDrunk: 0,
+    potionsDrunk: {},
   };
 }
 

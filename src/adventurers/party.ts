@@ -4,6 +4,7 @@ import type { MagicItem } from '../items/items';
 import { HERO_CLASS_NAMES, type HeroClassName } from 'battlecast-engine';
 import type { DeepReadonly } from '../core/readonly';
 import { createHero, type Hero } from './hero';
+import type { PotionPack } from './potions';
 
 export type PartyStatus =
   | 'idle'
@@ -32,8 +33,8 @@ export interface Party {
   questsDone: number;
   questsFailed: number;
   arrivedAt: number;
-  /** Healing potions in the shared pack. */
-  potions: number;
+  /** Healing potions in the shared pack, counted per tier. */
+  potions: PotionPack;
   /** Lifetime ledger. */
   earned: number;
   spent: number;
@@ -96,7 +97,7 @@ export function createParty(rng: Rng, level: number, size: number, tick: number,
     questsDone: 0,
     questsFailed: 0,
     arrivedAt: tick,
-    potions: 0,
+    potions: {},
     earned: 0,
     spent: 0,
     stash: [],

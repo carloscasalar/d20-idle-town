@@ -13,6 +13,7 @@ import {
   type ReadonlyParty,
 } from '../adventurers/party';
 import { runCombat } from '../combat/battlecast';
+import { packInCatalogueOrder, type PotionPack } from '../adventurers/potions';
 import { describeEffect, rollStockItem, type MagicItem } from '../items/items';
 import type { DeepReadonly } from '../core/readonly';
 import { hashString, Rng } from '../core/rng';
@@ -174,7 +175,7 @@ export interface GamePartyView {
   readonly questsFailed: number;
   readonly members: readonly GameHeroView[];
   readonly templeBill: number;
-  readonly potions: number;
+  readonly potions: PotionPack;
   readonly blessed: boolean;
   readonly guildMember: boolean;
   readonly renown: number;
@@ -399,7 +400,7 @@ export class Game {
           questsFailed: party.questsFailed,
           members: Object.freeze(party.members.map(heroView)),
           templeBill: deadMembers(party).reduce((total, hero) => total + resurrectionCost(hero.level, this.config.heroes), 0),
-          potions: party.potions,
+          potions: Object.freeze(packInCatalogueOrder(party.potions, this.config.potions.tiers)),
           blessed: party.blessed,
           guildMember: party.guildMember,
           renown: party.renown,
@@ -706,7 +707,10 @@ export class Game {
       blessingHpPerLevel: this.config.services.blessingHpPerLevel,
       companySize: this.config.roster.companySize,
       heroes: this.config.heroes,
-      combat: (heroes, spec, seed, options) => runCombat(heroes, spec, seed, { ...options, rules: this.config.combat, heroes: this.config.heroes }),
+      potions: this.config.potions,
+      combat: (heroes, spec, seed, options) => runCombat(heroes, spec, seed, {
+        ...options, rules: this.config.combat, heroes: this.config.heroes, catalogue: this.config.potions,
+      }),
       disband: (company) => this.roster.disband(company),
       report: ({ kind, text, detail, chronicle }) => {
         if (chronicle) this.chronicleLog(kind, text);
@@ -791,6 +795,7 @@ export class Game {
       },
       services: this.config.services,
       heroes: this.config.heroes,
+      potions: this.config.potions,
       items: this.config.items,
       maxStock: this.config.town.maxStock,
     });

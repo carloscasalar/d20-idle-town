@@ -229,10 +229,9 @@ hard bands still use the engine's DMG thresholds.
 Prices and healing for a hero. Defined in `src/adventurers/hero.ts`.
 Armour cost is `(armorBase + armorPerLevel × level) × armorTierFactor ^ tier`.
 Resurrection is `resurrectionBase + level² × resurrectionQuadratic`.
-A potion costs `potionBase + potionPerLevel × level` and heals at least
-`potionHealMinimum`, otherwise maximum hit points divided by `potionHealDivisor`,
-rounded up. Resurrection restores `resurrectedHpFraction` of maximum hit points,
-and at least `resurrectedHpMinimum`.
+Resurrection restores `resurrectedHpFraction` of maximum hit points,
+and at least `resurrectedHpMinimum`. Healing potions are not priced here;
+they live in `potions`.
 
 | Field | Default | Meaning |
 | --- | --- | --- |
@@ -242,14 +241,26 @@ and at least `resurrectedHpMinimum`.
 | `armorTierFactor` | 2.2 | Multiplier raised to the current tier |
 | `resurrectionBase` | 150 | Gold in a resurrection before the level term |
 | `resurrectionQuadratic` | 40 | Multiplier on level squared |
-| `potionBase` | 25 | Gold in a potion before level |
-| `potionPerLevel` | 10 | Gold added per level |
-| `potionHealMinimum` | 8 | Least a potion restores |
-| `potionHealDivisor` | 3 | Otherwise heal maximum hit points divided by this, rounded up |
-| `startingGoldPerLevel` | 20 | Gold a new company carries per level |
+| `startingGoldPerLevel` | 50 | Gold a new company carries per level |
 | `resurrectedHpFraction` | 0.5 | Share of maximum hit points restored |
 | `resurrectedHpMinimum` | 1 | Least hit points a resurrected hero is left with |
 | `skillAdvantageTiebreak` | 3 | Extra points a class with advantage counts for when choosing who attempts the check |
+
+## `potions`
+
+The Healing potion catalogue. Defined in `src/adventurers/potions.ts`.
+Each tier has a name, a dice formula and a selling price. The name is the key
+in a company's pack. Assured healing is not stored: the dice module derives it
+from the formula, and a smaller tier is one with lower assured healing.
+Replacing `tiers` replaces the whole list, so a tier can be dropped or changed.
+A formula that does not parse is rejected.
+
+| Tier | Formula | Price (gp) | Assured healing |
+| --- | --- | --- | --- |
+| basic | 2d4+2 | 50 | 8 |
+| greater | 4d4+4 | 200 | 16 |
+| superior | 8d4+8 | 2,000 | 32 |
+| supreme | 10d4+20 | 20,000 | 50 |
 
 ## `town`
 

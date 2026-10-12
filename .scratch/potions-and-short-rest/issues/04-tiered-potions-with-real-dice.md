@@ -104,3 +104,18 @@ Fixture migration:
 - `CHANGELOG.md`: the four potion tiers rolled with real dice, the pack per tier, the new starting gold.
 
 ## Comments
+
+Decisions left to this slice:
+
+- The catalogue lives in `src/adventurers/potions.ts`. Configuration section `potions`, list field `tiers`, each entry `{ name, formula, price }`. The name is the pack key and the word in "a greater healing potion".
+- A pack stores only positive counts. A missing key is 0. An empty pack is `{}`.
+- "Smaller" and "stronger" follow assured healing. When two stocked tiers assure the same amount, the earlier catalogue entry is the smaller one.
+- Temporary buying looks up the tier named `basic`. If that name is absent, the step buys nothing. Counts of other tiers do not count toward one per living hero. A price of 0 is free, because dividing the purse by zero is not a price.
+- Duplicate tier names are rejected. A pack key that is not in the catalogue is neither shown nor drinkable.
+- Combat and rest logs end the drink sentence with a period, like the other log lines. The rest line is `${company} catch their breath. ${drinks} ${pack} left.` An empty remainder reads "0 potions left."
+- The combat sub-seed is drawn after placement even when a test passes `dice`. The injected source replaces the child generator's rolls, not that draw.
+- The fallen rule sits inside `choosePotion` (`fallen ? maxHp : maxHp - hp`), so combat and the rest share one function. Combat passes the creature's fight HP and maximum. The rest passes the hero and `fallen: false`.
+- The game view copies the pack in catalogue order. The party card joins that map and does not import the catalogue.
+- `heroes` stays a required `runCombat` argument. Combat no longer reads the old potion economy fields from it.
+- The budget check: resurrection at level 1 is `150 + 1² × 40` = 190 gp. A new company with 50 gp per level still cannot buy before its first reward. That reason is not written in `docs/CONFIGURATION.md` or `CHANGELOG.md`.
+- `scripts/assault.ts` had to change so it still typechecks: the pack is a map, and a Bloodied hero between fights drinks one basic potion rolled as 2d4+2 on a private generator, so the script's combat seeds stay put. `scripts/tune*.ts`, `scripts/tune-baseline.json` and `test/tune.test.ts` did not change.

@@ -1,7 +1,8 @@
-import { describeHero, gainXp, healHero, isBloodied, killHero, potionHeal, resurrectionCost, type Hero, type HeroEconomyConfig } from '../adventurers/hero';
+import { describeHero, gainXp, healHero, isBloodied, killHero, resurrectionCost, type Hero, type HeroEconomyConfig } from '../adventurers/hero';
 import { aliveMembers, deadMembers, partyLevel, type Party } from '../adventurers/party';
+import { choosePotion, describePack, potionDrinkText, spendPotions, takePotion, type PotionConfig } from '../adventurers/potions';
 import { pacedHitDice, spendHitDice } from '../adventurers/hit-dice';
-import type { DiceSource } from '../core/dice';
+import { rollDice, type DiceSource } from '../core/dice';
 import type { CombatOptions, CombatOutcome } from '../combat/battlecast';
 import { freeze } from '../core/freeze';
 import { listNames } from '../core/names';
@@ -79,6 +80,7 @@ export interface ExpeditionContext {
   /** Received from the company roster. Encounters were built for a company of this size. */
   companySize: number;
   heroes: HeroEconomyConfig;
+  potions: PotionConfig;
   combat: CombatResolver;
   /** Roster-owned disbanding, called at the existing wipe point. */
   disband: (company: Party) => void;
@@ -175,7 +177,7 @@ function resolveFight(p: Party, q: ReadonlyQuest, context: ExpeditionContext): v
     noRetreat: bossFight,
     ...(profile.lairDepth ? { lairDepth: { index: p.progress, total: q.encounters.length } } : {}),
   });
-  p.potions = Math.max(0, p.potions - outcome.potionsDrunk);
+  spendPotions(p.potions, outcome.potionsDrunk);
 
   for (const r of outcome.heroes) {
     const hero = p.members.find((h) => h.id === r.heroId)!;
@@ -283,15 +285,19 @@ function shortRest(p: Party, q: ReadonlyQuest, context: ExpeditionContext): void
   p.status = 'questing';
   log(context, 'party', `${p.name} take a Short rest (1 hour).${details.length ? ` ${details.join(' ')}` : ''}`);
   if (turnBack(p, q, startedWith, context)) return;
-  let drunk = 0;
+  const drinks: string[] = [];
   for (const h of aliveMembers(p)) {
-    if (p.potions > 0 && isBloodied(h)) {
-      p.potions -= 1;
-      drunk += 1;
-      healHero(h, potionHeal(h, context.heroes));
-    }
+    if (!isBloodied(h)) continue;
+    const tier = choosePotion(p.potions, context.potions.tiers, { hp: h.hp, maxHp: h.maxHp, fallen: false });
+    if (!tier) break;
+    const roll = rollDice(tier.formula, source);
+    takePotion(p.potions, tier.name);
+    healHero(h, roll.total);
+    drinks.push(potionDrinkText(h.name, tier, roll.total));
   }
-  if (drunk > 0) log(context, 'party', `${p.name} catch their breath. ${drunk} potion${drunk > 1 ? 's' : ''} drunk; ${p.potions} left.`);
+  if (drinks.length > 0) {
+    log(context, 'party', `${p.name} catch their breath. ${drinks.join(' ')} ${describePack(p.potions, context.potions.tiers)} left.`);
+  }
 }
 
 function turnBack(p: Party, q: ReadonlyQuest, startedWith: number, context: ExpeditionContext): boolean {

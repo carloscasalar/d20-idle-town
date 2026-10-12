@@ -1,5 +1,6 @@
-import { armorUpgradeCost, equipItem, wantsItem, potionCost, resurrectionCost, type Hero, type HeroEconomyConfig } from '../adventurers/hero';
+import { armorUpgradeCost, equipItem, wantsItem, resurrectionCost, type Hero, type HeroEconomyConfig } from '../adventurers/hero';
 import { aliveMembers, partyLevel, type Party } from '../adventurers/party';
+import { basicTier, givePotions, potionCount, type PotionConfig } from '../adventurers/potions';
 import { freeze } from '../core/freeze';
 import { listNames } from '../core/names';
 import { describeEffect, resalePrice, type ItemConfig, type MagicItem } from '../items/items';
@@ -51,6 +52,7 @@ export interface TownServiceContext {
   report: (event: ServiceEvent) => void;
   services: TownServiceConfig;
   heroes: HeroEconomyConfig;
+  potions: PotionConfig;
   items: ItemConfig;
   /** Shop shelf size. The town section is its home. */
   maxStock: number;
@@ -89,16 +91,18 @@ export function visitTownServices(p: Party, services: TownServiceContext, steps:
 }
 
 export function buyPotions(p: Party, context: TownServiceContext): boolean {
-  const { town, level, reserve, alive, pay, log, heroes } = serviceVisit(p, context);
-  if (p.potions < alive.length) {
+  const { town, reserve, alive, pay, log, potions } = serviceVisit(p, context);
+  const basic = basicTier(potions.tiers);
+  if (!basic) return false;
+  const held = potionCount(p.potions, basic.name);
+  if (held < alive.length) {
     const apothecary = serviceOf(town, 'apothecary');
-    const cost = potionCost(level, heroes);
-    const wanted = alive.length - p.potions;
-    const affordable = Math.min(wanted, Math.floor((p.gold - reserve) / cost));
+    const wanted = alive.length - held;
+    const affordable = basic.price === 0 ? wanted : Math.min(wanted, Math.floor((p.gold - reserve) / basic.price));
     if (affordable > 0 && !apothecary.ruined) {
-      pay(p, apothecary, affordable * cost);
-      p.potions += affordable;
-      log('shop', `${p.name} buy ${affordable} healing potion${affordable > 1 ? 's' : ''} from ${apothecary.name} for ${affordable * cost} gp.`);
+      pay(p, apothecary, affordable * basic.price);
+      givePotions(p.potions, basic.name, affordable);
+      log('shop', `${p.name} buy ${affordable} ${basic.name} healing potion${affordable > 1 ? 's' : ''} from ${apothecary.name} for ${affordable * basic.price} gp.`);
       return true;
     }
   }
@@ -227,7 +231,7 @@ export function buyBlessing(p: Party, context: TownServiceContext): boolean {
 
 /** Per-step inputs and the existing coin/event operations; no random draws. */
 function serviceVisit(p: Party, context: TownServiceContext) {
-  const { town, day, ledger, coin, report, services, heroes, items, maxStock } = context;
+  const { town, day, ledger, coin, report, services, heroes, items, maxStock, potions } = context;
   const pay = (from: Party, to: Employer, amount: number, adventurer?: Hero) =>
     coin.transfer(purse(from), treasury(to), amount, 'service', adventurer);
   const log = (kind: ServiceEvent['kind'], text: string) => report({ kind, text });
@@ -235,7 +239,7 @@ function serviceVisit(p: Party, context: TownServiceContext) {
   const level = partyLevel(p);
   return {
     town, day, ledger, coin, pay, log, chronicleLog, level, services, heroes, items, maxStock,
-    reserve: resurrectionCost(level, heroes), alive: aliveMembers(p),
+    reserve: resurrectionCost(level, heroes), alive: aliveMembers(p), potions,
   };
 }
 

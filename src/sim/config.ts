@@ -1,5 +1,7 @@
 import { DEFAULT_COMPANY_ROSTER_CONFIG, type CompanyRosterConfig } from '../adventurers/company-roster';
 import { DEFAULT_HERO_ECONOMY, type HeroEconomyConfig } from '../adventurers/hero';
+import { DEFAULT_POTION_CONFIG, type PotionConfig } from '../adventurers/potions';
+import { parseDice } from '../core/dice';
 import { freeze } from '../core/freeze';
 import { DEFAULT_COMBAT_CONFIG, type CombatConfig } from '../combat/battlecast';
 import { DEFAULT_ENCOUNTER_CONFIG, type EncounterConfig } from '../quests/encounters';
@@ -34,6 +36,7 @@ export interface GameConfig {
   quests: QuestConfig;
   encounters: EncounterConfig;
   heroes: HeroEconomyConfig;
+  potions: PotionConfig;
   town: TownConfig;
   holdings: HoldingConfig;
   items: ItemConfig;
@@ -53,6 +56,7 @@ export const DEFAULT_CONFIG: GameConfig = freeze({
   quests: DEFAULT_QUEST_CONFIG,
   encounters: DEFAULT_ENCOUNTER_CONFIG,
   heroes: DEFAULT_HERO_ECONOMY,
+  potions: DEFAULT_POTION_CONFIG,
   town: DEFAULT_TOWN_CONFIG,
   holdings: DEFAULT_HOLDING_CONFIG,
   items: DEFAULT_ITEM_CONFIG,
@@ -76,6 +80,7 @@ type Spec =
   | { kind: 'range'; integer?: boolean }
   | { kind: 'boolean' }
   | { kind: 'enum'; values: readonly string[] }
+  | { kind: 'string'; nonEmpty?: boolean }
   | { kind: 'strings'; nonEmpty?: boolean }
   | { kind: 'list'; item: Spec; weights?: boolean }
   | { kind: 'section'; fields: Record<string, Spec> };
@@ -114,7 +119,7 @@ const GAME_SPEC: Spec = {
     ]),
     services: numberSection(['duesPeriodDays']),
     lairs: numberSection(['strengthCap', 'initialStrength', 'minRaidInterval', 'baseRaidInterval', 'raidIntervalPerStrength']),
-    heroes: numberSection(['maxArmorTier', 'potionHealMinimum', 'potionHealDivisor']),
+    heroes: numberSection(['maxArmorTier']),
     holdings: numberSection(['incomeSpreadMin', 'incomeSpreadSpan'], fraction),
     items: numberSection(['resaleDivisor'], whole(1)),
     world: numberSection([
@@ -176,8 +181,6 @@ const heroesSpec = withFields(sectionField(GAME_SPEC, 'heroes'), {
   armorTierFactor: fraction,
   resurrectionBase: price,
   resurrectionQuadratic: price,
-  potionBase: price,
-  potionPerLevel: price,
   startingGoldPerLevel: price,
   resurrectedHpFraction: chance,
   resurrectedHpMinimum: whole(1),
@@ -315,6 +318,22 @@ const kindsSpec: Spec = {
   },
 };
 
+const potionTier: Spec = {
+  kind: 'section',
+  fields: {
+    name: { kind: 'string', nonEmpty: true },
+    formula: { kind: 'string', nonEmpty: true },
+    price,
+  },
+};
+
+const potionsSpec: Spec = {
+  kind: 'section',
+  fields: {
+    tiers: { kind: 'list', item: potionTier },
+  },
+};
+
 const SPEC: Spec = {
   kind: 'section',
   fields: {
@@ -329,6 +348,7 @@ const SPEC: Spec = {
     quests: questsSpec,
     encounters: encountersSpec,
     heroes: heroesSpec,
+    potions: potionsSpec,
     town: townSpec,
     holdings: sectionField(GAME_SPEC, 'holdings'),
     items: itemsSpec,
@@ -385,7 +405,10 @@ export function mergeConfig(base: unknown, override: unknown): unknown {
 export function validateGameConfig(value: unknown): ConfigResult {
   const errors: string[] = [];
   check(value, SPEC, '', errors);
-  if (errors.length === 0 && isPlainObject(value)) checkNames(value, errors);
+  if (isPlainObject(value)) {
+    if (errors.length === 0) checkNames(value, errors);
+    checkPotionFormulas(value, errors);
+  }
   if (errors.length > 0) return { ok: false, errors };
   return { ok: true, config: value as GameConfig };
 }
@@ -407,6 +430,25 @@ function checkNames(value: Record<string, unknown>, errors: string[]): void {
       if (!list.allowed.includes(name)) errors.push(`${list.path}: unknown ${list.label} "${name}"`);
     }
   }
+}
+
+function checkPotionFormulas(value: Record<string, unknown>, errors: string[]): void {
+  const potions = value.potions;
+  if (!isPlainObject(potions) || !Array.isArray(potions.tiers)) return;
+  const names = new Set<string>();
+  potions.tiers.forEach((tier, index) => {
+    if (!isPlainObject(tier)) return;
+    if (typeof tier.formula === 'string') {
+      try {
+        parseDice(tier.formula);
+      } catch (error) {
+        errors.push(`potions.tiers[${index}].formula: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
+    if (typeof tier.name !== 'string') return;
+    if (names.has(tier.name)) errors.push(`potions.tiers: duplicate tier "${tier.name}"`);
+    names.add(tier.name);
+  });
 }
 
 function namesAt(value: Record<string, unknown>, path: string): readonly string[] | undefined {
@@ -485,6 +527,14 @@ function check(value: unknown, spec: Spec, path: string, errors: string[]): void
     if (typeof value !== 'string' || !spec.values.includes(value)) {
       errors.push(`${place}: expected one of ${spec.values.join(', ')}, got ${seen(value)}`);
     }
+    return;
+  }
+  if (spec.kind === 'string') {
+    if (typeof value !== 'string') {
+      errors.push(`${place}: expected a string, got ${seen(value)}`);
+      return;
+    }
+    if (spec.nonEmpty && value.length === 0) errors.push(`${place}: empty string`);
     return;
   }
   if (spec.kind === 'strings') {

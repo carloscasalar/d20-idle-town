@@ -62,7 +62,7 @@ export function combinedEffect(hero: Hero): Required<Pick<ItemEffect, 'ac' | 'we
   return total;
 }
 
-/** Prices and caps for an adventurer's gear, potions and return from death. */
+/** Prices and caps for an adventurer's gear and return from death. */
 export interface HeroEconomyConfig {
   maxArmorTier: number;
   armorBase: number;
@@ -70,10 +70,6 @@ export interface HeroEconomyConfig {
   armorTierFactor: number;
   resurrectionBase: number;
   resurrectionQuadratic: number;
-  potionBase: number;
-  potionPerLevel: number;
-  potionHealMinimum: number;
-  potionHealDivisor: number;
   startingGoldPerLevel: number;
   /** Fraction of maximum hit points restored by resurrection, before the minimum. */
   resurrectedHpFraction: number;
@@ -90,11 +86,7 @@ export const DEFAULT_HERO_ECONOMY: HeroEconomyConfig = freeze({
   armorTierFactor: 2.2,
   resurrectionBase: 150,
   resurrectionQuadratic: 40,
-  potionBase: 25,
-  potionPerLevel: 10,
-  potionHealMinimum: 8,
-  potionHealDivisor: 3,
-  startingGoldPerLevel: 20,
+  startingGoldPerLevel: 50,
   resurrectedHpFraction: 0.5,
   resurrectedHpMinimum: 1,
   skillAdvantageTiebreak: 3,
@@ -174,15 +166,6 @@ export function resurrectHero(hero: Hero, economy: HeroEconomyConfig): void {
 /** Gold the temple asks to bring someone back. Grows with level, like a 5e diamond bill would. */
 export function resurrectionCost(level: number, economy: HeroEconomyConfig): number {
   return economy.resurrectionBase + level * level * economy.resurrectionQuadratic;
-}
-
-/** A healing draught scaled to the buyer's level: one potion is about a third of a hero's hit points. */
-export function potionCost(level: number, economy: HeroEconomyConfig): number {
-  return economy.potionBase + economy.potionPerLevel * level;
-}
-
-export function potionHeal(hero: Hero, economy: HeroEconomyConfig): number {
-  return Math.max(economy.potionHealMinimum, Math.ceil(hero.maxHp / economy.potionHealDivisor));
 }
 
 /** Skills a class is good at beyond the numbers: the bard talks, the ranger reads the land. Rolled with advantage. */

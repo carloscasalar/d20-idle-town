@@ -56,7 +56,7 @@ function postingEmployer(scenario: GameScenario, rng: Rng, overrides: Partial<Em
 function company(rng: Rng, level = 5): Party {
   const party = createParty(rng, level, 4, 100, STARTING_GOLD);
   // Fully provisioned, with current dues; no service consumes the decision hour.
-  Object.assign(party, { gold: 0, potions: 4, blessed: true, duesPaidDay: 5 });
+  Object.assign(party, { gold: 0, potions: { basic: 4 }, blessed: true, duesPaidDay: 5 });
   for (const hero of party.members) hero.armorTier = 3;
   return party;
 }

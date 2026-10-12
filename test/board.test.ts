@@ -825,7 +825,7 @@ describe('Game and Board expedition ownership', () => {
       const patron = scenario.town.employers[0]!;
       const holding = patron.assets[0]!;
       const company = createParty(rng, 5, 4, scenario.tick, STARTING_GOLD);
-      Object.assign(company, { gold: kind === 'assault' ? 2000 : 0, potions: 100, blessed: true, duesPaidDay: 5, guildMember: true, idleTicks: 12 });
+      Object.assign(company, { gold: kind === 'assault' ? 2000 : 0, potions: { basic: 100 }, blessed: true, duesPaidDay: 5, guildMember: true, idleTicks: 12 });
       for (const hero of company.members) hero.armorTier = 3;
       const lair = createLair(rng, 'goblins', 5, scenario.tick, DEFAULT_COMPANY_ROSTER_CONFIG.companySize, DEFAULT_LAIR_CONFIG);
       lair.raidCooldown = 10_000;

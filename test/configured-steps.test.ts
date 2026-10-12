@@ -14,9 +14,9 @@ describe('configured steps', () => {
     const potionsFirst = shop(SERVICE_STEP_NAMES);
     const armourFirst = shop(['armour', ...SERVICE_STEP_NAMES.filter((name) => name !== 'armour')]);
 
-    expect(potionsFirst.potions).toBeGreaterThan(0);
+    expect(potionsFirst.potions).toEqual({ basic: 4 });
     expect(potionsFirst.members.every((hero) => hero.armorTier === 0)).toBe(true);
-    expect(armourFirst.potions).toBe(0);
+    expect(armourFirst.potions).toEqual({});
     expect(armourFirst.members.every((hero) => hero.armorTier === 1)).toBe(true);
   });
 

@@ -22,14 +22,14 @@ it('inserts a made-up service between potions and armour using only the supplied
   let shoeCleaning = 0;
   let spendsHour = true;
   const cleanShoes: TownServiceStep = (p) => {
-    expect(p.potions).toBe(4);
+    expect(p.potions).toEqual({ basic: 4 });
     expect(p.members.every((h) => h.armorTier === 0)).toBe(true);
     shoeCleaning += 1;
     return spendsHour;
   };
   const steps = [buyPotions, cleanShoes, buyArmour];
   expect(visitTownServices(company, context, steps)).toBe(true);
-  expect(company.potions).toBe(4);
+  expect(company.potions).toEqual({ basic: 4 });
   expect(shoeCleaning).toBe(0);
   expect(visitTownServices(company, context, steps)).toBe(true);
   expect(shoeCleaning).toBe(1);

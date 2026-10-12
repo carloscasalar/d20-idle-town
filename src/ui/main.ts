@@ -112,6 +112,11 @@ function appendEvent(event: GameEvent | GameEventView): void {
   if (atBottom) logEl.scrollTop = logEl.scrollHeight;
 }
 
+function potionSupply(pack: GameView['parties'][number]['potions']): string {
+  const held = Object.entries(pack).filter(([, count]) => count > 0).map(([name, count]) => `${count} ${name}`);
+  return held.length > 0 ? held.join(', ') : '0 potions';
+}
+
 function hpBar(hero: GameHeroView): string {
   if (!hero.alive) return `<span class="badge">dead</span>`;
   const cls = hero.hpPercent <= 25 ? 'crit' : hero.hpPercent <= 60 ? 'low' : '';
@@ -132,7 +137,7 @@ function renderParties(view: GameView): string {
       const bill = party.templeBill ? `<div class="row"><span>temple bill</span><span class="gold">${party.templeBill} gp</span></div>` : '';
       return `<div class="card"><h3><span>${esc(party.name)}</span><span class="status">lvl ${party.level} · <span class="gold">${party.gold} gp</span></span></h3>
         <div class="row"><span>${esc(party.statusText)}</span><span>${party.questsDone}✓ ${party.questsFailed}✗</span></div>${rows}${bill}
-        <div class="row muted"><span>${party.potions} potion${party.potions === 1 ? '' : 's'}${party.blessed ? ' · blessed' : ''}${party.guildMember ? ' · guild' : ''} · renown ${party.renown}</span><span>earned ${party.earned} · spent ${party.spent}</span></div>
+        <div class="row muted"><span>${potionSupply(party.potions)}${party.blessed ? ' · blessed' : ''}${party.guildMember ? ' · guild' : ''} · renown ${party.renown}</span><span>earned ${party.earned} · spent ${party.spent}</span></div>
         ${party.stash.length ? `<div class="row muted"><span>stash: ${party.stash.map(esc).join(', ')}</span></div>` : ''}</div>`;
     })
     .join('');

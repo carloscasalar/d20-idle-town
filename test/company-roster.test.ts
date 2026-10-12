@@ -82,7 +82,7 @@ function company(rng: Rng, level: number, living: string[], dead: string[] = [])
   });
   for (const hero of party.members) if (dead.includes(hero.name)) killHero(hero);
   party.gold = 0;
-  party.potions = 6;
+  party.potions = { basic: 6 };
   party.blessed = true;
   party.guildMember = true;
   party.duesPaidDay = DAY;
@@ -257,13 +257,13 @@ describe('who arrives', () => {
     expect(party.members.map((hero) => hero.level)).toEqual(Array.from({ length: size }, () => 4));
   });
 
-  it('a level-4 company starts with 80 gp', () => {
-    expect(createParty(new Rng(4), 4, 4, 0, STARTING_GOLD).gold).toBe(80);
+  it('a level-4 company starts with 200 gp', () => {
+    expect(createParty(new Rng(4), 4, 4, 0, STARTING_GOLD).gold).toBe(200);
   });
 
   it('a new company is idle, at the hour it arrived', () => {
     const party = createParty(new Rng(3), 2, 4, 17, STARTING_GOLD);
-    expect(party).toMatchObject({ status: 'idle', idleTicks: 0, questId: null, arrivedAt: 17, potions: 0, renown: 0 });
+    expect(party).toMatchObject({ status: 'idle', idleTicks: 0, questId: null, arrivedAt: 17, potions: {}, renown: 0 });
   });
 
   it('a new company has paid no dues, is outside the guild and is unblessed', () => {
@@ -276,7 +276,7 @@ describe('who arrives', () => {
     game.step();
     const arrived = game.view().parties[0]!;
     expect(arrived.members.map((member) => member.level)).toEqual([1, 1, 1, 1]);
-    expect(arrived.gold).toBe(20);
+    expect(arrived.gold).toBe(50);
     expect(arrived.statusText).toBe('looking at the board');
   });
 
@@ -936,11 +936,11 @@ describe('merging and burying', () => {
     const rng = new Rng(6);
     const host = createParty(rng, 2, 4, 0, STARTING_GOLD);
     const donor = createParty(rng, 2, 2, 0, STARTING_GOLD);
-    host.potions = 1;
-    donor.potions = 3;
+    host.potions = { basic: 1, greater: 1 };
+    donor.potions = { basic: 3, superior: 1 };
     rosterFor(host, donor).merge(host, donor, { coin: openCoin({ goldPaid: 0, goldSpentByHeroes: 0 }) });
-    expect(host.potions).toBe(4);
-    expect(donor.potions).toBe(0);
+    expect(host.potions).toEqual({ basic: 4, greater: 1, superior: 1 });
+    expect(donor.potions).toEqual({});
   });
 
   it('brings the donor finds into the host stash', () => {

@@ -115,7 +115,7 @@ describe('CompanyRoster arrivals', () => {
     context.report = (event) => {
       expect(event.kind).toBe('party');
       expect(context.ledger.partiesArrived).toBe(1);
-      expect(roster.active()[0]).toMatchObject({ status: 'idle', arrivedAt: 1, gold: 20 });
+      expect(roster.active()[0]).toMatchObject({ status: 'idle', arrivedAt: 1, gold: 50 });
     };
     arrivals();
     expect(roster.active()).toHaveLength(1);
@@ -258,16 +258,16 @@ describe('CompanyRoster recruitment and absorption', () => {
     const kept = donor.members.slice(1);
     host.gold = 10;
     donor.gold = 30;
-    host.potions = 1;
-    donor.potions = 2;
+    host.potions = { basic: 1 };
+    donor.potions = { greater: 2 };
     donor.renown = 7;
     const item = instantiate(context.rng, ITEM_CATALOGUE[0]!);
     donor.stash = [item];
     roster.replaceForScenario([host, donor]);
     expect(roster.merge(host, donor, context)).toEqual(kept);
     expect(aliveMembers(host)).toHaveLength(5);
-    expect(host).toMatchObject({ gold: 40, earned: 30, potions: 3, renown: 7, stash: [item] });
-    expect(donor).toMatchObject({ gold: 0, spent: 30, potions: 0, stash: [], status: 'idle' });
+    expect(host).toMatchObject({ gold: 40, earned: 30, potions: { basic: 1, greater: 2 }, renown: 7, stash: [item] });
+    expect(donor).toMatchObject({ gold: 0, spent: 30, potions: {}, stash: [], status: 'idle' });
     expect(context.coin.statistics).toEqual(emptyGoldStatistics());
   });
 

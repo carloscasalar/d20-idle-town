@@ -1,7 +1,9 @@
 import { buildHero, Encounter, EncounterError, getFootprintSize, getMonsterByName, type BattleLog, type Creature, type HeroClassName, type MonsterData } from 'battlecast-engine';
 import type { DeepReadonly } from '../core/readonly';
 import { Rng } from '../core/rng';
-import { combinedEffect, heroAc, isBloodied, potionHeal, skillBonus, WEAPON_CLASSES, type Hero, type HeroEconomyConfig } from '../adventurers/hero';
+import { combinedEffect, heroAc, isBloodied, skillBonus, WEAPON_CLASSES, type Hero, type HeroEconomyConfig } from '../adventurers/hero';
+import { choosePotion, potionDrinkText, takePotion, type PotionConfig, type PotionPack } from '../adventurers/potions';
+import { rollDice, type DiceSource } from '../core/dice';
 import { freeze } from '../core/freeze';
 import type { EncounterSpec } from '../quests/encounters';
 
@@ -31,8 +33,8 @@ export interface CombatOutcome {
   heroes: HeroResult[];
   /** Monster XP the party earns (0 unless it won). */
   xpEarned: number;
-  /** Healing potions consumed from the supplied shared pack. */
-  potionsDrunk: number;
+  /** Healing potions consumed from the supplied shared pack, counted per tier. */
+  potionsDrunk: PotionPack;
 }
 
 /** House rules layered on the engine: round cap, surprise, and who spots whom. */
@@ -72,7 +74,9 @@ export const DEFAULT_COMBAT_CONFIG: CombatConfig = freeze({
  */
 export interface CombatOptions {
   /** Healing potions available in the shared pack (defaults to none). */
-  potions?: number;
+  potions?: PotionPack;
+  /** Potion rolls. Production draws a child generator after placement; tests script this. */
+  dice?: DiceSource;
   /** A temple blessing: extra hit points for the whole company. */
   blessingHp?: number;
   /** No running from this one (a boss in its own hall). */
@@ -125,9 +129,8 @@ function fmtBonus(n: number): string {
   return n === 0 ? '' : n > 0 ? `+${n}` : `${n}`;
 }
 
-export function runCombat(heroes: Hero[], spec: DeepReadonly<EncounterSpec>, seed: number, opts: CombatOptions & { rules: CombatConfig; heroes: HeroEconomyConfig }): CombatOutcome {
-  const { rules } = opts;
-  const economy = opts.heroes;
+export function runCombat(heroes: Hero[], spec: DeepReadonly<EncounterSpec>, seed: number, opts: CombatOptions & { rules: CombatConfig; heroes: HeroEconomyConfig; catalogue: PotionConfig }): CombatOutcome {
+  const { rules, catalogue } = opts;
   const fighters = heroes.filter((h) => h.alive);
   const rng = new Rng(seed);
   const enc = new Encounter({ gridSize: GRID, seed });
@@ -205,6 +208,8 @@ export function runCombat(heroes: Hero[], spec: DeepReadonly<EncounterSpec>, see
     });
   });
 
+  const potionSeed = rng.seed();
+  const potionDice = opts.dice ?? new Rng(potionSeed);
   enc.start();
   for (const h of fighters) {
     const carried = h.maxHp - h.hp;
@@ -220,7 +225,8 @@ export function runCombat(heroes: Hero[], spec: DeepReadonly<EncounterSpec>, see
   let rounds = 0;
   let winner: 'red' | 'blue' | 'draw' | null = null;
   let retreated = false;
-  let potionsDrunk = 0;
+  const pack: PotionPack = { ...(opts.potions ?? {}) };
+  const potionsDrunk: PotionPack = {};
   for (let i = 0; i < rules.maxRounds; i++) {
     const r = enc.runRound();
     rounds = r.round;
@@ -241,16 +247,18 @@ export function runCombat(heroes: Hero[], spec: DeepReadonly<EncounterSpec>, see
       return c?.isAlive && c.currentHp > 0 && !c.conditions.includes('unconscious');
     });
     for (const h of fighters) {
-      if (!companion || potionsDrunk >= (opts.potions ?? 0)) break;
+      if (!companion) break;
       const c = enc.creatures.find((x) => x.id === idByHero.get(h.id));
       if (!c?.isAlive || !isBloodied({ hp: c.currentHp, maxHp: c.maxHp })) continue;
       if (c.currentHp > 0 && c.conditions.includes('unconscious')) continue;
       const fallen = c.currentHp <= 0;
-      enc.heal(c.id, potionHeal(h, economy));
-      potionsDrunk += 1;
-      lines.push(fallen
-        ? `${companion.name} gives ${h.name} a healing potion.`
-        : `${h.name} drinks a healing potion.`);
+      const tier = choosePotion(pack, catalogue.tiers, { hp: c.currentHp, maxHp: c.maxHp, fallen });
+      if (!tier) break;
+      const roll = rollDice(tier.formula, potionDice);
+      enc.heal(c.id, roll.total);
+      takePotion(pack, tier.name);
+      potionsDrunk[tier.name] = (potionsDrunk[tier.name] ?? 0) + 1;
+      lines.push(potionDrinkText(h.name, tier, roll.total, fallen ? companion.name : undefined));
     }
     if (!opts.noRetreat && shouldFlee(enc.creatures, fighters.length, rules)) {
       retreated = true;

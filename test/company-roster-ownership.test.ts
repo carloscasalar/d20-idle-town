@@ -35,9 +35,9 @@ it('refuses merges, burial and disbanding of companies outside the roster before
   expect(() => roster.bury(outsider)).toThrow('not in this roster');
   expect(() => roster.disband(outsider)).toThrow('not in this roster');
   expect(host.members).toHaveLength(2);
-  expect(host.gold).toBe(20);
+  expect(host.gold).toBe(50);
   expect(outsider.members).toHaveLength(2);
-  expect(outsider.gold).toBe(20);
+  expect(outsider.gold).toBe(50);
   expect(outsider.status).toBe('idle');
 });
 

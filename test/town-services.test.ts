@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { DEFAULT_COMPANY_ROSTER_CONFIG } from '../src/adventurers/company-roster';
 import { Game } from '../src/sim/game';
 import { createParty } from '../src/adventurers/party';
-import { armorUpgradeCost, createHero, potionCost, resurrectionCost } from '../src/adventurers/hero';
+import { armorUpgradeCost, createHero, resurrectionCost } from '../src/adventurers/hero';
 import { Rng } from '../src/core/rng';
 import { instantiate, ITEM_CATALOGUE } from '../src/items/items';
 import { DEFAULT_TOWN_CONFIG, type Employer } from '../src/town/town';
@@ -14,7 +14,7 @@ function setup(level = 1, tick = 0) {
   const rng = new Rng(8);
   const party = createParty(rng, level, 4, 0, STARTING_GOLD);
   party.members = Array.from({ length: 4 }, () => createHero(rng, level, 'Fighter'));
-  party.potions = 4;
+  party.potions = { basic: 4 };
   party.blessed = true;
   party.guildMember = true;
   party.duesPaidDay = 1;
@@ -36,29 +36,52 @@ const itemRng = new Rng(9);
 const item = (name: string) => instantiate(itemRng, ITEM_CATALOGUE.find((i) => i.name === name)!);
 
 describe('town services through an hourly tick', () => {
-  it('buys affordable potions, preserves the reserve and spends the hour before guild dues', () => {
+  it('buys basic potions at 50 gp, up to one per living hero, and keeps the resurrection reserve', () => {
     const { game, party, reserve, shop } = setup();
-    party.potions = 0;
+    expect(reserve).toBe(190);
+    party.potions = {};
     party.guildMember = false;
     party.duesPaidDay = -1;
-    party.gold = reserve + potionCost(1, DEFAULT_HERO_ECONOMY) * 2;
+    party.gold = 290;
     const apothecary = shop('apothecary');
     const treasury = apothecary.treasury;
     const earned = apothecary.earned;
     game.step();
-    expect(party.potions).toBe(2);
-    expect(party.gold).toBe(reserve);
-    expect(party.spent).toBe(potionCost(1, DEFAULT_HERO_ECONOMY) * 2);
+    expect(party.potions).toEqual({ basic: 2 });
+    expect(party.gold).toBe(190);
+    expect(party.spent).toBe(100);
     expect(game.view().stats.goldSpentByHeroes).toBe(party.spent);
     expect(apothecary.treasury).toBe(treasury + party.spent);
     expect(apothecary.earned).toBe(earned + party.spent);
     expect(party.guildMember).toBe(false);
+    expect(game.view().events.some((event) => event.text.includes('buy 2 basic healing potions') && event.text.includes('for 100 gp'))).toBe(true);
+  });
+
+  it('buys only basic potions, and no more than one per living hero, when the purse could pay for a greater one', () => {
+    const { game, party } = setup();
+    party.potions = { greater: 1 };
+    party.gold = 100000;
+    game.step();
+    expect(party.potions).toEqual({ basic: 4, greater: 1 });
+    expect(party.spent).toBe(200);
+    expect(Object.keys(game.view().parties[0]!.potions)).toEqual(['basic', 'greater']);
+  });
+
+  it('leaves a new level-1 purse of 50 gp untouched, because one resurrection costs 190 gp', () => {
+    const { game, party, reserve } = setup();
+    expect(reserve).toBe(190);
+    party.potions = {};
+    party.gold = 50;
+    game.step();
+    expect(party.gold).toBe(50);
+    expect(party.potions).toEqual({});
+    expect(party.spent).toBe(0);
   });
 
   it.each(['apothecary', 'enchanter', 'guild', 'temple', 'smith'] as const)('does not buy from a ruined %s', (service) => {
     const { game, party, reserve, shop } = setup();
     party.gold = reserve + 2000;
-    if (service === 'apothecary') party.potions = 0;
+    if (service === 'apothecary') party.potions = {};
     if (service === 'enchanter') shop(service).stock = [item('Shield +1')];
     if (service === 'guild') party.duesPaidDay = -1;
     if (service === 'temple') party.blessed = false;
@@ -68,7 +91,7 @@ describe('town services through an hourly tick', () => {
     game.step();
     expect(party.gold).toBe(before.gold);
     expect(party.members).toEqual(before.members);
-    expect(party.potions).toBe(before.potions);
+    expect(party.potions).toEqual(before.potions);
     expect(party.blessed).toBe(before.blessed);
     expect(party.spent).toBe(0);
   });
