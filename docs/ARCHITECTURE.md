@@ -397,8 +397,9 @@ After a non-final victory, a hurt company spends the next tick in
 Its required pacing strategy receives hero, dice remaining and encounters ahead;
 the default spreads remaining dice with `ceil(D / E)`, stopping at full HP.
 The profile's `encounterCountSource` selects the configured upper bound when the
-count is unknown (Contract counts, or Bounty upper bound plus the boss), never
-below what job intelligence has revealed. A known count uses the exact total.
+count is unknown (the largest Contract count, or a Bounty's encounter total,
+the boss included), never below what job intelligence has revealed. A known
+count uses the exact total.
 The rest logs rolls, checks retreat using the resulting HP, then, if the company
 continues, asks the company for one drinking plan. Every living adventurer is
 conscious. Each drink is taken from the company's pack and rolled on the same
@@ -511,7 +512,7 @@ seeds 1 and 2 keep those fights, with a scripted 2d4+2 of 8.
 | `test/potion-sharing.test.ts` | The company's drinking plan (order, tier, a fallen adventurer's maximum, a short pack, the conscious companion), one fight and one Short rest applying it, one draw per company, host policies on a merger, weight validation |
 | `test/dice.test.ts` | Formula parsing, scripted and seeded rolls, bounds, invalid formulas, derived Assured healing |
 | `test/hit-dice.test.ts` | Engine HP parser, minimum healing, pure spending, quota, full-HP stopping, exhausted heroes, level-up, death and resurrection |
-| `test/expedition.test.ts` | Separate Short rest hour, dice/retreat/potion order, shared local rolls including rest potions, world seed isolation, encounter bounds, Long rest in every lodging case |
+| `test/expedition.test.ts` | Separate Short rest hour, dice/retreat/potion order, shared local rolls including rest potions, world seed isolation, encounter bounds (a hidden Bounty count paces over the configured total, the boss included), Long rest in every lodging case |
 | `test/combat-potions.test.ts` | Between-round drinking, scripted 2d4+2, engine log stable until the first drink, and one world seed per fight however many potion dice are rolled |
 | `test/combat-space.test.ts` | A Gargantuan creature's space on the battlefield |
 | `test/smoke.test.ts` | A deterministic 400-hour run: no crashes, and the world produces contracts, deaths and coin |

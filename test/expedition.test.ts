@@ -8,15 +8,18 @@ import { listNames } from '../src/core/names';
 import { Rng } from '../src/core/rng';
 import type { EncounterSpec } from '../src/quests/encounters';
 import { jobInquiry } from '../src/quests/job-intel';
-import type { Quest } from '../src/quests/quest';
+import { DEFAULT_QUEST_CONFIG, generateAssault, type Quest } from '../src/quests/quest';
 import { Board, DEFAULT_BOARD_CONFIG } from '../src/sim/board';
 import { Game } from '../src/sim/game';
+import { DEFAULT_KIND_CONFIGS } from '../src/sim/kind-config';
 import { profilesById } from '../src/sim/work-kinds';
 import { advanceExpedition, encountersAhead, type CombatResolver, type ExpeditionContext, type ExpeditionEvent } from '../src/sim/expedition';
 import { openCoin } from '../src/town/coin';
+import { createLair, DEFAULT_LAIR_CONFIG } from '../src/town/lairs';
 import { generateTown, serviceOf } from '../src/town/town';
 import { expeditionRules } from './helpers/expedition-rules';
-import { STARTING_GOLD } from './helpers/supplied-config';
+import { LONG_SIMULATION_TIMEOUT_MS } from './helpers/simulation';
+import { QUEST_GENERATION, STARTING_GOLD } from './helpers/supplied-config';
 import { DEFAULT_HERO_ECONOMY } from '../src/adventurers/hero';
 import { DEFAULT_TOWN_CONFIG } from '../src/town/town';
 import { DEFAULT_HOLDING_CONFIG } from '../src/town/assets';
@@ -1018,12 +1021,94 @@ describe('encounters ahead for Hit Dice pacing', () => {
     expect(encountersAhead(quest, 2, context.kinds.contract!, context.quests, context.kindConfigs)).toBe(7);
   });
 
-  it('uses the configured Bounty upper bound plus its boss when unknown, never less than revealed', () => {
+  it('uses the configured Bounty total when unknown, never less than revealed', () => {
     const { quest, context } = setup();
     quest.kind = 'assault';
     context.kindConfigs = { ...context.kindConfigs, assault: { ...context.kindConfigs.assault, encounters: [2, 4] } };
-    expect(encountersAhead(quest, 1, context.kinds.assault!, context.quests, context.kindConfigs)).toBe(4);
+    expect(encountersAhead(quest, 1, context.kinds.assault!, context.quests, context.kindConfigs)).toBe(3);
     quest.revealed = 7;
     expect(encountersAhead(quest, 1, context.kinds.assault!, context.quests, context.kindConfigs)).toBe(6);
+  });
+
+  it('keeps generated Bounties inside the configured range, boss last, and paces over that longest total', () => {
+    const encounters: [number, number] = [4, 7];
+    const kinds = {
+      ...DEFAULT_KIND_CONFIGS,
+      assault: { ...DEFAULT_KIND_CONFIGS.assault, encounters, revealsCount: false },
+    };
+    const generation = { ...QUEST_GENERATION, kinds };
+    const town = generateTown(new Rng(2), DEFAULT_TOWN_CONFIG, DEFAULT_HOLDING_CONFIG);
+    const guild = serviceOf(town, 'guild');
+    const bounties: { quest: Quest; boss: string }[] = [];
+    for (let seed = 1; seed <= 40; seed++) {
+      const rng = new Rng(seed);
+      const lair = createLair(rng, 'goblins', 5, 0, DEFAULT_COMPANY_ROSTER_CONFIG.companySize, DEFAULT_LAIR_CONFIG);
+      const quest = generateAssault(
+        rng, lair, { id: guild.id, rewardCap: guild.treasury },
+        DEFAULT_COMPANY_ROSTER_CONFIG.companySize, 0, 1, generation,
+      );
+      bounties.push({ quest, boss: lair.boss });
+    }
+    const lengths = bounties.map(({ quest }) => quest.encounters.length);
+    expect(Math.min(...lengths)).toBe(4);
+    expect(Math.max(...lengths)).toBe(7);
+    expect(lengths.every((count) => count >= 4 && count <= 7)).toBe(true);
+    for (const { quest, boss } of bounties) {
+      expect(quest.encounters[quest.encounters.length - 1]!.monsters[0]!.name).toBe(boss);
+    }
+    const hidden = bounties[0]!.quest;
+    expect(hidden.countRevealed).toBe(false);
+    expect(encountersAhead(hidden, 0, profilesById().assault!, DEFAULT_QUEST_CONFIG, kinds)).toBe(7);
+  }, LONG_SIMULATION_TIMEOUT_MS);
+
+  it('spends two Hit Dice at a Short rest on a Bounty whose count is hidden', () => {
+    const assault = { ...DEFAULT_KIND_CONFIGS.assault, revealsCount: false };
+    const kinds = { ...DEFAULT_KIND_CONFIGS, assault };
+    const party = createParty(new Rng(1), 5, 1, 0, STARTING_GOLD, DEFAULT_POLICIES_CONFIG.potionSharing);
+    const hero = party.members[0]!;
+    hero.hp = 1;
+    hero.maxHp = 1000;
+    hero.hitDiceSpent = 0;
+    party.potions = {};
+    const game = Game.forTesting({
+      seed: 9,
+      roster: { maxCompanies: 1, firstArrivalTick: 1000 },
+      world: { maxOpenQuests: 0 },
+      expedition: { retreatHpFraction: 0 },
+      kinds: { assault },
+    }, (scenario) => {
+      const lair = createLair(new Rng(3), 'goblins', 5, 0, DEFAULT_COMPANY_ROSTER_CONFIG.companySize, DEFAULT_LAIR_CONFIG);
+      const guild = serviceOf(scenario.town, 'guild');
+      const bounty = generateAssault(
+        new Rng(4), lair, { id: guild.id, rewardCap: guild.treasury },
+        DEFAULT_COMPANY_ROSTER_CONFIG.companySize, 0, 1, { ...QUEST_GENERATION, kinds },
+      );
+      bounty.status = 'taken';
+      bounty.partyId = party.id;
+      party.questId = bounty.id;
+      party.status = 'short-resting';
+      party.ticksLeft = 1;
+      party.shortRestStartedWith = 1;
+      party.progress = 1;
+      scenario.lairs = [];
+      scenario.quests = [bounty];
+      scenario.parties = [party];
+      for (const employer of scenario.town.employers) {
+        employer.stock = [];
+        employer.restockIn = 1000;
+      }
+    });
+
+    game.step();
+
+    const state = JSON.parse(game.regressionState()) as {
+      parties: { members: { hitDiceSpent: number }[] }[];
+      quests: { kind: string; countRevealed: boolean }[];
+    };
+    const rest = game.view().events.find((event) => event.text.includes('Short rest'));
+    const hitDieRolls = rest?.text.match(/\d+[+-]\d+=\d+/g) ?? [];
+    expect(state.quests[0]).toMatchObject({ kind: 'assault', countRevealed: false });
+    expect(hitDieRolls).toHaveLength(2);
+    expect(state.parties[0]!.members.map((member) => member.hitDiceSpent)).toEqual([2]);
   });
 });

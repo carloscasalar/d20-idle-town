@@ -70,7 +70,7 @@ Tunables that belong to one kind of work, keyed by that kind's id. Defined in
 | `revealsCount` | true | When the profile says `configured`, posting reveals the encounter count |
 | `appetite` | 0.35 | Chance an idle company that can pay a resurrection takes this work |
 | `levelGap` | 1 | A bounty is posted once some company is within this many levels of the lair |
-| `encounters` | [3, 5] | Fights before the boss, inclusive, plus the boss |
+| `encounters` | [3, 5] | Total number of encounters, the boss included |
 | `difficultyWeights` | easy 2, intermediate 4, hard 2 | Weight of each difficulty on a bounty |
 | `rewardPerLevel` | 150 | Guild gold per lair level, capped by the whole treasury or, for a listed guild, its treasury share after rewards owed |
 

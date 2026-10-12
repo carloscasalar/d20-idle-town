@@ -261,7 +261,7 @@ function resolveFight(p: Party, q: ReadonlyQuest, context: ExpeditionContext): v
 /** Exact when known; otherwise pace over the configured upper bound, including every revealed encounter. */
 export function encountersAhead(q: ReadonlyQuest, completed: number, profile: WorkProfile, quests: QuestConfig, kinds: WorkKindConfigs): number {
   const maximum = profile.encounterCountSource === 'assault'
-    ? kinds.assault.encounters[1] + 1
+    ? kinds.assault.encounters[1]
     : Math.max(...quests.encounterCounts.map((entry) => entry.count));
   const total = q.countRevealed ? q.encounters.length : Math.max(maximum, q.revealed);
   return Math.max(1, total - completed);
