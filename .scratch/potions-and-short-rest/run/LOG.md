@@ -24,6 +24,7 @@ Branch `feature/potions-healing`. Run started 2026-10-12 at checkpoint `4774e43`
 | 09 | 10 fractional potion price and formula floor | feature (configuration validation) | Codex (LIMIT before any change, back 11:12), then Cursor (new session) | `6235cf0` | PASS first round (orchestrator read the diff, two mutations killed); issue done |
 | 10 | 11 Bounties in the Reward set-aside | feature | Codex | `5329eea` | FAIL on design only (slice-reviewer): criteria proven, no mutation survives, guard identical, long sweep clean; a treasury fallback in `generateAssault`, a repeated formula, one name with two meanings |
 | 10 fix 1 | 11 | correction | Codex (same session) | `f8327e3` | PASS (orchestrator read the whole diff, checks and guard re-run); issue done |
+| 11 | 12 Reward set-aside review leftovers | tests, visibility, types | Codex (sandbox refused the commit; committed by the orchestrator) | `4880c6c` | PASS first round (orchestrator read the diff; three raid mutations and four catalogue mutations fail as required); issue done; one `prd-answerer` decision |
 
 Run finished 2026-10-12: issues 02 to 09 done; `pnpm typecheck` clean, 749 tests green with none skipped; final smoke `smoke/07-final.md` PASS at `98e1bae`. Left open: issue 01 and issue 10 (`needs-triage`).
 
@@ -41,3 +42,4 @@ Run resumed 2026-10-12 at checkpoint `9c9a2f7` (typecheck clean, 754 tests green
 - Listing in the prompt the mutations the reviewer will try (from earlier failed rounds) gave the first PASS in one round.
 - A detached measurement an implementer started before its usage limit keeps running: its output is a free independent run for the review.
 - A prompt that forbids every other test edit also forbids the call-site edits a signature change needs; the implementer then keeps a fallback instead of asking. Say which call sites may change shape.
+- An issue written before its sibling was built can lose its premise (a method "with no outside caller" gained one): read the code the issue names before writing the prompt, and take the question to the `prd-answerer` before dispatching, not after the implementer stops.

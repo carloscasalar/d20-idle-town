@@ -1,6 +1,6 @@
 # Reward set-aside: three leftovers of the review
 
-Status: ready-for-agent
+Status: done
 Category: enhancement
 
 Noted by the slice reviewer of [issue 08](08-reward-set-aside.md) and left uncorrected when that issue was closed; confirmed still open by the owner's review. None changes what the game does with the default configuration.
@@ -70,3 +70,9 @@ No behaviour of the game changes: no configuration default, no random draw and n
 - Why: the issue says "apply the visibility change to whatever it left" and "The Board's reward-sizing treasury is not part of the Board's public surface", so leaving them public is out. Moving the check into `Board.postBounty` would put a Game decision in the Board: `world.postingThreshold` is Game configuration, all three threshold checks are in `src/sim/game.ts`, and `docs/ARCHITECTURE.md` says the Game checks the threshold. No test or script calls either method.
 - Confidence: high that the methods cannot stay public; medium for a Board query over folding the check into `postBounty`. If wrong, it is one Board method and one call site.
 
+### Closed by the orchestrator (2026-10-12)
+
+- Commit: `4880c6c` (Codex, turn 11; its sandbox refused the commit, so the orchestrator committed the work it left in the tree). Report: `../run/turns/11-12-reward-set-aside-leftovers-report.md`.
+- Review by the orchestrator, who read the whole source diff (three files) and re-ran the mutations in a throwaway worktree. Raid threshold in `src/sim/game.ts`, against `test/raid-posting-threshold.test.ts`: check removed, 1 test fails; "meets" changed to "exceeds", 2 fail; treasury left after the rewards owed, 1 fails. Catalogues in `src/town/town.ts`: a name added to the `ServiceKind` union only, to `SERVICE_KINDS` only, to the `EmployerKind` union only and to `EMPLOYER_KINDS` only each fail `pnpm typecheck`.
+- `Board.rewardTreasury` and `Board.bountyRewardCap` are private; the Game asks `Board.canFundBounty(employer, threshold, quests)`. No existing test changed in this turn; the regression snapshots and `scripts/tune-baseline.json` are identical to `9c9a2f7`.
+- `pnpm typecheck` clean, 773 tests green in 38 files, none skipped.
