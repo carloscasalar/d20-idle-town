@@ -19,6 +19,8 @@ Branch `feature/potions-healing`. Run started 2026-10-12 at checkpoint `4774e43`
 | 05 fix 1 | 06 | correction | Cursor (same session) | `cd06396` | PASS (orchestrator read and mutation re-check); issue done |
 | 06 | 07 apothecary production | feature | Codex | `b0e724e` | PASS first round (23 of 24 mutations killed, long sweep clean); issue done; issue 10 filed (`needs-triage`) |
 | 07 | 08 Reward set-aside | feature | Codex | `23c5c2b` | PASS first round (final check 3 reproduced: 0 of 40 ruined, lowest treasury 198; long sweep clean); issue done |
+| 08 | 09 retune confirmation | checks, hashes, documents | Codex (LIMIT before any change, back 11:12), then Cursor (new session) | `e63b1e8`, `21291d8` | FAIL: documentation only; the three checks pass with no retune, hashes sound |
+| 08 fix 1 | 09 | documents | Cursor (same session) | `827e863` | PASS (orchestrator read against the code); issue done |
 
 ## Lessons
 
@@ -30,3 +32,4 @@ Branch `feature/potions-healing`. Run started 2026-10-12 at checkpoint `4774e43`
 - When a new draw breaks a seeded test, ask the implementer to try other fixed places for the draw before it edits the test; the reviewer found one in minutes.
 - `docs/ARCHITECTURE-INTERFACES.md` goes stale on every issue that changes a signature: name it in each prompt.
 - Listing in the prompt the mutations the reviewer will try (from earlier failed rounds) gave the first PASS in one round.
+- A detached measurement an implementer started before its usage limit keeps running: its output is a free independent run for the review.

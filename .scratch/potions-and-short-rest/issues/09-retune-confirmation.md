@@ -1,6 +1,6 @@
 # Retune confirmation
 
-Status: ready-for-agent
+Status: done
 
 Blocked-by: [05 - Buying policy](05-buying-policy.md), [06 - Potion sharing policy](06-potion-sharing-policy.md), [07 - Apothecary production](07-apothecary-production.md), [08 - Reward set-aside](08-reward-set-aside.md)
 
@@ -154,3 +154,9 @@ scale 1.15: quests 479.025  failed 111.325  deaths 378.825 (0.7908251135118208/q
 apothecary: ruined 0 of 40  lowest treasury reached 198  treasury at end (mean) 2439.85  goldSpentOnProduction 54749.375
 baseline comparison: unavailable (TICKS=3000; baseline has 600 ticks)
 ```
+
+### Closed by the orchestrator (2026-10-12)
+
+Commits `e63b1e8` (hashes re-recorded and re-enabled, documents), `21291d8` (the check transcripts in the report) and `827e863` (correction 1, documents only), all by Cursor; Codex reached its usage limit before changing anything. The three checks passed with the values the earlier issues left, so nothing was retuned. Evidence: a second, independent run of the three checks on the same game code (`23c5c2b`) gave identical figures; the slice reviewer recomputed the ten deviations of check 1 from the baseline file (worst -11.0%, failed at scale 1.15), re-ran check 2 (0.422, 0.946, 2.292 deaths per quest) and confirmed the hashes fail when a potion formula changes and pass twice in a row. Review: failed the first round on documentation only (configuration sections and validator rejections missing from three documents, one unclear changelog sentence); the orchestrator read the correction against `src/sim/config.ts`. 749 tests green, none skipped; long sweep `no crashes in seeds 1-150 for 1500 hours`.
+
+Reviewer notes, not corrected, older than this PRD: the `town.ts` row of `docs/ARCHITECTURE-INTERFACES.md` names constants that no longer exist; `docs/agents/implementation.md` gives `pnpm exec vite-node`, which does not work (`pnpm dlx vite-node` does).
