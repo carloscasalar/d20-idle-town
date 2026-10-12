@@ -14,7 +14,7 @@ Which adventurers drink a Healing potion, in what order and which tier is a deci
 
 Both run the same sequence: keep the Bloodied, order them by the Potion sharing policy, choose the tier, roll its formula, take the potion out of the pack, heal, narrate. They differ only in who may be given a potion (a fight has fallen adventurers and needs a conscious companion), in how the healing is applied (to the engine's creature, or to the adventurer), and in which pack is written (a fight works on a copy and reports what was drunk).
 
-A third copy in `scripts/assault.ts` has already drifted from the rules; see [issue 14](14-assault-script-uses-rules-the-game-dropped.md).
+A third copy in `scripts/assault.ts` has already drifted from the rules. [Issue 14](14-assault-script-uses-rules-the-game-dropped.md) removes it by making the script play the real game.
 
 A rule that weighs anything else the Company knows (a cleric in the company, for example) would have to be added in each copy.
 
@@ -33,8 +33,6 @@ It rolls no dice, heals nobody and changes nothing. It has no variants and no co
 **The effect of one drink, once, with the potion.** In `src/adventurers/potions.ts`, one operation for what a potion does when it is drunk: roll its formula from the dice it is given, leave the pack, and give the drink's text. It returns the amount rolled so the caller can heal.
 
 **The fight and the Short rest apply the plan.** Each describes its adventurers, asks for the plan, and for each drink applies the effect and heals in its own way. A fight still does not write the Company's pack: it works on its copy and reports what was drunk, and the Expedition subtracts it afterwards. At a Short rest every living adventurer is conscious, so there is no second variant of the decision.
-
-**The calibration script.** The potion loop of `scripts/assault.ts` uses the same decision and effect. Its flat heal between fights and its import from `test/helpers` are issue 14, not this one.
 
 ## Behaviour
 
@@ -56,7 +54,6 @@ The whole round can be planned before any die is rolled because no choice depend
 - [ ] The decision rolls no dice and writes neither the pack nor an adventurer; a test shows the pack and the adventurers it was given are unchanged after planning.
 - [ ] A plan for a short pack reflects the pack running down: with one potion and two Bloodied adventurers, only the first in policy order drinks.
 - [ ] The choice of tier is no longer exported from `src/adventurers/potions.ts`, and pack helpers nobody outside that file uses are no longer exported.
-- [ ] `scripts/assault.ts` drinks through the decision and the effect.
 - [ ] The regression hash tests pass without re-recording, and `scripts/tune-baseline.json` is unchanged.
 - [ ] `docs/ARCHITECTURE.md`, `docs/ARCHITECTURE-INTERFACES.md` and `docs/ARCHITECTURE-IMPROVEMENTS.md` describe the decision, the effect and where each lives.
 - [ ] `pnpm typecheck` and `pnpm test` are green.
@@ -66,7 +63,7 @@ The whole round can be planned before any die is rolled because no choice depend
 - How many potions a Company buys. That decision stays in town services until a second purchase has to be weighed against it.
 - Variants of the drinking decision, weights for them in the configuration, or a draw when a Company is constituted.
 - The turn-back decision of the Short rest and the flee decision of a fight.
-- The flat heal and the test import of `scripts/assault.ts` (issue 14).
+- `scripts/assault.ts` (issue 14). If it still has its own potion loop when this issue is built, change it only as far as it needs to typecheck.
 - The count of encounters the Short rest paces Hit Dice over.
 
 ## Comments
