@@ -13,6 +13,7 @@ import {
   type ReadonlyParty,
 } from '../adventurers/party';
 import { runCombat } from '../combat/battlecast';
+import { packInCatalogueOrder, type PotionPack } from '../adventurers/potions';
 import { describeEffect, rollStockItem, type MagicItem } from '../items/items';
 import type { DeepReadonly } from '../core/readonly';
 import { hashString, Rng } from '../core/rng';
@@ -58,6 +59,7 @@ export interface GameStats {
   partiesArrived: number;
   goldPaid: number;
   goldSpentByHeroes: number;
+  goldSpentOnProduction: number;
   employersRuined: number;
   itemsFound: number;
   itemsSold: number;
@@ -174,7 +176,7 @@ export interface GamePartyView {
   readonly questsFailed: number;
   readonly members: readonly GameHeroView[];
   readonly templeBill: number;
-  readonly potions: number;
+  readonly potions: PotionPack;
   readonly blessed: boolean;
   readonly guildMember: boolean;
   readonly renown: number;
@@ -267,7 +269,7 @@ export class Game {
     this.board = new Board(this.config.board, WORK_KINDS, this.config.kinds);
     this.rng = new Rng(this.config.seed);
     this.town = generateTown(this.rng, this.config.town, this.config.holdings);
-    this.roster = new CompanyRoster(this.config.roster, this.config.heroes, this.config.town, this.config.holdings);
+    this.roster = new CompanyRoster(this.config.roster, this.config.heroes, this.config.town, this.config.holdings, this.config.policies);
     this.coin = openCoin(this.stats);
     const temple = serviceOf(this.town, 'temple');
     this.log('town', `Welcome to ${this.town.name}. Adventurers gather at ${this.town.tavernName}; the ${temple.name} keeps its doors open for the fallen.`);
@@ -399,7 +401,7 @@ export class Game {
           questsFailed: party.questsFailed,
           members: Object.freeze(party.members.map(heroView)),
           templeBill: deadMembers(party).reduce((total, hero) => total + resurrectionCost(hero.level, this.config.heroes), 0),
-          potions: party.potions,
+          potions: Object.freeze(packInCatalogueOrder(party.potions, this.config.potions.tiers)),
           blessed: party.blessed,
           guildMember: party.guildMember,
           renown: party.renown,
@@ -507,6 +509,8 @@ export class Game {
         return `on the road to ${quest?.place ?? '?'} (${party.ticksLeft}h)`;
       case 'questing':
         return `fighting at ${quest?.place ?? '?'} (${party.progress}/${quest?.encounters.length ?? '?'})`;
+      case 'short-resting':
+        return `taking a Short rest at ${quest?.place ?? '?'} (1h)`;
       case 'returning':
         return `returning (${party.ticksLeft}h)`;
       case 'resting':
@@ -638,8 +642,9 @@ export class Game {
   /** The guild keeps a standing contract on every lair once someone in town could plausibly take it. */
   private postAssaults(): void {
     const guild = serviceOf(this.town, 'guild');
-    if (guild.ruined || guild.treasury < this.config.world.postingThreshold) return;
+    if (guild.ruined || this.config.kinds.assault.rewardPerLevel <= 0) return;
     for (const lair of this.activeLairs) {
+      if (!this.board.canFundBounty(guild, this.config.world.postingThreshold, this.config.quests)) return;
       if (lair.questId) continue;
       const strongest = Math.max(0, ...this.activeParties.map(partyLevel));
       if (strongest < lair.level - this.config.kinds.assault.levelGap) continue;
@@ -698,10 +703,16 @@ export class Game {
       intel: this.config.intel,
       encounters: this.config.encounters,
       renownCap: this.config.roster.renownCap,
+      quests: this.config.quests,
+      kindConfigs: this.config.kinds,
+      restDice: (seed) => new Rng(seed),
       blessingHpPerLevel: this.config.services.blessingHpPerLevel,
       companySize: this.config.roster.companySize,
       heroes: this.config.heroes,
-      combat: (heroes, spec, seed, options) => runCombat(heroes, spec, seed, { ...options, rules: this.config.combat, heroes: this.config.heroes }),
+      potions: this.config.potions,
+      combat: (heroes, spec, seed, options) => runCombat(heroes, spec, seed, {
+        ...options, rules: this.config.combat, heroes: this.config.heroes, catalogue: this.config.potions,
+      }),
       disband: (company) => this.roster.disband(company),
       report: ({ kind, text, detail, chronicle }) => {
         if (chronicle) this.chronicleLog(kind, text);
@@ -786,6 +797,7 @@ export class Game {
       },
       services: this.config.services,
       heroes: this.config.heroes,
+      potions: this.config.potions,
       items: this.config.items,
       maxStock: this.config.town.maxStock,
     });

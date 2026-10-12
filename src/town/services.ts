@@ -1,5 +1,7 @@
-import { armorUpgradeCost, equipItem, wantsItem, potionCost, resurrectionCost, type Hero, type HeroEconomyConfig } from '../adventurers/hero';
+import { armorUpgradeCost, equipItem, wantsItem, resurrectionCost, type Hero, type HeroEconomyConfig } from '../adventurers/hero';
 import { aliveMembers, partyLevel, type Party } from '../adventurers/party';
+import { givePotions, potionCount, type PotionConfig, type PotionPack, type PotionTier } from '../adventurers/potions';
+import { assuredHealing } from '../core/dice';
 import { freeze } from '../core/freeze';
 import { listNames } from '../core/names';
 import { describeEffect, resalePrice, type ItemConfig, type MagicItem } from '../items/items';
@@ -15,6 +17,8 @@ export interface TownServiceConfig {
   blessingHpPerLevel: number;
   /** Gold that must remain after a blessing, as a multiple of the resurrection price. */
   blessingReserveFactor: number;
+  /** Share of each living hero's maximum the pack's assured healing should cover. */
+  potionCoverFraction: number;
   /** Idle-hour order, by step name. `retirement` is the roster's step. */
   steps: readonly string[];
 }
@@ -25,6 +29,7 @@ export const DEFAULT_TOWN_SERVICE_CONFIG: TownServiceConfig = freeze({
   blessingCostPerLevel: 40,
   blessingHpPerLevel: 3,
   blessingReserveFactor: 1.5,
+  potionCoverFraction: 0.5,
   steps: ['potions', 'loot', 'items', 'dues', 'blessing', 'retirement', 'armour'],
 });
 
@@ -51,6 +56,7 @@ export interface TownServiceContext {
   report: (event: ServiceEvent) => void;
   services: TownServiceConfig;
   heroes: HeroEconomyConfig;
+  potions: PotionConfig;
   items: ItemConfig;
   /** Shop shelf size. The town section is its home. */
   maxStock: number;
@@ -89,20 +95,24 @@ export function visitTownServices(p: Party, services: TownServiceContext, steps:
 }
 
 export function buyPotions(p: Party, context: TownServiceContext): boolean {
-  const { town, level, reserve, alive, pay, log, heroes } = serviceVisit(p, context);
-  if (p.potions < alive.length) {
-    const apothecary = serviceOf(town, 'apothecary');
-    const cost = potionCost(level, heroes);
-    const wanted = alive.length - p.potions;
-    const affordable = Math.min(wanted, Math.floor((p.gold - reserve) / cost));
-    if (affordable > 0 && !apothecary.ruined) {
-      pay(p, apothecary, affordable * cost);
-      p.potions += affordable;
-      log('shop', `${p.name} buy ${affordable} healing potion${affordable > 1 ? 's' : ''} from ${apothecary.name} for ${affordable * cost} gp.`);
-      return true;
-    }
+  const visit = serviceVisit(p, context);
+  const purchase = planPotionPurchase(
+    p.potions, visit.alive, p.gold - visit.reserve, visit.potions.tiers, visit.services.potionCoverFraction,
+  );
+  if (!purchase) return false;
+  const apothecary = serviceOf(visit.town, 'apothecary');
+  if (apothecary.ruined) return false;
+  const cost = purchase.count * purchase.tier.price;
+  // Read the time tuning, but production is instant even for a nonzero value.
+  void purchase.tier.productionTicks;
+  for (let made = 0; made < purchase.count; made++) {
+    visit.coin.sink(treasury(apothecary), purchase.tier.productionCost, 'production');
+    visit.pay(p, apothecary, purchase.tier.price);
   }
-  return false;
+  givePotions(p.potions, purchase.tier.name, purchase.count);
+  const plural = purchase.count === 1 ? '' : 's';
+  visit.log('shop', `${p.name} buy ${purchase.count} ${purchase.tier.name} healing potion${plural} from ${apothecary.name} for ${cost} gp.`);
+  return true;
 }
 
 export function buyArmour(p: Party, context: TownServiceContext): boolean {
@@ -225,9 +235,85 @@ export function buyBlessing(p: Party, context: TownServiceContext): boolean {
   return true;
 }
 
+interface PotionPurchase {
+  tier: PotionTier;
+  count: number;
+}
+
+/**
+ * One tier for this visit. The cap is `N / 2`; the 2 is a literal in this function.
+ * Lowest means smallest assured healing, with catalogue order breaking a tie.
+ * Cheaper means a strictly lower price. The budget floor is the cheapest tier,
+ * then the lowest assured healing, then catalogue order. A tier is chosen by
+ * those fields, whatever its name is.
+ */
+function planPotionPurchase(
+  pack: PotionPack,
+  alive: readonly { maxHp: number }[],
+  budget: number,
+  tiers: readonly PotionTier[],
+  potionCoverFraction: number,
+): PotionPurchase | undefined {
+  if (alive.length === 0 || tiers.length === 0) return undefined;
+  const sumNeeds = alive.reduce((sum, hero) => sum + Math.ceil(hero.maxHp * potionCoverFraction), 0);
+  const limit = (sumNeeds / alive.length) / 2;
+  const ladder = [...tiers].sort((a, b) => byAssuredHealing(a, b, tiers));
+  const lowest = ladder[0];
+  if (!lowest) return undefined;
+  const underCap = ladder.filter((tier) => assuredHealing(tier.formula) <= limit);
+  const chosen = underCap[underCap.length - 1] ?? lowest;
+  const wanted = (tier: PotionTier) => potionsToMeet(pack, tier, tiers, sumNeeds, alive.length);
+  const chosenCount = wanted(chosen);
+  if (chosenCount === 0) return undefined;
+  if (costFits(chosen.price, chosenCount, budget)) return { tier: chosen, count: chosenCount };
+  const cheaper = ladder.filter((tier) => tier !== chosen
+    && tier.price < chosen.price
+    && assuredHealing(tier.formula) <= assuredHealing(chosen.formula));
+  for (const tier of [...cheaper].reverse()) {
+    const count = wanted(tier);
+    if (costFits(tier.price, count, budget)) return { tier, count };
+  }
+  const floorTier = [...tiers].sort((a, b) =>
+    a.price - b.price || byAssuredHealing(a, b, tiers))[0];
+  if (!floorTier) return undefined;
+  const count = countAffordable(floorTier.price, wanted(floorTier), budget);
+  return count > 0 ? { tier: floorTier, count } : undefined;
+}
+
+function potionsToMeet(
+  pack: PotionPack,
+  tier: PotionTier,
+  tiers: readonly PotionTier[],
+  sumNeeds: number,
+  living: number,
+): number {
+  const healing = assuredHealing(tier.formula);
+  const heldHealing = tiers.reduce((sum, item) => sum + potionCount(pack, item.name) * assuredHealing(item.formula), 0);
+  const held = Object.values(pack).reduce((sum, count) => sum + count, 0);
+  const healShort = sumNeeds - heldHealing;
+  const forHealing = healShort <= 0 ? 0 : healing > 0 ? Math.ceil(healShort / healing) : Number.POSITIVE_INFINITY;
+  return Math.max(forHealing, living - held);
+}
+
+function byAssuredHealing(a: PotionTier, b: PotionTier, tiers: readonly PotionTier[]): number {
+  return assuredHealing(a.formula) - assuredHealing(b.formula) || tiers.indexOf(a) - tiers.indexOf(b);
+}
+
+function costFits(price: number, count: number, budget: number): boolean {
+  if (!(count > 0) || !Number.isFinite(count)) return false;
+  return price === 0 || count * price <= budget;
+}
+
+function countAffordable(price: number, wanted: number, budget: number): number {
+  if (!(wanted > 0) || !Number.isFinite(wanted)) return 0;
+  if (price === 0) return wanted;
+  if (budget < price) return 0;
+  return Math.min(wanted, Math.floor(budget / price));
+}
+
 /** Per-step inputs and the existing coin/event operations; no random draws. */
 function serviceVisit(p: Party, context: TownServiceContext) {
-  const { town, day, ledger, coin, report, services, heroes, items, maxStock } = context;
+  const { town, day, ledger, coin, report, services, heroes, items, maxStock, potions } = context;
   const pay = (from: Party, to: Employer, amount: number, adventurer?: Hero) =>
     coin.transfer(purse(from), treasury(to), amount, 'service', adventurer);
   const log = (kind: ServiceEvent['kind'], text: string) => report({ kind, text });
@@ -235,7 +321,7 @@ function serviceVisit(p: Party, context: TownServiceContext) {
   const level = partyLevel(p);
   return {
     town, day, ledger, coin, pay, log, chronicleLog, level, services, heroes, items, maxStock,
-    reserve: resurrectionCost(level, heroes), alive: aliveMembers(p),
+    reserve: resurrectionCost(level, heroes), alive: aliveMembers(p), potions,
   };
 }
 

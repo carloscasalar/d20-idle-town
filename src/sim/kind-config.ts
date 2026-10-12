@@ -24,7 +24,7 @@ export interface AssaultKindConfig {
   appetite: number;
   /** Posted once some company is within this many levels of the lair. */
   levelGap: number;
-  /** Fights before the boss, inclusive, plus the boss. */
+  /** Total number of encounters, the boss included. */
   encounters: [number, number];
   /** Weight of each difficulty. */
   difficultyWeights: { difficulty: Difficulty; weight: number }[];

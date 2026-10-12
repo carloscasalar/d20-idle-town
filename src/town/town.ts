@@ -12,6 +12,14 @@ export const EMPLOYER_KINDS = ['noble', 'merchant', 'faction', 'temple'] as cons
 /** Shops where adventurers spend coin. Each belongs to one employer. */
 export type ServiceKind = 'tavern' | 'temple' | 'smith' | 'apothecary' | 'enchanter' | 'guild';
 
+/** Every town service a configuration may name. */
+export const SERVICE_KINDS = ['tavern', 'temple', 'smith', 'apothecary', 'enchanter', 'guild'] as const satisfies readonly ServiceKind[];
+
+// `satisfies` rejects unknown names; these compile-time assertions reject missing ones.
+type AssertNever<Missing extends never> = Missing;
+type UnlistedEmployerKinds = AssertNever<Exclude<EmployerKind, (typeof EMPLOYER_KINDS)[number]>>;
+type UnlistedServiceKinds = AssertNever<Exclude<ServiceKind, (typeof SERVICE_KINDS)[number]>>;
+
 export interface Employer {
   id: string;
   name: string;

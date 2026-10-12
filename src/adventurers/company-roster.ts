@@ -1,6 +1,8 @@
 import { freeze } from '../core/freeze';
 import { describeHero, resurrectHero, resurrectionCost, type Hero, type HeroEconomyConfig } from './hero';
 import { aliveMembers, createParty, deadMembers, describeParty, partyLevel, type Party, type ReadonlyParty } from './party';
+import { mergePotionPacks } from './potions';
+import type { PoliciesConfig } from './policies';
 import { listNames } from '../core/names';
 import type { DeepReadonly } from '../core/readonly';
 import type { Rng } from '../core/rng';
@@ -109,6 +111,7 @@ export class CompanyRoster {
     private readonly heroes: HeroEconomyConfig,
     private readonly townRules: TownConfig,
     private readonly holdings: HoldingConfig,
+    private readonly policies: PoliciesConfig,
   ) {
     this.nextArrival = config.firstArrivalTick;
   }
@@ -194,7 +197,7 @@ export class CompanyRoster {
     const stranded = this.activeCompanies.find((p) => p.status === 'idle' && !this.isReady(p) && p.idleTicks >= this.config.patienceTicks);
     if (stranded) {
       const missing = this.config.companySize - aliveMembers(stranded).length;
-      const band = createParty(context.rng, partyLevel(stranded), context.rng.int(Math.max(1, missing), Math.max(1, missing) + this.config.strangerExtraMembers), context.tick, this.heroes.startingGoldPerLevel);
+      const band = createParty(context.rng, partyLevel(stranded), context.rng.int(Math.max(1, missing), Math.max(1, missing) + this.config.strangerExtraMembers), context.tick, this.heroes.startingGoldPerLevel, this.policies.potionSharing);
       this.companies.push(band);
       context.ledger.partiesArrived += 1;
       log(context, 'party', `${describeParty(band, this.config.companySize)} arrive at ${context.town.tavernName}: survivors of another company, looking for work.`);
@@ -203,7 +206,7 @@ export class CompanyRoster {
 
     let level = 1;
     if (context.board.open().length > 0 && context.rng.chance(this.config.arrivalQuestLevelChance)) level = context.rng.pick(context.board.open()).level;
-    const party = createParty(context.rng, level, this.config.companySize, context.tick, this.heroes.startingGoldPerLevel);
+    const party = createParty(context.rng, level, this.config.companySize, context.tick, this.heroes.startingGoldPerLevel, this.policies.potionSharing);
     this.companies.push(party);
     context.ledger.partiesArrived += 1;
     log(context, 'party', `${describeParty(party, this.config.companySize)} arrive at ${context.town.tavernName}: ${party.members.map(describeHero).join(', ')}.`);
@@ -315,8 +318,7 @@ function mergeMembers(host: Party, donor: Party, maxCompanySize: number, coin: C
   }
   donor.members = donor.members.filter((h) => !moved.includes(h));
   coin.transfer(purse(donor), purse(host), donor.gold, 'merger');
-  host.potions += donor.potions;
-  donor.potions = 0;
+  mergePotionPacks(host.potions, donor.potions);
   host.stash.push(...donor.stash);
   donor.stash = [];
   host.renown = Math.max(host.renown, donor.renown);

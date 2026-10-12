@@ -8,6 +8,76 @@ follow [Semantic Versioning](https://semver.org/).
 
 Everything below is part of the first release, which has not been tagged yet.
 
+### 2026-10-12
+
+- Reward set-aside now counts open and taken Bounties alongside Contracts.
+  A listed guild sizes Bounties from the rounded-down treasury share after
+  rewards owed, with no minimum, and waits until that remainder meets the
+  posting threshold. Payment and failure release the amount; zero or negative
+  Bounty rewards are never posted. Contract thresholds keep reading the whole
+  treasury. Unlisted guilds and the apothecary-only default remain unchanged,
+  including the default random draws and regression hashes.
+
+- A potion tier's selling price must be a whole number of gold, and its
+  formula's lowest total must be at least 1. Each die counts as at least 1,
+  plus the bonus, worked out without rolling. The dice module still accepts a
+  negative bonus, and the default catalogue is unchanged.
+
+- The six regression hashes were re-recorded once, on purpose, because the
+  healing rules change every seeded trajectory: three whole-world snapshots
+  and three stripped-world hashes. No tuning default moved; the acceptance,
+  scale-shape and 3,000-tick apothecary checks passed on the values the
+  earlier slices left.
+
+- The apothecary sets aside rewards promised on open and taken Contracts when
+  sizing new rewards. Payment, failure and expiry release the amount.
+  `board.rewardSetAsideFor` selects town services or every employer of a kind;
+  it defaults to the apothecary alone. Upkeep can still take a treasury below
+  zero. No tuning value or random draw changed.
+
+- The apothecary makes each healing potion on demand. Its treasury pays a
+  production sink of 25 / 100 / 1,000 / 10,000 gp before receiving the full
+  sale price; every tier remains available while it is not ruined, whatever
+  its treasury. Costs are independent catalogue configuration. Production
+  ticks default to zero and are read but have no behaviour yet. The lifetime
+  `goldSpentOnProduction` statistic appears in the game view and tuning report.
+
+- A company draws a Potion sharing policy once, when it is constituted:
+  company order, or fallen heroes first and then the lowest hit point
+  fraction. The weights are `policies.potionSharing`, default 50 / 50. A
+  merger keeps the host's policies. A company with no recorded policy is
+  served in company order.
+
+- A company restocks at the apothecary until the pack can cover half of each
+  living hero's maximum hit points (`services.potionCoverFraction`, default
+  0.5), with at least one potion per living hero, favouring the lower tiers.
+  One visit buys one tier. A purse that cannot pay that count and still keep
+  one resurrection steps down to a cheaper tier, or buys as many of the
+  cheapest tier as it affords. A ruined apothecary sells nothing.
+
+- Healing potions come in four tiers — basic, greater, superior and supreme —
+  rolled with real dice (2d4+2, 4d4+4, 8d4+8, 10d4+20) and sold at 50, 200,
+  2,000 and 20,000 gp. A company's pack holds a count per tier. A Bloodied
+  hero drinks the smallest tier that covers the hit points they are missing.
+  New companies start with 50 gp per level. Removed `heroes.potionBase`,
+  `heroes.potionPerLevel`, `heroes.potionHealMinimum` and
+  `heroes.potionHealDivisor`.
+
+- Hurt companies take a logged Short rest hour between encounters, spending
+  level-based Hit Dice before checking retreat and sharing potions. Die size
+  and Constitution come from the engine's class HP formula; each rest has one
+  seeded dice stream. A Long rest restores every living hero's spent dice.
+  Removed `expedition.shortRestHealFraction`.
+
+- `scripts/tune.ts` accepts seed ranges, rejects empty entries, includes scale
+  1.15 by default, prints unrounded metrics and compares each of the five tuning
+  metrics to the recorded baseline at +/-15%.
+- `scripts/tune-baseline.json` records unchanged-game measurements at commit
+  `4774e43` (game code identical to `ed52b20`), including the 3,000-tick
+  apothecary run. The tool tracks apothecary ruin and treasury every tick and
+  reports production gold when that statistic exists. Game code and all six
+  regression hashes are unchanged.
+
 ### 2026-09-10
 
 - MIT licence for the project, with battlecast-engine's MIT text and the SRD 5.2

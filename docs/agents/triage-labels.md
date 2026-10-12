@@ -9,3 +9,9 @@ The skills use five triage roles. For local Markdown issues, record the matching
 | `ready-for-agent` | `ready-for-agent` | Fully specified and ready for an agent |
 | `ready-for-human` | `ready-for-human` | Requires human implementation |
 | `wontfix` | `wontfix` | Will not be actioned |
+
+One further state is set by the `implement-prd` skill, not by triage:
+
+| Status | Meaning |
+| --- | --- |
+| `done` | Implemented, reviewed and committed; the issue's Comments name the commits |

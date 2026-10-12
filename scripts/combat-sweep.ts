@@ -2,7 +2,7 @@ import { Game } from '../src/sim/game';
 
 /**
  * Long runs through Game, outside the default test suite.
- * FROM=1 TO=150 HOURS=1500 pnpm exec vite-node scripts/combat-sweep.ts
+ * FROM=1 TO=150 HOURS=1500 pnpm dlx vite-node scripts/combat-sweep.ts
  */
 const from = Number(process.env.FROM ?? 1);
 const to = Number(process.env.TO ?? 150);

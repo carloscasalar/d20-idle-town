@@ -24,7 +24,7 @@ pnpm build         # typecheck + production bundle in dist/
 pnpm dlx vite-node scripts/calibrate.ts   # win/death rates per difficulty and level, single fights
 pnpm dlx vite-node scripts/tune.ts        # deaths per contract and wipes at several difficulty scales
 pnpm dlx vite-node scripts/variety.ts     # how many different monsters a long run throws at the companies
-pnpm dlx vite-node scripts/assault.ts     # how often a level-matched company clears a lair
+pnpm dlx vite-node scripts/assault.ts     # how often one company clears a lair's bounty
 pnpm dlx vite-node scripts/lairs.ts       # a long run, lair events only
 ```
 

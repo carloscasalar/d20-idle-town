@@ -112,6 +112,11 @@ function appendEvent(event: GameEvent | GameEventView): void {
   if (atBottom) logEl.scrollTop = logEl.scrollHeight;
 }
 
+function potionSupply(pack: GameView['parties'][number]['potions']): string {
+  const held = Object.entries(pack).filter(([, count]) => count > 0).map(([name, count]) => `${count} ${name}`);
+  return held.length > 0 ? held.join(', ') : '0 potions';
+}
+
 function hpBar(hero: GameHeroView): string {
   if (!hero.alive) return `<span class="badge">dead</span>`;
   const cls = hero.hpPercent <= 25 ? 'crit' : hero.hpPercent <= 60 ? 'low' : '';
@@ -132,7 +137,7 @@ function renderParties(view: GameView): string {
       const bill = party.templeBill ? `<div class="row"><span>temple bill</span><span class="gold">${party.templeBill} gp</span></div>` : '';
       return `<div class="card"><h3><span>${esc(party.name)}</span><span class="status">lvl ${party.level} · <span class="gold">${party.gold} gp</span></span></h3>
         <div class="row"><span>${esc(party.statusText)}</span><span>${party.questsDone}✓ ${party.questsFailed}✗</span></div>${rows}${bill}
-        <div class="row muted"><span>${party.potions} potion${party.potions === 1 ? '' : 's'}${party.blessed ? ' · blessed' : ''}${party.guildMember ? ' · guild' : ''} · renown ${party.renown}</span><span>earned ${party.earned} · spent ${party.spent}</span></div>
+        <div class="row muted"><span>${potionSupply(party.potions)}${party.blessed ? ' · blessed' : ''}${party.guildMember ? ' · guild' : ''} · renown ${party.renown}</span><span>earned ${party.earned} · spent ${party.spent}</span></div>
         ${party.stash.length ? `<div class="row muted"><span>stash: ${party.stash.map(esc).join(', ')}</span></div>` : ''}</div>`;
     })
     .join('');
@@ -198,6 +203,7 @@ function renderTown(view: GameView): string {
   return `<div class="card"><h3><span>${esc(view.town.name)}</span><span class="status">town</span></h3>
       <div class="row"><span>${view.parties.length} companies in town</span><span>${view.stats.partiesArrived} arrived so far</span></div>
       <div class="row"><span>heroes have spent</span><span class="gold">${view.stats.goldSpentByHeroes} gp</span></div>
+      <div class="row"><span>spent on potion production</span><span class="gold">${view.stats.goldSpentOnProduction} gp</span></div>
       <div class="row"><span>contracts expired</span><span>${view.stats.questsExpired}</span></div>
       <div class="row"><span>magic items found / sold</span><span>${view.stats.itemsFound} / ${view.stats.itemsSold}</span></div>
       <div class="row"><span>retired adventurers</span><span>${view.stats.retirements}</span></div>
@@ -234,7 +240,7 @@ function renderAll(): void {
   const view = game.view();
   clockEl.textContent = view.time;
   const stats = view.stats;
-  statsEl.innerHTML = `<span>quests <b>${stats.questsCompleted}</b>/${stats.questsCompleted + stats.questsFailed}</span><span>gold paid <b>${stats.goldPaid}</b></span><span>deaths <b>${stats.heroesDied}</b></span><span>raised <b>${stats.resurrections}</b></span><span>wiped <b>${stats.partiesWiped}</b></span>`;
+  statsEl.innerHTML = `<span>quests <b>${stats.questsCompleted}</b>/${stats.questsCompleted + stats.questsFailed}</span><span>gold paid <b>${stats.goldPaid}</b></span><span>production spent <b>${stats.goldSpentOnProduction}</b></span><span>deaths <b>${stats.heroesDied}</b></span><span>raised <b>${stats.resurrections}</b></span><span>wiped <b>${stats.partiesWiped}</b></span>`;
   renderPanel(view);
 }
 

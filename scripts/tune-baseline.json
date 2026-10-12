@@ -1,0 +1,139 @@
+{
+  "commit": "4774e43",
+  "note": "Game code, original scripts/tune.ts and existing tests are identical to ed52b20. The measuring tool was changed for this run; src/ and existing tests were untouched. The checkout was 51dcc00, which adds only run-log documents to 4774e43; 4774e43 is recorded per the turn instruction.",
+  "aggregation": {
+    "metrics": "Mean per seed, except deathsPerQuest is total deaths divided by total completed quests.",
+    "apothecaryRuined": "Total ruined apothecaries across seeds.",
+    "lowestTreasuryReached": "Minimum treasury of any apothecary in the initial view and every post-step view, including ruined shops.",
+    "treasuryAtEnd": "Mean final apothecary treasury total per seed.",
+    "goldSpentOnProduction": "Mean final lifetime statistic per seed when the game exposes it. The game exposes it now. These measured results omit it because they were recorded before that statistic existed."
+  },
+  "tuning": {
+    "command": "SEEDS=1..80 SCALES=1,1.15,1.25,1.5,1.75 TICKS=600 pnpm dlx vite-node scripts/tune.ts",
+    "seeds": {
+      "from": 1,
+      "to": 80
+    },
+    "ticks": 600,
+    "results": [
+      {
+        "scale": 1.0,
+        "metrics": {
+          "quests": 139.1125,
+          "failed": 19.5125,
+          "deaths": 60.7875,
+          "deathsPerQuest": 0.43696648396082305,
+          "wiped": 4.9875,
+          "arrived": 23.1375,
+          "raised": 9.95
+        },
+        "apothecary": {
+          "ruined": 0,
+          "count": 80,
+          "lowestTreasuryReached": -484.0,
+          "treasuryAtEnd": 6645.9125
+        }
+      },
+      {
+        "scale": 1.15,
+        "metrics": {
+          "quests": 113.8625,
+          "failed": 28.1375,
+          "deaths": 85.1875,
+          "deathsPerQuest": 0.7481611592930069,
+          "wiped": 7.2125,
+          "arrived": 30.0625,
+          "raised": 11.2375
+        },
+        "apothecary": {
+          "ruined": 0,
+          "count": 80,
+          "lowestTreasuryReached": -165.0,
+          "treasuryAtEnd": 6121.3
+        }
+      },
+      {
+        "scale": 1.25,
+        "metrics": {
+          "quests": 104.8,
+          "failed": 32.9875,
+          "deaths": 97.375,
+          "deathsPerQuest": 0.9291507633587787,
+          "wiped": 8.0125,
+          "arrived": 33.8,
+          "raised": 11.7375
+        },
+        "apothecary": {
+          "ruined": 0,
+          "count": 80,
+          "lowestTreasuryReached": 355.0,
+          "treasuryAtEnd": 6409.3375
+        }
+      },
+      {
+        "scale": 1.5,
+        "metrics": {
+          "quests": 83.05,
+          "failed": 41.0625,
+          "deaths": 123.15,
+          "deathsPerQuest": 1.4828416616496087,
+          "wiped": 11.2625,
+          "arrived": 40.7625,
+          "raised": 11.7625
+        },
+        "apothecary": {
+          "ruined": 0,
+          "count": 80,
+          "lowestTreasuryReached": 354.0,
+          "treasuryAtEnd": 5767.8125
+        }
+      },
+      {
+        "scale": 1.75,
+        "metrics": {
+          "quests": 61.425,
+          "failed": 46.625,
+          "deaths": 138.9875,
+          "deathsPerQuest": 2.262718762718763,
+          "wiped": 12.7125,
+          "arrived": 45.0875,
+          "raised": 11.3625
+        },
+        "apothecary": {
+          "ruined": 0,
+          "count": 80,
+          "lowestTreasuryReached": -336.0,
+          "treasuryAtEnd": 4497.0375
+        }
+      }
+    ]
+  },
+  "apothecaryLongRun": {
+    "command": "SEEDS=1..40 SCALES=1.15 TICKS=3000 pnpm dlx vite-node scripts/tune.ts",
+    "seeds": {
+      "from": 1,
+      "to": 40
+    },
+    "ticks": 3000,
+    "results": [
+      {
+        "scale": 1.15,
+        "metrics": {
+          "quests": 479.6,
+          "failed": 126.875,
+          "deaths": 389.55,
+          "deathsPerQuest": 0.8122393661384487,
+          "wiped": 29.95,
+          "arrived": 115.85,
+          "raised": 50.1
+        },
+        "apothecary": {
+          "ruined": 2,
+          "count": 40,
+          "lowestTreasuryReached": -1957.0,
+          "treasuryAtEnd": 3832.925
+        }
+      }
+    ]
+  }
+}

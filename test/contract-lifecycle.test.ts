@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createParty, type Party } from '../src/adventurers/party';
+import { DEFAULT_POLICIES_CONFIG } from '../src/adventurers/policies';
 import { Rng } from '../src/core/rng';
 import { ITEM_CATALOGUE, type MagicItem } from '../src/items/items';
 import type { Quest } from '../src/quests/quest';
@@ -54,9 +55,9 @@ function postingEmployer(scenario: GameScenario, rng: Rng, overrides: Partial<Em
 }
 
 function company(rng: Rng, level = 5): Party {
-  const party = createParty(rng, level, 4, 100, STARTING_GOLD);
+  const party = createParty(rng, level, 4, 100, STARTING_GOLD, DEFAULT_POLICIES_CONFIG.potionSharing);
   // Fully provisioned, with current dues; no service consumes the decision hour.
-  Object.assign(party, { gold: 0, potions: 4, blessed: true, duesPaidDay: 5 });
+  Object.assign(party, { gold: 0, potions: { basic: 4 }, blessed: true, duesPaidDay: 5 });
   for (const hero of party.members) hero.armorTier = 3;
   return party;
 }

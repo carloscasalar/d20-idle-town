@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_COMPANY_ROSTER_CONFIG } from '../src/adventurers/company-roster';
 import { createParty } from '../src/adventurers/party';
+import { DEFAULT_POLICIES_CONFIG } from '../src/adventurers/policies';
 import { Rng } from '../src/core/rng';
 import { generateAssault, generateQuest, type Quest } from '../src/quests/quest';
 import { Game, TICKS_PER_DAY } from '../src/sim/game';
@@ -22,12 +23,12 @@ describe('employer ruin', () => {
       scenario.parties = [];
       const lair = createLair(rng, 'goblins', 5, scenario.tick, DEFAULT_COMPANY_ROSTER_CONFIG.companySize, DEFAULT_LAIR_CONFIG);
       lair.raidCooldown = 100;
-      const bounty = generateAssault(rng, lair, serviceOf(scenario.town, 'guild'), 4, scenario.tick, 1, QUEST_GENERATION);
+      const bounty = generateAssault(rng, lair, { id: serviceOf(scenario.town, 'guild').id, rewardCap: serviceOf(scenario.town, 'guild').treasury }, 4, scenario.tick, 1, QUEST_GENERATION);
       lair.questId = bounty.id;
       scenario.lairs = [lair];
       scenario.quests = [bounty, ...employer.assets.map((asset) => {
         asset.status = status;
-        const quest = generateQuest(rng, { employer, asset, theme: lair.theme, lair, level: 1, partySize: 4, tick: scenario.tick }, QUEST_GENERATION);
+        const quest = generateQuest(rng, { employer, rewardTreasury: employer.treasury, asset, theme: lair.theme, lair, level: 1, partySize: 4, tick: scenario.tick }, QUEST_GENERATION);
         asset.questId = quest.id;
         return quest;
       })];
@@ -60,11 +61,11 @@ describe('employer ruin', () => {
       const lairs = [createLair(rng, 'goblins', 5, scenario.tick, DEFAULT_COMPANY_ROSTER_CONFIG.companySize, DEFAULT_LAIR_CONFIG), createLair(rng, 'undead', 5, scenario.tick, DEFAULT_COMPANY_ROSTER_CONFIG.companySize, DEFAULT_LAIR_CONFIG)];
       const bounties = lairs.map((lair) => {
         lair.raidCooldown = 100;
-        const bounty = generateAssault(rng, lair, guild, 4, scenario.tick, 1, QUEST_GENERATION);
+        const bounty = generateAssault(rng, lair, { id: guild.id, rewardCap: guild.treasury }, 4, scenario.tick, 1, QUEST_GENERATION);
         lair.questId = bounty.id;
         return bounty;
       });
-      const company = createParty(rng, 5, 4, scenario.tick, STARTING_GOLD);
+      const company = createParty(rng, 5, 4, scenario.tick, STARTING_GOLD, DEFAULT_POLICIES_CONFIG.potionSharing);
       const taken = bounties[1]!;
       taken.status = 'taken';
       taken.partyId = company.id;

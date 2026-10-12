@@ -23,6 +23,8 @@ export interface WorkProfile {
   readonly lastFightForbidsRetreat: boolean;
   /** Each fight reports how deep the company is in the lair. */
   readonly lairDepth: boolean;
+  /** Configuration that bounds the encounter count when job intelligence does not know it. */
+  readonly encounterCountSource: 'quests' | 'assault';
   /**
    * Whether the encounter count is public when the work is posted.
    * `configured` follows that kind's `revealsCount`.
@@ -50,6 +52,7 @@ export const contractProfile: WorkProfile = Object.freeze({
   lairFigure: 'strength',
   lastFightForbidsRetreat: false,
   lairDepth: false,
+  encounterCountSource: 'quests',
   countAtPosting: false,
   offer: 'holding',
 });
@@ -62,6 +65,7 @@ export const assaultProfile: WorkProfile = Object.freeze({
   lairFigure: 'hoard',
   lastFightForbidsRetreat: true,
   lairDepth: true,
+  encounterCountSource: 'assault',
   countAtPosting: 'configured',
   offer: 'lair',
 });
@@ -74,6 +78,7 @@ export const EMPTY_PROFILE: WorkProfile = Object.freeze({
   lairFigure: 'strength',
   lastFightForbidsRetreat: false,
   lairDepth: false,
+  encounterCountSource: 'quests',
   countAtPosting: false,
   offer: 'none',
 });

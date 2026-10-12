@@ -1,49 +1,68 @@
-import { DEFAULT_HERO_ECONOMY, healHero, potionHeal } from '../src/adventurers/hero';
 import { DEFAULT_COMPANY_ROSTER_CONFIG } from '../src/adventurers/company-roster';
-import { aliveMembers, createParty } from '../src/adventurers/party';
-import { runCombat } from '../src/combat/battlecast';
+import { DEFAULT_HERO_ECONOMY, resurrectionCost } from '../src/adventurers/hero';
+import { createParty } from '../src/adventurers/party';
+import { DEFAULT_POLICIES_CONFIG } from '../src/adventurers/policies';
 import { Rng } from '../src/core/rng';
-import { generateAssault } from '../src/quests/quest';
-import { DEFAULT_HOLDING_CONFIG } from '../src/town/assets';
+import { Game } from '../src/sim/game';
 import { createLair, DEFAULT_LAIR_CONFIG, LAIR_THEMES } from '../src/town/lairs';
-import { DEFAULT_TOWN_CONFIG, generateTown, serviceOf } from '../src/town/town';
-import { COMBAT_RULES, QUEST_GENERATION, STARTING_GOLD } from '../test/helpers/supplied-config';
 
 const trials = Number(process.env.TRIALS ?? 40);
 const scale = Number(process.env.SCALE ?? 1.25);
 const rng = new Rng(Number(process.env.SEED ?? 7));
-const town = generateTown(rng, DEFAULT_TOWN_CONFIG, DEFAULT_HOLDING_CONFIG);
-const guild = serviceOf(town, 'guild');
+const companySize = DEFAULT_COMPANY_ROSTER_CONFIG.companySize;
+const heroes = DEFAULT_HERO_ECONOMY;
+/** Hours after which a trial that has not taken its bounty stops with an error. */
+const tickLimit = 1_000;
+
+function play(lairLevel: number, companyLevel: number): { cleared: boolean; reachedBoss: boolean; deaths: number } {
+  let reachedBoss = false;
+  let bountyTaken = false;
+  const game = Game.forTesting({
+    seed: rng.seed(),
+    board: { difficultyScale: scale },
+    roster: { maxCompanies: 1 },
+    world: { maxOpenQuests: 0 }, // Bounty posting does not read this limit.
+  }, (scenario) => {
+    const lair = createLair(rng, rng.pick(LAIR_THEMES), lairLevel, scenario.tick, companySize, DEFAULT_LAIR_CONFIG);
+    const company = createParty(rng, companyLevel, companySize, scenario.tick, heroes.startingGoldPerLevel, DEFAULT_POLICIES_CONFIG.potionSharing);
+    company.gold = resurrectionCost(companyLevel, heroes) + heroes.startingGoldPerLevel * companyLevel;
+    scenario.lairs = [lair];
+    scenario.parties = [company];
+    scenario.quests = [];
+  });
+
+  // A bounty's last fight is the boss, reported as "Encounter n/n".
+  game.onEvent((event) => {
+    const fight = /Encounter (\d+)\/(\d+)/.exec(event.text);
+    if (event.kind === 'combat' && fight && fight[1] === fight[2]) reachedBoss = true;
+  });
+
+  const pairing = `lair L${lairLevel}, company L${companyLevel}`;
+  for (let tick = 0; tick < tickLimit; tick++) {
+    game.step();
+    const view = game.view();
+    if (view.stats.partiesArrived > 0) throw new Error(`Another company entered the trial (${pairing}).`);
+    if (view.board.taken.some((quest) => quest.kind === 'assault')) bountyTaken = true;
+    const deaths = view.stats.heroesDied;
+    if (view.stats.lairsCleared > 0) return { cleared: true, reachedBoss, deaths };
+    if (view.stats.partiesWiped > 0) return { cleared: false, reachedBoss, deaths };
+    const company = view.parties[0];
+    if (company && company.questsFailed > 0) return { cleared: false, reachedBoss, deaths };
+  }
+  if (!bountyTaken) throw new Error(`Bounty was never taken within ${tickLimit} ticks (${pairing}).`);
+  throw new Error(`Expedition did not end within ${tickLimit} ticks (${pairing}).`);
+}
 
 for (const level of [5, 6, 8]) {
   for (const partyLevelOffset of [0, 1]) {
     let wins = 0, deaths = 0, reachedBoss = 0;
+    const companyLevel = level + partyLevelOffset;
     for (let t = 0; t < trials; t++) {
-      const lair = createLair(rng, rng.pick(LAIR_THEMES), level, 0, DEFAULT_COMPANY_ROSTER_CONFIG.companySize, DEFAULT_LAIR_CONFIG);
-      const quest = generateAssault(rng, lair, guild, DEFAULT_COMPANY_ROSTER_CONFIG.companySize, 0, scale, QUEST_GENERATION);
-      const party = createParty(rng, level + partyLevelOffset, DEFAULT_COMPANY_ROSTER_CONFIG.companySize, 0, STARTING_GOLD);
-      party.potions = 4;
-      let ok = true;
-      for (let i = 0; i < quest.encounters.length && ok; i++) {
-        const fighters = aliveMembers(party);
-        const boss = i === quest.encounters.length - 1;
-        if (boss) reachedBoss++;
-        const out = runCombat(fighters, quest.encounters[i]!, rng.seed(), { ...COMBAT_RULES, noRetreat: boss });
-        for (const r of out.heroes) {
-          const h = party.members.find((m) => m.id === r.heroId)!;
-          if (r.alive) h.hp = r.hp;
-          else { h.alive = false; h.hp = 0; deaths++; }
-        }
-        if (out.winner !== 'party') { ok = false; break; }
-        const alive = aliveMembers(party);
-        if (alive.length <= fighters.length / 2) { ok = false; break; }
-        for (const h of alive) {
-          healHero(h, Math.ceil(h.maxHp * 0.5));
-          if (party.potions > 0 && h.hp < h.maxHp * 0.5) { party.potions--; healHero(h, potionHeal(h, DEFAULT_HERO_ECONOMY)); }
-        }
-      }
-      if (ok) wins++;
+      const outcome = play(level, companyLevel);
+      if (outcome.cleared) wins++;
+      if (outcome.reachedBoss) reachedBoss++;
+      deaths += outcome.deaths;
     }
-    console.log(`lair L${level} vs party L${level + partyLevelOffset}: cleared ${(100 * wins / trials).toFixed(0)}%  reached boss ${(100 * reachedBoss / trials).toFixed(0)}%  deaths/attempt ${(deaths / trials).toFixed(2)}`);
+    console.log(`lair L${level} vs party L${companyLevel}: cleared ${(100 * wins / trials).toFixed(0)}%  reached boss ${(100 * reachedBoss / trials).toFixed(0)}%  deaths/attempt ${(deaths / trials).toFixed(2)}`);
   }
 }

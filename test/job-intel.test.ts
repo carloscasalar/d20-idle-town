@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { DEFAULT_COMPANY_ROSTER_CONFIG } from '../src/adventurers/company-roster';
 import { createHero } from '../src/adventurers/hero';
 import { createParty, type Party } from '../src/adventurers/party';
+import { DEFAULT_POLICIES_CONFIG } from '../src/adventurers/policies';
 import { Rng } from '../src/core/rng';
 import type { EncounterSpec } from '../src/quests/encounters';
 import { DEFAULT_JOB_INTEL_CONFIG } from '../src/quests/job-intel';
@@ -43,7 +44,7 @@ function job(overrides: Partial<Quest> = {}): Quest {
 }
 
 function company(rng: Rng, level = 1, gold = 300, name = 'Lanterns'): Party {
-  const result = createParty(rng, level, 4, 0, STARTING_GOLD);
+  const result = createParty(rng, level, 4, 0, STARTING_GOLD, DEFAULT_POLICIES_CONFIG.potionSharing);
   result.name = name;
   result.members = Array.from({ length: 4 }, (_, index) => {
     const hero = createHero(rng, level, 'Fighter');
@@ -51,7 +52,8 @@ function company(rng: Rng, level = 1, gold = 300, name = 'Lanterns'): Party {
     hero.armorTier = 3;
     return hero;
   });
-  Object.assign(result, { gold, potions: 4, blessed: true, guildMember: true, duesPaidDay: 1 });
+  // Four greater cover four level-3 fighters, so the idle hour stays with job intelligence.
+  Object.assign(result, { gold, potions: { greater: 4 }, blessed: true, guildMember: true, duesPaidDay: 1 });
   return result;
 }
 
@@ -122,7 +124,7 @@ function road(work = job(), skillDc = DEFAULT_JOB_INTEL_CONFIG.skillDc, seed = 1
   const events: ExpeditionEvent[] = [];
   const context: ExpeditionContext = {
     quest: board.byId(work.id), town: generateTown(rng, DEFAULT_TOWN_CONFIG, DEFAULT_HOLDING_CONFIG), rng: new Rng(seed),
-    ledger: { heroesDied: 0, partiesWiped: 0 }, coin: openCoin({ goldPaid: 0, goldSpentByHeroes: 0 }), kinds: profilesById(),
+    ledger: { heroesDied: 0, partiesWiped: 0 }, coin: openCoin({ goldPaid: 0, goldSpentByHeroes: 0, goldSpentOnProduction: 0 }), kinds: profilesById(),
     ...expeditionRules({ travelTicks: 4, skillDc }),
     combat: () => { throw new Error('Travel does not fight'); },
     disband: () => { throw new Error('Travel does not disband'); },

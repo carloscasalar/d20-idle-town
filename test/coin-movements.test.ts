@@ -1,4 +1,5 @@
 import { CompanyRoster, DEFAULT_COMPANY_ROSTER_CONFIG } from '../src/adventurers/company-roster';
+import { DEFAULT_POLICIES_CONFIG } from '../src/adventurers/policies';
 import assert from 'node:assert/strict';
 import { describe, expect, it } from 'vitest';
 import { createHero, killHero } from '../src/adventurers/hero';
@@ -92,7 +93,7 @@ function watchBooks(game: Game, config: DeepPartial<GameConfig> = {}) {
       if (!previousIndex.parties.has(p.id)) {
         // C01: derive opening gold from the public constructor, using an
         // independent RNG so observation cannot affect the simulation.
-        const purse = createParty(new Rng(0), partyLevel(p), p.members.length, p.arrivedAt, STARTING_GOLD).gold;
+        const purse = createParty(new Rng(0), partyLevel(p), p.members.length, p.arrivedAt, STARTING_GOLD, DEFAULT_POLICIES_CONFIG.potionSharing).gold;
         starting.set(p.id, purse);
         sources += purse;
       }
@@ -126,6 +127,7 @@ function watchBooks(game: Game, config: DeepPartial<GameConfig> = {}) {
         }
       }
     }
+    sinks += current.stats.goldSpentOnProduction - previous.stats.goldSpentOnProduction; // Apothecary production.
     previous = current;
     previousIndex = currentIndex;
   };
@@ -153,9 +155,9 @@ function watchBooks(game: Game, config: DeepPartial<GameConfig> = {}) {
 }
 
 function provisioned(rng: Rng, level = 1, gold = 1000): Party {
-  const p = createParty(rng, level, 4, 0, STARTING_GOLD);
+  const p = createParty(rng, level, 4, 0, STARTING_GOLD, DEFAULT_POLICIES_CONFIG.potionSharing);
   p.members = Array.from({ length: 4 }, () => createHero(rng, level, 'Fighter'));
-  Object.assign(p, { gold, potions: 4, blessed: true, guildMember: true, duesPaidDay: 1 });
+  Object.assign(p, { gold, potions: { basic: 4 }, blessed: true, guildMember: true, duesPaidDay: 1 });
   for (const hero of p.members) hero.armorTier = 3;
   return p;
 }
@@ -204,19 +206,19 @@ function investigationScene(gold: number) {
 // literal outcomes; fixtures start with nonzero lifetime entries as well.
 describe('service purchase ledgers', () => {
   it.each([
-    { gold: 225, potions: 1, left: 190, spent: 35, treasury: 1035 },
-    { gold: 224, potions: 0, left: 224, spent: 0, treasury: 1000 },
-    { gold: 260, potions: 2, left: 190, spent: 70, treasury: 1070 },
-    { gold: 259, potions: 1, left: 224, spent: 35, treasury: 1035 },
-  ])('buys $potions potions from a $gold gp purse while keeping the reserve', ({ gold, potions, left, spent, treasury }) => {
+    { gold: 240, potions: { basic: 1 }, left: 190, spent: 50, treasury: 1025, production: 25 },
+    { gold: 239, potions: {}, left: 239, spent: 0, treasury: 1000, production: 0 },
+    { gold: 290, potions: { basic: 2 }, left: 190, spent: 100, treasury: 1050, production: 50 },
+    { gold: 289, potions: { basic: 1 }, left: 239, spent: 50, treasury: 1025, production: 25 },
+  ])('buys basic potions from a $gold gp purse while keeping the reserve', ({ gold, potions, left, spent, treasury, production }) => {
     const game = scene((s, rng) => {
       const p = provisioned(rng, 1, gold);
-      p.potions = 0;
+      p.potions = {};
       s.parties = [p];
     });
     watchBooks(game).step();
     expect(game.view().parties[0]).toMatchObject({ gold: left, earned: 0, spent, potions });
-    expect(employer(game, 'apothecary')).toMatchObject({ treasury, earned: spent, spent: 0 });
+    expect(employer(game, 'apothecary')).toMatchObject({ treasury, earned: spent, spent: production });
     expect(readWorld(game).parties[0]!.members.map((h) => h.goldSpent)).toEqual([0, 0, 0, 0]);
     expect(game.view().stats).toMatchObject({ goldSpentByHeroes: spent, itemsSold: 0 });
   });
@@ -240,7 +242,7 @@ describe('service purchase ledgers', () => {
   });
 
   it.each([
-    { service: 'apothecary', cost: 70, left: 930, spent: 80, treasury: 1070, earned: 90, totalSpent: 77 },
+    { service: 'apothecary', cost: 100, left: 900, spent: 110, treasury: 1050, earned: 120, totalSpent: 107 },
     { service: 'guild', cost: 60, left: 940, spent: 70, treasury: 1060, earned: 80, totalSpent: 67 },
     { service: 'temple', cost: 40, left: 960, spent: 50, treasury: 1040, earned: 60, totalSpent: 47 },
     { service: 'smith', cost: 120, left: 880, spent: 130, treasury: 1120, earned: 140, totalSpent: 127 },
@@ -253,7 +255,7 @@ describe('service purchase ledgers', () => {
     p.spent = 10;
     const shop = serviceOf(town, service);
     Object.assign(shop, { treasury: 1000, earned: 20, spent: 5 });
-    if (service === 'apothecary') p.potions = 2;
+    if (service === 'apothecary') p.potions = { basic: 2 };
     if (service === 'guild') { p.guildMember = false; p.duesPaidDay = -1; }
     if (service === 'temple') p.blessed = false;
     if (service === 'smith') p.members[0]!.armorTier = 0;
@@ -262,21 +264,21 @@ describe('service purchase ledgers', () => {
     const starting = openings(world);
     const before = totalGold(world);
     const ledger = { itemsSold: 3 };
-    const statistics = { goldPaid: 0, goldSpentByHeroes: 7 };
+    const statistics = { goldPaid: 0, goldSpentByHeroes: 7, goldSpentOnProduction: 0 };
 
     expect(visitTownServices(p, { ...SERVICE_SUPPLIES, town, day: 1, ledger, coin: openCoin(statistics), report: () => {} }, defaultTownServiceSteps())).toBe(true);
 
     expect(p).toMatchObject({ gold: left, earned: 30, spent });
-    expect(shop).toMatchObject({ treasury, earned, spent: 5 });
+    expect(shop).toMatchObject({ treasury, earned, spent: service === 'apothecary' ? 55 : 5 });
     expect(ledger).toEqual({ itemsSold: 3 });
     expect(statistics.goldSpentByHeroes).toBe(totalSpent);
     expect(p.members.map((h) => h.goldSpent)).toEqual(service === 'smith' || service === 'enchanter' ? [cost, 0, 0, 0] : [0, 0, 0, 0]);
-    if (service === 'apothecary') expect(p.potions).toBe(4);
+    if (service === 'apothecary') expect(p.potions).toEqual({ basic: 4 });
     if (service === 'guild') expect(p).toMatchObject({ guildMember: true, duesPaidDay: 1 });
     if (service === 'temple') expect(p.blessed).toBe(true);
     if (service === 'smith') expect(p.members[0]!.armorTier).toBe(1);
     if (service === 'enchanter') { expect(shop.stock).toEqual([]); expect(p.members[0]!.items[0]!.name).toBe('Shield +1'); }
-    assertConservation(before, totalGold(world));
+    assertConservation(before, totalGold(world), 0, service === 'apothecary' ? 50 : 0);
     assertHolderCounters(world, starting);
   });
 });
@@ -360,9 +362,9 @@ describe('homecoming payments', () => {
     const starting = openings(world);
     const before = totalGold(world);
     const ledger = { heroesDied: 0, partiesWiped: 0 };
-    const statistics = { goldPaid: 0, goldSpentByHeroes: 0 };
+    const statistics = { goldPaid: 0, goldSpentByHeroes: 0, goldSpentOnProduction: 0 };
     const reports: string[] = [];
-    const roster = new CompanyRoster(DEFAULT_COMPANY_ROSTER_CONFIG, DEFAULT_HERO_ECONOMY, DEFAULT_TOWN_CONFIG, DEFAULT_HOLDING_CONFIG);
+    const roster = new CompanyRoster(DEFAULT_COMPANY_ROSTER_CONFIG, DEFAULT_HERO_ECONOMY, DEFAULT_TOWN_CONFIG, DEFAULT_HOLDING_CONFIG, DEFAULT_POLICIES_CONFIG);
     roster.replaceForScenario([p]);
     const board = new Board(DEFAULT_BOARD_CONFIG);
     board.replaceForScenario([q]);
@@ -387,7 +389,11 @@ describe('homecoming payments', () => {
 
 describe('retirement capital', () => {
   it('spends 25000 gp and starts the veteran’s business with 5000 gp', () => {
-    const game = scene((s, rng) => { s.parties = [provisioned(rng, 8, 30000)]; });
+    const game = scene((s, rng) => {
+      const party = provisioned(rng, 8, 30000);
+      party.potions = { supreme: 4 }; // already at the stock target, so this hour is retirement
+      s.parties = [party];
+    });
     watchBooks(game).step();
     expect(game.view().parties[0]).toMatchObject({ gold: 5000, earned: 0, spent: 25000 });
     const veteran = game.view().town.employers.find((e) => e.title === 'Retired adventurer')!;
@@ -515,7 +521,7 @@ describe('company purse transfers', () => {
         status: 'taken', assetId: a.id, lairId: destination === 'Lair' ? l.id : null,
         encounters: [{ difficulty: 'hard', monsters: [{ name: 'Ancient Red Dragon', count: 6, xpEach: 62000 }], totalXp: 372000, tier: 'High' }],
       });
-      Object.assign(p, { status: 'questing', questId: q.id, potions: 0 });
+      Object.assign(p, { status: 'questing', questId: q.id, potions: {} });
       for (const h of p.members) h.hp = 1;
       p.members[0]!.items = [instantiate(rng, ITEM_CATALOGUE[0]!)];
       p.stash = [instantiate(rng, ITEM_CATALOGUE.find((item) => item.name === 'Shield +1')!)];
@@ -562,10 +568,10 @@ describe('opening gold sources', () => {
     expect(world.lairs.map((l) => [l.level, l.hoard.gold])).toEqual([[6, 600], [7, 700], [8, 800]]);
     assertConservation(0, totalGold({ ...world, town: { ...world.town, employers: [] } }), 2100);
   });
-  it('brings a new company’s 20 gp starting purse into the world', () => {
+  it('brings a new company’s 50 gp starting purse into the world', () => {
     const game = Game.forTesting({ seed: 42, roster: { maxCompanies: 1 }, world: { maxOpenQuests: 0 } }, (s) => { s.lairs = []; });
     watchBooks(game).step();
-    expect(readWorld(game).parties[0]).toMatchObject({ gold: 20, earned: 0, spent: 0 });
+    expect(readWorld(game).parties[0]).toMatchObject({ gold: 50, earned: 0, spent: 0 });
     expect(game.view().stats).toMatchObject({ partiesArrived: 1, goldPaid: 0, goldSpentByHeroes: 0 });
   });
 });
@@ -586,7 +592,7 @@ describe('fallen equipment and the surviving purse', () => {
       const q = work(s.town, p, { status: 'taken', assetId: a.id, lairId: destination === 'Lair' ? l.id : null,
         encounters: [{ difficulty: 'hard', monsters: [{ name: 'Goblin Warrior', count: 7, xpEach: 50 }], totalXp: 350, tier: 'High' }],
       });
-      Object.assign(p, { status: 'questing', questId: q.id, potions: 0 });
+      Object.assign(p, { status: 'questing', questId: q.id, potions: {} });
       s.parties = [p]; s.quests = [q]; s.lairs = destination === 'Lair' ? [l] : [];
     });
     watchBooks(game).step();

@@ -5,14 +5,13 @@ import { LONG_SIMULATION_TIMEOUT_MS } from './helpers/simulation';
 
 /**
  * SHA-256 over every tick of a 400-hour run, with each company's investigations
- * removed before hashing. Recorded from the commit before inquiries changed
- * shape, for seeds 7, 42 and 20260907. A match means nothing else in the
- * serialized world moved.
+ * removed before hashing, for seeds 7, 42 and 20260907. A match means nothing
+ * but investigations moved against this baseline.
  */
 const STRIPPED_WORLD = {
-  7: 'fd0bd29beed4c5f2cffe251eb5b8a32480f1c4ccf30ccd67f3d8eab8e24dcfa7',
-  42: '7eb12a0ac2695ad2d1885f01c1b216a0ecee4e3bd044554423d83c148d4d6827',
-  20260907: 'f1200ba338de87cd00d69a1fca88fc1b6e75ff2a9c91206f962f2b651e91d0bb',
+  7: '562d2560dc64c52c9223dcd3ce4bfce9d93e3ca1b6883223f314ebc88b8de4ed',
+  42: '2136fb35070c4bc551b368ac2f4f1a66a0e6ab33d7cf044a70cc6906a614967d',
+  20260907: 'f6820bd5ad9bea78b4a1ffca84d08da448ab44fb02ac0fb84379945cea3f83dd',
 } as const;
 
 function withoutInquiries(serialized: string): string {
@@ -22,7 +21,7 @@ function withoutInquiries(serialized: string): string {
 }
 
 it.each([7, 42, 20260907] as const)(
-  'matches the pre-change world once investigations are removed for seed %s',
+  'matches the baseline world once investigations are removed for seed %s',
   (seed) => {
     const game = new Game({ seed });
     const history = createHash('sha256');

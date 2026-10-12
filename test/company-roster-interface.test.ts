@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { CompanyRoster, DEFAULT_COMPANY_ROSTER_CONFIG, type CompanyRosterConfig, type RosterEvent, type RosterContext } from '../src/adventurers/company-roster';
+import { DEFAULT_POLICIES_CONFIG } from '../src/adventurers/policies';
 import { aliveMembers, createParty, type Party, type ReadonlyParty } from '../src/adventurers/party';
 import { killHero, resurrectionCost } from '../src/adventurers/hero';
 import { Rng } from '../src/core/rng';
@@ -16,7 +17,7 @@ import { DEFAULT_HOLDING_CONFIG } from '../src/town/assets';
 function setup(config: Partial<CompanyRosterConfig> = {}) {
   const rng = new Rng(8);
   const town = generateTown(rng, DEFAULT_TOWN_CONFIG, DEFAULT_HOLDING_CONFIG);
-  const roster = new CompanyRoster({ ...DEFAULT_COMPANY_ROSTER_CONFIG, ...config }, DEFAULT_HERO_ECONOMY, DEFAULT_TOWN_CONFIG, DEFAULT_HOLDING_CONFIG);
+  const roster = new CompanyRoster({ ...DEFAULT_COMPANY_ROSTER_CONFIG, ...config }, DEFAULT_HERO_ECONOMY, DEFAULT_TOWN_CONFIG, DEFAULT_HOLDING_CONFIG, DEFAULT_POLICIES_CONFIG);
   const events: RosterEvent[] = [];
   const context: RosterContext = {
     town, rng, tick: 1,
@@ -24,7 +25,7 @@ function setup(config: Partial<CompanyRosterConfig> = {}) {
     coin: openCoin(emptyGoldStatistics()), report: (event) => events.push(event),
   };
   const board = new Board(DEFAULT_BOARD_CONFIG);
-  const company = (level = 1, size = 4): Party => createParty(rng, level, size, 0, STARTING_GOLD);
+  const company = (level = 1, size = 4): Party => createParty(rng, level, size, 0, STARTING_GOLD, DEFAULT_POLICIES_CONFIG.potionSharing);
   const arrivals = () => roster.arrivals({ ...context, board });
   return { roster, context, company, events, board, arrivals };
 }
@@ -115,7 +116,7 @@ describe('CompanyRoster arrivals', () => {
     context.report = (event) => {
       expect(event.kind).toBe('party');
       expect(context.ledger.partiesArrived).toBe(1);
-      expect(roster.active()[0]).toMatchObject({ status: 'idle', arrivedAt: 1, gold: 20 });
+      expect(roster.active()[0]).toMatchObject({ status: 'idle', arrivedAt: 1, gold: 50 });
     };
     arrivals();
     expect(roster.active()).toHaveLength(1);
@@ -258,16 +259,16 @@ describe('CompanyRoster recruitment and absorption', () => {
     const kept = donor.members.slice(1);
     host.gold = 10;
     donor.gold = 30;
-    host.potions = 1;
-    donor.potions = 2;
+    host.potions = { basic: 1 };
+    donor.potions = { greater: 2 };
     donor.renown = 7;
     const item = instantiate(context.rng, ITEM_CATALOGUE[0]!);
     donor.stash = [item];
     roster.replaceForScenario([host, donor]);
     expect(roster.merge(host, donor, context)).toEqual(kept);
     expect(aliveMembers(host)).toHaveLength(5);
-    expect(host).toMatchObject({ gold: 40, earned: 30, potions: 3, renown: 7, stash: [item] });
-    expect(donor).toMatchObject({ gold: 0, spent: 30, potions: 0, stash: [], status: 'idle' });
+    expect(host).toMatchObject({ gold: 40, earned: 30, potions: { basic: 1, greater: 2 }, renown: 7, stash: [item] });
+    expect(donor).toMatchObject({ gold: 0, spent: 30, potions: {}, stash: [], status: 'idle' });
     expect(context.coin.statistics).toEqual(emptyGoldStatistics());
   });
 

@@ -1,7 +1,10 @@
 import { buildHero, Encounter, EncounterError, getFootprintSize, getMonsterByName, type BattleLog, type Creature, type HeroClassName, type MonsterData } from 'battlecast-engine';
 import type { DeepReadonly } from '../core/readonly';
 import { Rng } from '../core/rng';
-import { combinedEffect, heroAc, isBloodied, potionHeal, skillBonus, WEAPON_CLASSES, type Hero, type HeroEconomyConfig } from '../adventurers/hero';
+import { combinedEffect, heroAc, skillBonus, WEAPON_CLASSES, type Hero, type HeroEconomyConfig } from '../adventurers/hero';
+import { planDrinkingRound, type DrinkingAdventurer, type PotionSharingPolicy } from '../adventurers/policies';
+import { drinkPotion, type PotionConfig, type PotionPack } from '../adventurers/potions';
+import type { DiceSource } from '../core/dice';
 import { freeze } from '../core/freeze';
 import type { EncounterSpec } from '../quests/encounters';
 
@@ -31,8 +34,8 @@ export interface CombatOutcome {
   heroes: HeroResult[];
   /** Monster XP the party earns (0 unless it won). */
   xpEarned: number;
-  /** Healing potions consumed from the supplied shared pack. */
-  potionsDrunk: number;
+  /** Healing potions consumed from the supplied shared pack, counted per tier. */
+  potionsDrunk: PotionPack;
 }
 
 /** House rules layered on the engine: round cap, surprise, and who spots whom. */
@@ -72,7 +75,11 @@ export const DEFAULT_COMBAT_CONFIG: CombatConfig = freeze({
  */
 export interface CombatOptions {
   /** Healing potions available in the shared pack (defaults to none). */
-  potions?: number;
+  potions?: PotionPack;
+  /** Who is served first when the pack is short. Absent means company order. */
+  potionSharing?: PotionSharingPolicy;
+  /** Potion rolls. Production draws a child generator after placement; tests script this. */
+  dice?: DiceSource;
   /** A temple blessing: extra hit points for the whole company. */
   blessingHp?: number;
   /** No running from this one (a boss in its own hall). */
@@ -125,9 +132,8 @@ function fmtBonus(n: number): string {
   return n === 0 ? '' : n > 0 ? `+${n}` : `${n}`;
 }
 
-export function runCombat(heroes: Hero[], spec: DeepReadonly<EncounterSpec>, seed: number, opts: CombatOptions & { rules: CombatConfig; heroes: HeroEconomyConfig }): CombatOutcome {
-  const { rules } = opts;
-  const economy = opts.heroes;
+export function runCombat(heroes: Hero[], spec: DeepReadonly<EncounterSpec>, seed: number, opts: CombatOptions & { rules: CombatConfig; heroes: HeroEconomyConfig; catalogue: PotionConfig }): CombatOutcome {
+  const { rules, catalogue } = opts;
   const fighters = heroes.filter((h) => h.alive);
   const rng = new Rng(seed);
   const enc = new Encounter({ gridSize: GRID, seed });
@@ -205,6 +211,8 @@ export function runCombat(heroes: Hero[], spec: DeepReadonly<EncounterSpec>, see
     });
   });
 
+  const potionSeed = rng.seed();
+  const potionDice = opts.dice ?? new Rng(potionSeed);
   enc.start();
   for (const h of fighters) {
     const carried = h.maxHp - h.hp;
@@ -220,7 +228,8 @@ export function runCombat(heroes: Hero[], spec: DeepReadonly<EncounterSpec>, see
   let rounds = 0;
   let winner: 'red' | 'blue' | 'draw' | null = null;
   let retreated = false;
-  let potionsDrunk = 0;
+  const pack: PotionPack = { ...(opts.potions ?? {}) };
+  const potionsDrunk: PotionPack = {};
   for (let i = 0; i < rules.maxRounds; i++) {
     const r = enc.runRound();
     rounds = r.round;
@@ -233,24 +242,33 @@ export function runCombat(heroes: Hero[], spec: DeepReadonly<EncounterSpec>, see
       winner = r.winner;
       break;
     }
-    // Stand-in for the 2024 Bonus Action: conscious Bloodied heroes drink;
-    // a fallen hero receives a potion from the first conscious companion.
     // Between rounds, before deciding whether the company must flee.
-    const companion = fighters.find((h) => {
-      const c = enc.creatures.find((x) => x.id === idByHero.get(h.id));
-      return c?.isAlive && c.currentHp > 0 && !c.conditions.includes('unconscious');
-    });
+    // The company plans the round; each drink is taken from this fight's copy of the pack.
+    const living: DrinkingAdventurer[] = [];
     for (const h of fighters) {
-      if (!companion || potionsDrunk >= (opts.potions ?? 0)) break;
       const c = enc.creatures.find((x) => x.id === idByHero.get(h.id));
-      if (!c?.isAlive || !isBloodied({ hp: c.currentHp, maxHp: c.maxHp })) continue;
-      if (c.currentHp > 0 && c.conditions.includes('unconscious')) continue;
-      const fallen = c.currentHp <= 0;
-      enc.heal(c.id, potionHeal(h, economy));
-      potionsDrunk += 1;
-      lines.push(fallen
-        ? `${companion.name} gives ${h.name} a healing potion.`
-        : `${h.name} drinks a healing potion.`);
+      if (!c?.isAlive) continue;
+      living.push({
+        id: h.id,
+        name: h.name,
+        hp: c.currentHp,
+        maxHp: c.maxHp,
+        conscious: c.currentHp > 0 && !c.conditions.includes('unconscious'),
+      });
+    }
+    const plan = planDrinkingRound(
+      living,
+      pack,
+      catalogue.tiers,
+      opts.potionSharing === undefined ? undefined : { potionSharing: opts.potionSharing },
+    );
+    for (const drink of plan) {
+      const h = fighters.find((hero) => hero.id === drink.id)!;
+      const c = enc.creatures.find((x) => x.id === idByHero.get(h.id))!;
+      const draught = drinkPotion(pack, drink.tier, potionDice, h.name, drink.giver);
+      enc.heal(c.id, draught.total);
+      potionsDrunk[drink.tier.name] = (potionsDrunk[drink.tier.name] ?? 0) + 1;
+      lines.push(draught.text);
     }
     if (!opts.noRetreat && shouldFlee(enc.creatures, fighters.length, rules)) {
       retreated = true;

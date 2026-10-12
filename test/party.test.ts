@@ -1,4 +1,5 @@
 import { CompanyRoster, DEFAULT_COMPANY_ROSTER_CONFIG } from '../src/adventurers/company-roster';
+import { DEFAULT_POLICIES_CONFIG } from '../src/adventurers/policies';
 import { describe, expect, it } from 'vitest';
 import { createHero, gainXp, killHero, resurrectHero, resurrectionCost } from '../src/adventurers/hero';
 import { aliveMembers, createParty, partyLevel } from '../src/adventurers/party';
@@ -38,16 +39,16 @@ describe('hero progression', () => {
 describe('party merging', () => {
   it('takes every donor survivor while there is room for six', () => {
     const rng = new Rng(5);
-    const host = createParty(rng, 3, 4, 0, STARTING_GOLD);
-    const donor = createParty(rng, 3, 4, 0, STARTING_GOLD);
+    const host = createParty(rng, 3, 4, 0, STARTING_GOLD, DEFAULT_POLICIES_CONFIG.potionSharing);
+    const donor = createParty(rng, 3, 4, 0, STARTING_GOLD, DEFAULT_POLICIES_CONFIG.potionSharing);
     killHero(host.members[0]!);
     killHero(host.members[1]!);
     killHero(donor.members[0]!);
     host.gold = 10;
     donor.gold = 5;
-    const roster = new CompanyRoster(DEFAULT_COMPANY_ROSTER_CONFIG, DEFAULT_HERO_ECONOMY, DEFAULT_TOWN_CONFIG, DEFAULT_HOLDING_CONFIG);
+    const roster = new CompanyRoster(DEFAULT_COMPANY_ROSTER_CONFIG, DEFAULT_HERO_ECONOMY, DEFAULT_TOWN_CONFIG, DEFAULT_HOLDING_CONFIG, DEFAULT_POLICIES_CONFIG);
     roster.replaceForScenario([host, donor]);
-    const leftover = roster.merge(host, donor, { coin: openCoin({ goldPaid: 0, goldSpentByHeroes: 0 }) });
+    const leftover = roster.merge(host, donor, { coin: openCoin({ goldPaid: 0, goldSpentByHeroes: 0, goldSpentOnProduction: 0 }) });
     expect(roster.isReady(host)).toBe(true);
     expect(aliveMembers(host).length).toBe(5); // 2 + 3: room for six, so everyone comes along
     expect(leftover.length).toBe(0);

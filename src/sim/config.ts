@@ -1,5 +1,8 @@
 import { DEFAULT_COMPANY_ROSTER_CONFIG, type CompanyRosterConfig } from '../adventurers/company-roster';
 import { DEFAULT_HERO_ECONOMY, type HeroEconomyConfig } from '../adventurers/hero';
+import { DEFAULT_POLICIES_CONFIG, type PoliciesConfig } from '../adventurers/policies';
+import { DEFAULT_POTION_CONFIG, type PotionConfig } from '../adventurers/potions';
+import { parseDice } from '../core/dice';
 import { freeze } from '../core/freeze';
 import { DEFAULT_COMBAT_CONFIG, type CombatConfig } from '../combat/battlecast';
 import { DEFAULT_ENCOUNTER_CONFIG, type EncounterConfig } from '../quests/encounters';
@@ -9,7 +12,7 @@ import { ASSET_KINDS, DEFAULT_HOLDING_CONFIG, type HoldingConfig } from '../town
 import { DEFAULT_ITEM_CONFIG, type ItemConfig } from '../items/items';
 import { DEFAULT_LAIR_CONFIG, type LairConfig } from '../town/lairs';
 import { DEFAULT_TOWN_SERVICE_CONFIG, SERVICE_STEP_REGISTRY, type TownServiceConfig } from '../town/services';
-import { DEFAULT_TOWN_CONFIG, EMPLOYER_KINDS, type TownConfig } from '../town/town';
+import { DEFAULT_TOWN_CONFIG, EMPLOYER_KINDS, SERVICE_KINDS, type TownConfig } from '../town/town';
 import { DEFAULT_BOARD_CONFIG, type BoardConfig } from './board';
 import { DEFAULT_KIND_CONFIGS, type WorkKindConfigs } from './kind-config';
 import { DEFAULT_EXPEDITION_CONFIG, type ExpeditionConfig } from './expedition';
@@ -34,6 +37,8 @@ export interface GameConfig {
   quests: QuestConfig;
   encounters: EncounterConfig;
   heroes: HeroEconomyConfig;
+  potions: PotionConfig;
+  policies: PoliciesConfig;
   town: TownConfig;
   holdings: HoldingConfig;
   items: ItemConfig;
@@ -53,6 +58,8 @@ export const DEFAULT_CONFIG: GameConfig = freeze({
   quests: DEFAULT_QUEST_CONFIG,
   encounters: DEFAULT_ENCOUNTER_CONFIG,
   heroes: DEFAULT_HERO_ECONOMY,
+  potions: DEFAULT_POTION_CONFIG,
+  policies: DEFAULT_POLICIES_CONFIG,
   town: DEFAULT_TOWN_CONFIG,
   holdings: DEFAULT_HOLDING_CONFIG,
   items: DEFAULT_ITEM_CONFIG,
@@ -76,6 +83,7 @@ type Spec =
   | { kind: 'range'; integer?: boolean }
   | { kind: 'boolean' }
   | { kind: 'enum'; values: readonly string[] }
+  | { kind: 'string'; nonEmpty?: boolean }
   | { kind: 'strings'; nonEmpty?: boolean }
   | { kind: 'list'; item: Spec; weights?: boolean }
   | { kind: 'section'; fields: Record<string, Spec> };
@@ -114,7 +122,7 @@ const GAME_SPEC: Spec = {
     ]),
     services: numberSection(['duesPeriodDays']),
     lairs: numberSection(['strengthCap', 'initialStrength', 'minRaidInterval', 'baseRaidInterval', 'raidIntervalPerStrength']),
-    heroes: numberSection(['maxArmorTier', 'potionHealMinimum', 'potionHealDivisor']),
+    heroes: numberSection(['maxArmorTier']),
     holdings: numberSection(['incomeSpreadMin', 'incomeSpreadSpan'], fraction),
     items: numberSection(['resaleDivisor'], whole(1)),
     world: numberSection([
@@ -131,6 +139,7 @@ function withFields(spec: Spec, fields: Record<string, Spec>): Spec {
 }
 
 const boardSpec = withFields(GAME_SPEC.kind === 'section' ? GAME_SPEC.fields.board! : GAME_SPEC, {
+  rewardSetAsideFor: { kind: 'strings' },
   difficultyScale: { kind: 'number', min: 0 },
   expiryCooldown: wholeRange,
   failureCooldown: wholeRange,
@@ -151,7 +160,6 @@ const intelSpec = withFields(sectionField(GAME_SPEC, 'intel'), {
 });
 
 const expeditionSpec = withFields(sectionField(GAME_SPEC, 'expedition'), {
-  shortRestHealFraction: fraction,
   carousingShare: chance,
   carousingMinimum: price,
   roomFeePerLevel: price,
@@ -163,6 +171,7 @@ const servicesSpec = withFields(sectionField(GAME_SPEC, 'services'), {
   blessingCostPerLevel: price,
   blessingHpPerLevel: count,
   blessingReserveFactor: fraction,
+  potionCoverFraction: chance,
   steps: { kind: 'strings' },
 });
 
@@ -177,8 +186,6 @@ const heroesSpec = withFields(sectionField(GAME_SPEC, 'heroes'), {
   armorTierFactor: fraction,
   resurrectionBase: price,
   resurrectionQuadratic: price,
-  potionBase: price,
-  potionPerLevel: price,
   startingGoldPerLevel: price,
   resurrectedHpFraction: chance,
   resurrectedHpMinimum: whole(1),
@@ -316,6 +323,41 @@ const kindsSpec: Spec = {
   },
 };
 
+const potionTier: Spec = {
+  kind: 'section',
+  fields: {
+    name: { kind: 'string', nonEmpty: true },
+    formula: { kind: 'string', nonEmpty: true },
+    price: { ...price, integer: true },
+    productionCost: { ...price, integer: true },
+    productionTicks: count,
+  },
+};
+
+const potionsSpec: Spec = {
+  kind: 'section',
+  fields: {
+    tiers: { kind: 'list', item: potionTier },
+  },
+};
+
+const policiesSpec: Spec = {
+  kind: 'section',
+  fields: {
+    potionSharing: {
+      kind: 'list',
+      weights: true,
+      item: {
+        kind: 'section',
+        fields: {
+          policy: { kind: 'enum', values: ['company-order', 'most-hurt'] },
+          weight: count,
+        },
+      },
+    },
+  },
+};
+
 const SPEC: Spec = {
   kind: 'section',
   fields: {
@@ -330,6 +372,8 @@ const SPEC: Spec = {
     quests: questsSpec,
     encounters: encountersSpec,
     heroes: heroesSpec,
+    potions: potionsSpec,
+    policies: policiesSpec,
     town: townSpec,
     holdings: sectionField(GAME_SPEC, 'holdings'),
     items: itemsSpec,
@@ -380,19 +424,25 @@ export function mergeConfig(base: unknown, override: unknown): unknown {
 
 /**
  * Check a complete configuration, such as the object a YAML loader would return.
- * A missing section, a wrong type, a negative price, or a range whose minimum
- * exceeds its maximum is reported in words. A valid value is returned as `GameConfig`.
+ * A missing section, a wrong type, a negative price, a potion price that is not
+ * a whole number, a potion formula whose lowest total is below 1, or a range
+ * whose minimum exceeds its maximum is reported in words. A valid value is
+ * returned as `GameConfig`.
  */
 export function validateGameConfig(value: unknown): ConfigResult {
   const errors: string[] = [];
   check(value, SPEC, '', errors);
-  if (errors.length === 0 && isPlainObject(value)) checkNames(value, errors);
+  if (isPlainObject(value)) {
+    if (errors.length === 0) checkNames(value, errors);
+    checkPotionFormulas(value, errors);
+  }
   if (errors.length > 0) return { ok: false, errors };
   return { ok: true, config: value as GameConfig };
 }
 
 /** Names a configuration may use, each checked against the catalogue that defines it. */
 const NAME_LISTS: readonly { path: string; label: string; allowed: readonly string[] }[] = [
+  { path: 'board.rewardSetAsideFor', label: 'employer kind or town service', allowed: [...EMPLOYER_KINDS, ...SERVICE_KINDS] },
   { path: 'town.retiredHoldings', label: 'holding', allowed: Object.keys(ASSET_KINDS) },
   { path: 'quests.relicHoldings', label: 'holding', allowed: Object.keys(ASSET_KINDS) },
   { path: 'quests.guildOnlyKinds', label: 'employer kind', allowed: EMPLOYER_KINDS },
@@ -408,6 +458,29 @@ function checkNames(value: Record<string, unknown>, errors: string[]): void {
       if (!list.allowed.includes(name)) errors.push(`${list.path}: unknown ${list.label} "${name}"`);
     }
   }
+}
+
+function checkPotionFormulas(value: Record<string, unknown>, errors: string[]): void {
+  const potions = value.potions;
+  if (!isPlainObject(potions) || !Array.isArray(potions.tiers)) return;
+  const names = new Set<string>();
+  potions.tiers.forEach((tier, index) => {
+    if (!isPlainObject(tier)) return;
+    if (typeof tier.formula === 'string') {
+      try {
+        const dice = parseDice(tier.formula);
+        const lowestTotal = dice.count + dice.bonus;
+        if (lowestTotal < 1) {
+          errors.push(`potions.tiers[${index}].formula: lowest total ${lowestTotal} is below 1`);
+        }
+      } catch (error) {
+        errors.push(`potions.tiers[${index}].formula: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
+    if (typeof tier.name !== 'string') return;
+    if (names.has(tier.name)) errors.push(`potions.tiers: duplicate tier "${tier.name}"`);
+    names.add(tier.name);
+  });
 }
 
 function namesAt(value: Record<string, unknown>, path: string): readonly string[] | undefined {
@@ -486,6 +559,14 @@ function check(value: unknown, spec: Spec, path: string, errors: string[]): void
     if (typeof value !== 'string' || !spec.values.includes(value)) {
       errors.push(`${place}: expected one of ${spec.values.join(', ')}, got ${seen(value)}`);
     }
+    return;
+  }
+  if (spec.kind === 'string') {
+    if (typeof value !== 'string') {
+      errors.push(`${place}: expected a string, got ${seen(value)}`);
+      return;
+    }
+    if (spec.nonEmpty && value.length === 0) errors.push(`${place}: empty string`);
     return;
   }
   if (spec.kind === 'strings') {

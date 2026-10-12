@@ -1,0 +1,210 @@
+import { describe, expect, it } from 'vitest';
+import { createHero } from '../src/adventurers/hero';
+import { createParty } from '../src/adventurers/party';
+import { DEFAULT_POLICIES_CONFIG } from '../src/adventurers/policies';
+import { Rng } from '../src/core/rng';
+import { Game } from '../src/sim/game';
+import { serviceOf } from '../src/town/town';
+import { STARTING_GOLD } from './helpers/supplied-config';
+import { compareScaleToBaseline, type TuneBaseline } from '../scripts/tune-report';
+import {
+  ApothecaryTracker, compareMetrics, formatComparison, formatScaleReport, parseTuneArgs,
+  summarizeApothecaries, type ScaleReport, type TuneMetrics,
+} from '../scripts/tune-report';
+
+describe('tuning arguments', () => {
+  it('expands an inclusive seed range', () => {
+    const seeds = parseTuneArgs({ SEEDS: '1..80' }).seeds;
+    expect(seeds).toHaveLength(80);
+    expect(seeds.slice(0, 3)).toEqual([1, 2, 3]);
+    expect(seeds.slice(-3)).toEqual([78, 79, 80]);
+  });
+
+  it('accepts a comma list of seeds', () => {
+    expect(parseTuneArgs({ SEEDS: '1,2,3' }).seeds).toEqual([1, 2, 3]);
+  });
+
+  it('rejects an empty seed entry with a clear error', () => {
+    expect(() => parseTuneArgs({ SEEDS: '1,2,' })).toThrow('SEEDS must not contain empty entries');
+  });
+
+  it('includes the game difficulty in the default scales and keeps the existing run defaults', () => {
+    expect(parseTuneArgs({})).toEqual({
+      seeds: [1, 2, 3], scales: [1, 1.15, 1.25, 1.5, 1.75], ticks: 600,
+    });
+  });
+
+  it.each(['', '1,,2', '1, ', 'two', '1.5', '-1', '3..1', '1..', 'Infinity'])('rejects invalid seeds %j', (SEEDS) => {
+    expect(() => parseTuneArgs({ SEEDS })).toThrow(/SEEDS/);
+  });
+
+  it.each(['', '1,', '0', '-1', 'NaN'])('rejects invalid scales %j', (SCALES) => {
+    expect(() => parseTuneArgs({ SCALES })).toThrow(/SCALES/);
+  });
+
+  it.each(['', '-1', '1.5', 'NaN'])('rejects invalid tick counts %j', (TICKS) => {
+    expect(() => parseTuneArgs({ TICKS })).toThrow(/TICKS/);
+  });
+});
+
+describe('baseline comparison', () => {
+  const baseline: TuneMetrics = { quests: 100, failed: 100, deaths: 100, deathsPerQuest: 1, wiped: 100, arrived: 100, raised: 100 };
+
+  it('prints deviations for the five tuning metrics and passes both inclusive 15% edges', () => {
+    const current = { ...baseline, quests: 115, failed: 85, deathsPerQuest: 0.85 };
+    expect(compareMetrics(current, baseline, 0.15)).toEqual([
+      { metric: 'quests', deviationPercent: 15, passed: true },
+      { metric: 'failed', deviationPercent: -15, passed: true },
+      { metric: 'deathsPerQuest', deviationPercent: -15.000000000000002, passed: true },
+      { metric: 'wiped', deviationPercent: 0, passed: true },
+      { metric: 'raised', deviationPercent: 0, passed: true },
+    ]);
+    expect(formatComparison(compareMetrics(current, baseline, 0.15))).toEqual([
+      'baseline quests: deviation 15% PASS',
+      'baseline failed: deviation -15% PASS',
+      'baseline deathsPerQuest: deviation -15.000000000000002% PASS',
+      'baseline wiped: deviation 0% PASS',
+      'baseline raised: deviation 0% PASS',
+      'baseline comparison: PASS',
+    ]);
+  });
+
+  it('fails deviations outside either edge, including an easier result', () => {
+    const comparison = compareMetrics({ ...baseline, quests: 115.01, raised: 84.99 }, baseline, 0.15);
+    expect(comparison.filter((metric) => !metric.passed).map((metric) => metric.metric)).toEqual(['quests', 'raised']);
+    expect(formatComparison(comparison).at(-1)).toBe('baseline comparison: FAIL');
+  });
+
+  it('passes an unchanged zero baseline and fails a new nonzero value', () => {
+    const reference = { ...baseline, wiped: 0, raised: 0 };
+    expect(compareMetrics({ ...reference, raised: 1 }, reference, 0.15).slice(-2)).toEqual([
+      { metric: 'wiped', deviationPercent: 0, passed: true },
+      { metric: 'raised', deviationPercent: Infinity, passed: false },
+    ]);
+  });
+});
+
+describe('baseline run selection', () => {
+  const report: ScaleReport = {
+    scale: 1.75,
+    metrics: { quests: 100, failed: 100, deaths: 100, deathsPerQuest: 1, wiped: 100, arrived: 100, raised: 100 },
+    apothecary: { ruined: 0, count: 10, lowestTreasuryReached: 50, treasuryAtEnd: 100 },
+  };
+  const baseline: TuneBaseline = {
+    tuning: {
+      ticks: 600, seeds: { from: 1, to: 80 },
+      results: [{ ...report, metrics: { ...report.metrics, raised: 50 } }],
+    },
+  };
+
+  it('reports different seeds without any metric verdict or failing status', () => {
+    expect(compareScaleToBaseline(parseTuneArgs({ SEEDS: '1..10' }), report, baseline, 0.15)).toEqual({
+      lines: ["baseline comparison: unavailable (seeds differ from baseline's 1..80)"], exitCode: 0,
+    });
+  });
+
+  it('leaves the default seed sample without a baseline verdict', () => {
+    expect(compareScaleToBaseline(parseTuneArgs({}), report, baseline, 0.15)).toEqual({
+      lines: ["baseline comparison: unavailable (seeds differ from baseline's 1..80)"], exitCode: 0,
+    });
+  });
+
+  it.each(['1,2,4', '1,2,2'])('rejects a different sample of the same size: %s', (SEEDS) => {
+    const smallBaseline = { tuning: { ...baseline.tuning, seeds: { from: 1, to: 3 } } };
+    expect(compareScaleToBaseline(parseTuneArgs({ SEEDS }), report, smallBaseline, 0.15)).toEqual({
+      lines: ["baseline comparison: unavailable (seeds differ from baseline's 1..3)"], exitCode: 0,
+    });
+  });
+
+  it('compares matching seeds and still fails a metric outside the band', () => {
+    const run = parseTuneArgs({ SEEDS: '1..80' });
+    const expected = {
+      lines: [
+        'baseline quests: deviation 0% PASS',
+        'baseline failed: deviation 0% PASS',
+        'baseline deathsPerQuest: deviation 0% PASS',
+        'baseline wiped: deviation 0% PASS',
+        'baseline raised: deviation 100% FAIL',
+        'baseline comparison: FAIL',
+      ], exitCode: 1,
+    };
+    expect(compareScaleToBaseline(run, report, baseline, 0.15)).toEqual(expected);
+    expect(compareScaleToBaseline({ ...run, seeds: [...run.seeds].reverse() }, report, baseline, 0.15)).toEqual(expected);
+  });
+});
+
+describe('tuning report', () => {
+  it('prints all metrics without rounding, including deaths and arrived', () => {
+    const report: ScaleReport = {
+      scale: 1.15,
+      metrics: { quests: 3.125, failed: 1.375, deaths: 1.5, deathsPerQuest: 0.48000000000000004, wiped: 0.125, arrived: 4.625, raised: 0.375 },
+      apothecary: { ruined: 0, count: 8, lowestTreasuryReached: 20, treasuryAtEnd: 42.125 },
+    };
+    expect(formatScaleReport(report)).toEqual([
+      'scale 1.15: quests 3.125  failed 1.375  deaths 1.5 (0.48000000000000004/quest)  wiped 0.125 of 4.625  raised 0.375',
+      'apothecary: ruined 0 of 8  lowest treasury reached 20  treasury at end (mean) 42.125  goldSpentOnProduction unavailable',
+    ]);
+  });
+
+  it('keeps a treasury dip from an intermediate tick and excludes other services', () => {
+    const tracker = new ApothecaryTracker();
+    tracker.observe({ town: { employers: [
+      { service: 'apothecary', treasury: 40, ruined: false },
+      { service: 'temple', treasury: -1000, ruined: true },
+    ] }, stats: {} });
+    tracker.observe({ town: { employers: [{ service: 'apothecary', treasury: -5, ruined: false }] }, stats: {} });
+    tracker.observe({ town: { employers: [{ service: 'apothecary', treasury: 25, ruined: true }] }, stats: {} });
+    expect(tracker.report()).toEqual({ ruined: 1, count: 1, lowestTreasuryReached: -5, treasuryAtEnd: 25 });
+  });
+
+  it('reports the lifetime production statistic when it appears without counting it twice', () => {
+    const tracker = new ApothecaryTracker();
+    const town = { employers: [{ service: 'apothecary' as const, treasury: 50, ruined: false }] };
+    tracker.observe({ town, stats: { goldSpentOnProduction: 25 } });
+    tracker.observe({ town, stats: { goldSpentOnProduction: 100 } });
+    const apothecary = tracker.report();
+    expect(apothecary.goldSpentOnProduction).toBe(100);
+    expect(formatScaleReport({ scale: 1, metrics: { quests: 0, failed: 0, deaths: 0, deathsPerQuest: 0, wiped: 0, arrived: 0, raised: 0 }, apothecary })[1])
+      .toContain('goldSpentOnProduction 100');
+  });
+
+  it('prints production spending from a real game purchase with configured cost and ticks', () => {
+    const game = Game.forTesting({
+      seed: 42, roster: { maxCompanies: 0, companySize: 1 }, world: { maxOpenQuests: 0 },
+      services: { steps: ['potions'] },
+      potions: { tiers: [{ name: 'basic', formula: '2d4+2', price: 50, productionCost: 7, productionTicks: 3 }] },
+    }, (scenario) => {
+      scenario.lairs = [];
+      for (const employer of scenario.town.employers) {
+        employer.assets = [];
+        employer.cooldown = 10000;
+      }
+      Object.assign(serviceOf(scenario.town, 'apothecary'), { treasury: 0, earned: 0, spent: 0 });
+      const rng = new Rng(71);
+      const party = createParty(rng, 1, 1, 0, STARTING_GOLD, DEFAULT_POLICIES_CONFIG.potionSharing);
+      party.members = [createHero(rng, 1, 'Fighter')];
+      party.members[0]!.maxHp = 32;
+      party.gold = 1190;
+      scenario.parties = [party];
+    });
+    const tracker = new ApothecaryTracker();
+    tracker.observe(game.view());
+    game.step();
+    const view = game.view();
+    expect(view.parties[0]).toMatchObject({ gold: 1090, earned: 0, spent: 100, potions: { basic: 2 } });
+    expect(view.town.employers.find((employer) => employer.service === 'apothecary'))
+      .toMatchObject({ treasury: 86, earned: 100, spent: 14 });
+    expect(view.stats).toMatchObject({ goldPaid: 0, goldSpentByHeroes: 100, goldSpentOnProduction: 14 });
+    tracker.observe(view);
+    tracker.observe(view);
+    expect(formatScaleReport({ scale: 1, metrics: { quests: 0, failed: 0, deaths: 0, deathsPerQuest: 0, wiped: 0, arrived: 0, raised: 0 }, apothecary: tracker.report() })[1])
+      .toBe('apothecary: ruined 0 of 1  lowest treasury reached 0  treasury at end (mean) 86  goldSpentOnProduction 14');
+  });
+
+  it('totals ruined shops across seeds, preserves the global minimum and averages final treasuries and production', () => {
+    expect(summarizeApothecaries([
+      { ruined: 1, count: 1, lowestTreasuryReached: -5, treasuryAtEnd: 25, goldSpentOnProduction: 100 },
+      { ruined: 0, count: 1, lowestTreasuryReached: 40, treasuryAtEnd: 100, goldSpentOnProduction: 50 },
+    ])).toEqual({ ruined: 1, count: 2, lowestTreasuryReached: -5, treasuryAtEnd: 62.5, goldSpentOnProduction: 75 });
+  });
+});

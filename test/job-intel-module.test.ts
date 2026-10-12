@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { resurrectionCost } from '../src/adventurers/hero';
 import { createParty, partyLevel, type Party } from '../src/adventurers/party';
+import { DEFAULT_POLICIES_CONFIG } from '../src/adventurers/policies';
 import { Rng } from '../src/core/rng';
 import type { EncounterSpec } from '../src/quests/encounters';
 import {
@@ -47,7 +48,7 @@ function contract() {
 }
 
 function scene(options: { gold?: number; level?: number; skillDc?: number; ruined?: ServiceKind } = {}) {
-  const company = createParty(new Rng(1), options.level ?? 1, 4, 0, STARTING_GOLD);
+  const company = createParty(new Rng(1), options.level ?? 1, 4, 0, STARTING_GOLD, DEFAULT_POLICIES_CONFIG.potionSharing);
   company.name = 'Lanterns';
   company.gold = options.gold ?? 1000;
   const town = generateTown(new Rng(2), DEFAULT_TOWN_CONFIG, DEFAULT_HOLDING_CONFIG);
@@ -124,7 +125,7 @@ describe('job intelligence', () => {
     expect(company.gold).toBe(resurrectionCost(partyLevel(company), DEFAULT_HERO_ECONOMY) * DEFAULT_JOB_INTEL_CONFIG.divinationReserveFactor);
     expect(company.spent).toBe(spent + cost);
     expect(temple).toMatchObject({ treasury: treasury + cost, earned: earned + cost });
-    expect(statistics).toEqual({ goldPaid: 0, goldSpentByHeroes: cost });
+    expect(statistics).toEqual({ goldPaid: 0, goldSpentByHeroes: cost, goldSpentOnProduction: 0 });
     expect(company.members.every((hero) => hero.goldSpent === 0)).toBe(true);
   });
 
@@ -163,7 +164,7 @@ describe('job intelligence', () => {
     expect(jobInquiry(company, work.id)?.roundsBought).toBe(1);
     expect(company.gold).toBe(resurrectionCost(partyLevel(company), DEFAULT_HERO_ECONOMY) * DEFAULT_JOB_INTEL_CONFIG.roundReserveFactor);
     expect(tavern.treasury).toBe(treasury + cost);
-    expect(statistics).toEqual({ goldPaid: 0, goldSpentByHeroes: cost });
+    expect(statistics).toEqual({ goldPaid: 0, goldSpentByHeroes: cost, goldSpentOnProduction: 0 });
     expect(company.members.every((hero) => hero.goldSpent === 0)).toBe(true);
   });
 

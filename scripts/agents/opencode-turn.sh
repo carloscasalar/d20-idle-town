@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Run one opencode turn (cheap-model tasks: reviews, checks) and keep its output
-# out of the caller's context.
+# Run one opencode turn (cheap reviews, and implementation when the other
+# implementers are at their limit) and keep its output out of the caller's context.
 #
 #   scripts/agents/opencode-turn.sh new <title> <prompt-file>
 #   scripts/agents/opencode-turn.sh resume <session-id> <prompt-file>
@@ -51,6 +51,9 @@ for line in open(path, errors="replace"):
 print(f"session: {session or 'unknown'}")
 print(f"exit: {status}")
 print(f"log: {path}")
+raw = open(path, errors="replace").read().lower()
+if status != "0" and any(word in raw for word in ("usage limit", "rate limit", "quota", "insufficient balance")):
+    print("LIMIT: the output mentions a usage or rate limit")
 print("--- final message ---")
 print(texts[-1] if texts else open(path, errors="replace").read()[-3000:])
 PY

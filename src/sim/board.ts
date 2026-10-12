@@ -12,10 +12,11 @@ import { describeEncounter, type EncounterConfig, type EncounterSpec } from '../
 import { DEFAULT_KIND_CONFIGS, type WorkKindConfigs } from './kind-config';
 import { assaultProfile, contractProfile, renownGain, type WorkProfile } from './work-kinds';
 import type { ItemConfig } from '../items/items';
-import { assetById, serviceOf, type Employer, type Town } from '../town/town';
+import { assetById, serviceOf, type Employer, type EmployerKind, type ServiceKind, type Town } from '../town/town';
 
 /** Plain data: ticks for durations, days for income, inclusive cooldown ranges. */
 export interface BoardConfig {
+  rewardSetAsideFor: (EmployerKind | ServiceKind)[];
   windfallDays: number;
   lootingDays: number;
   failureRenownLoss: number;
@@ -29,6 +30,7 @@ export interface BoardConfig {
 }
 
 export const DEFAULT_BOARD_CONFIG: BoardConfig = freeze({
+  rewardSetAsideFor: ['apothecary'],
   windfallDays: 4,
   lootingDays: 2,
   failureRenownLoss: 1,
@@ -50,6 +52,8 @@ export interface WorkPosting {
 }
 
 export interface WorkContext extends BoardContext {
+  rewardTreasury: (employer: Employer) => number;
+  bountyRewardCap: (employer: Employer) => number;
   config: DeepReadonly<BoardConfig>;
   kindTuning: DeepReadonly<WorkKindConfigs>;
   profileOf: (kind: QuestKind) => WorkProfile;
@@ -130,6 +134,32 @@ export class Board {
 
   taken(): readonly ReadonlyQuest[] {
     return Object.freeze(this.work.filter((work) => work.status === 'taken'));
+  }
+
+  /** Whether new Bounty funding meets the Game's threshold and can pay a positive reward. */
+  canFundBounty(employer: Employer, threshold: number, quests: QuestConfig): boolean {
+    return this.rewardTreasury(employer) >= threshold && this.bountyRewardCap(employer, quests) > 0;
+  }
+
+  /** Treasury available for sizing new work rewards; no gold is moved. */
+  private rewardTreasury(employer: Employer): number {
+    if (!this.setsAsideRewards(employer)) return employer.treasury;
+    const owed = this.work.reduce((total, work) => total + (
+      work.giverId === employer.id && (work.status === 'open' || work.status === 'taken')
+        ? work.reward : 0
+    ), 0);
+    return employer.treasury - owed;
+  }
+
+  /** Listed Bounties use the Contract treasury share, without its minimum. */
+  private bountyRewardCap(employer: Employer, quests: QuestConfig): number {
+    return this.setsAsideRewards(employer)
+      ? Math.floor(this.rewardTreasury(employer) * quests.treasuryShare)
+      : employer.treasury;
+  }
+
+  private setsAsideRewards(employer: Employer): boolean {
+    return this.config.rewardSetAsideFor.some((name) => name === employer.service || name === employer.kind);
   }
 
   byId(id: string | null): ReadonlyQuest | undefined {
@@ -240,6 +270,8 @@ export class Board {
       ...context,
       config: this.config,
       kindTuning: this.kindTuning,
+      rewardTreasury: (employer) => this.rewardTreasury(employer),
+      bountyRewardCap: (employer) => this.bountyRewardCap(employer, context.quests),
       profileOf: (kind) => this.profile(kind),
       breakLair: (lair, company, work, context) => this.breakLair(lair, company, work, context),
     };
@@ -310,6 +342,7 @@ function createContract(kind: QuestKind, terms: WorkPosting, context: WorkContex
   const lair = origin ?? context.lairs.find((candidate) => candidate.status === 'active' && candidate.theme === theme) ?? null;
   const work = generateQuest(context.rng, {
     employer,
+    rewardTreasury: context.rewardTreasury(employer),
     asset: holding,
     theme,
     level,
@@ -344,7 +377,9 @@ function postContract(quest: ReadonlyQuest, { employer, holding, lair: origin }:
 function createBounty(kind: QuestKind, { employer, lair }: WorkPosting, context: WorkContext): Quest {
   if (!lair) throw new Error('A Bounty needs a lair.');
   if (lair.questId !== null) throw new Error(`Cannot post a bounty on ${lair.name}: it already has one.`);
-  const work = generateAssault(context.rng, lair, employer, context.companySize, context.tick, context.config.difficultyScale, generationOf(context));
+  const rewardCap = context.bountyRewardCap(employer);
+  const work = generateAssault(context.rng, lair, { id: employer.id, rewardCap }, context.companySize, context.tick, context.config.difficultyScale, generationOf(context));
+  if (work.reward <= 0) throw new Error('A Bounty needs a positive reward.');
   return { ...work, kind };
 }
 

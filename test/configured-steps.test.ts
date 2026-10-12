@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createParty } from '../src/adventurers/party';
+import { DEFAULT_POLICIES_CONFIG } from '../src/adventurers/policies';
 import { Rng } from '../src/core/rng';
 import { DEFAULT_CONFIG, Game, validateGameConfig } from '../src/sim/game';
 import { SERVICE_STEP_NAMES } from '../src/town/services';
@@ -14,9 +15,9 @@ describe('configured steps', () => {
     const potionsFirst = shop(SERVICE_STEP_NAMES);
     const armourFirst = shop(['armour', ...SERVICE_STEP_NAMES.filter((name) => name !== 'armour')]);
 
-    expect(potionsFirst.potions).toBeGreaterThan(0);
+    expect(potionsFirst.potions).toEqual({ basic: 4 });
     expect(potionsFirst.members.every((hero) => hero.armorTier === 0)).toBe(true);
-    expect(armourFirst.potions).toBe(0);
+    expect(armourFirst.potions).toEqual({});
     expect(armourFirst.members.every((hero) => hero.armorTier === 1)).toBe(true);
   });
 
@@ -50,7 +51,7 @@ describe('configured steps', () => {
 });
 
 function shop(steps: readonly string[]) {
-  const company = createParty(new Rng(1), 1, 4, 0, STARTING_GOLD);
+  const company = createParty(new Rng(1), 1, 4, 0, STARTING_GOLD, DEFAULT_POLICIES_CONFIG.potionSharing);
   company.gold = 100000;
   const game = Game.forTesting({
     roster: { maxCompanies: 0 },

@@ -38,7 +38,7 @@ services using narrow contexts. No domain module imports Game.
    └──────┬─────┘ └──────┬─────┘ └───┬────────┘ └───┬────────┘
           │              │           │              │
           │       ┌──────▼───────────▼──────────────▼──┐
-          └───────►             src/core               │  Rng, XP table, names
+          └───────►             src/core               │  Rng, dice, XP, names
                   └────────────────────────────────────┘
 
    ┌────────────┐
@@ -55,9 +55,15 @@ services using narrow contexts. No domain module imports Game.
 
 ### `src/core` — primitives with no domain in them
 
+`dice.ts` parses `NdM+K` (also unmodified dice and negative bonuses), rolls from
+an explicit `int(min, max)` source and derives Assured healing from the formula.
+Game code never calls the engine's exported `rollDice`: outside `withRng` it
+falls back to `Math.random()`. Every game-side die uses this core module.
+
 | File | What it holds |
 | --- | --- |
-| `rng.ts` | `Rng`, a mulberry32 PRNG. `int`, `chance`, `pick`, `weighted`, `shuffle`, and `seed()` which forks a child seed for one combat. It also allocates namespaced IDs from counters owned by that RNG, without consuming random values. `hashString` turns a `?seed=` URL string into a number. |
+| `rng.ts` | `Rng`, a mulberry32 PRNG. `int`, `chance`, `pick`, `weighted`, `shuffle`, and `seed()` which forks a child seed. The world takes one per combat and one per actual Short rest; the combat adapter takes one more from its own generator for potion rolls. It also allocates namespaced IDs from counters owned by that RNG, without consuming random values. `hashString` turns a `?seed=` URL string into a number. |
+| `dice.ts` | Parses `NdM+K` (also unmodified dice and a negative bonus), rolls from an explicit `int(min, max)` source, and derives Assured healing. Game code uses this instead of the engine's `rollDice`. |
 | `xp.ts` | The 5e XP-to-level table, `levelForXp`, `xpToNextLevel`. |
 | `names.ts` | Syllable-based generators for heroes, nobles, merchants, factions, deities, towns and companies. |
 
@@ -77,11 +83,28 @@ RNG argument. Interleaving two worlds cannot change either world's IDs.
   magic items and a kill count. The class chassis (hit points, attacks) comes
   from the engine's `buildHero`; this module layers the game's own progression
   on top: `gainXp`, `healHero`, `killHero`, `resurrectHero`, armour tiers and
-  their costs, potion costs and healing, and `combinedEffect`, which folds every
+  their costs, and `combinedEffect`, which folds every
   equipped item into one bundle of AC / weapon / HP / speed / resistance
   modifiers. It also owns out-of-combat skill checks (`rollSkill`,
   `SKILL_ADVANTAGE`) used for tavern investigation and reading the road.
-- **`party.ts`** — a `Party` is members, shared gold, potions, stash, renown,
+- **`potions.ts`** — the Healing potion catalogue (name, formula, price,
+  independent production cost and production ticks) and the
+  shared pack, a count per tier. Drinking one potion rolls its formula on the
+  dice it is given, takes it from the pack, and gives the drink's text. The
+  game view copies that pack in catalogue order; the party card joins the view
+  and does not import the catalogue. Combat, the Short rest and the apothecary
+  ask it; none of them owns a second price or heal formula.
+- **`policies.ts`** — the Potion sharing policy (`company-order` or
+  `most-hurt`), the one weighted draw at company creation, and the company's
+  drinking decision. The decision plans one round: which Bloodied adventurers
+  drink, which tier, and which conscious companion gives a potion to a fallen
+  adventurer. It rolls no dice and writes nothing. Combat and the Short rest
+  ask it for that plan and apply each drink themselves. A missing policy is
+  company order.
+- **`hit-dice.ts`** — die size and Constitution from the engine's `hpFormula`,
+  and a pure calculation of Hit Dice spent at a Short rest. The caller writes
+  the hero.
+- **`party.ts`** — a `Party` is members, shared gold, the potion pack, stash, renown,
   guild membership and a `PartyStatus`. Four to six strong. `rollClasses` fills
   the four classic roles (front line, support, skirmisher, arcane).
   Pure queries also accept deeply read-only companies. Company size and the
@@ -143,7 +166,13 @@ enchanter buys back.
   name any registered step, including one that is not in the default list.
   Each step
   keeps the existing reserve, equipment allocation and synchronous reporting.
-  Gold moves through the world's coin object. The blessing's hit points per
+  Gold moves through the world's coin object. The potions step makes each
+  potion on demand: a `production` sink first, then its full-price `service`
+  transfer, with no event between them. A multi-potion purchase repeats that
+  pair and reports one receipt afterwards. Every tier is offered while the
+  apothecary is not ruined, regardless of treasury. Production ticks are read
+  but have no behaviour yet; production is instant and draws no randomness.
+  The blessing's hit points per
   level live on the services configuration and are passed into combat setup.
 
 - **`coin.ts`** — the only writer of a gold balance or a gold counter. `openCoin`
@@ -160,6 +189,11 @@ enchanter buys back.
   `Game`. The reason table stays in code: the effects are the accounting
   identity of a movement, not a tunable of the world. Factories still set a
   holder's starting amount.
+  `production` sets only `spent` and `goldSpentOnProduction`; its other effects
+  are false. `GoldStatistics`, `GameStats` and `Game.view().stats` expose
+  `goldPaid`, `goldSpentByHeroes` and the lifetime `goldSpentOnProduction`.
+  The UI shows production spending in the Town summary and statistics bar. Only
+  the built-in `production` reason moves that new statistic.
 
 ### `src/quests` — what companies actually do
 
@@ -179,8 +213,9 @@ enchanter buys back.
   (`countAtPosting`) through `knowledgeAtPosting`. Later changes to `revealed`
   and `countRevealed` go through the handle only the Board gives out.
   `generateQuest` prices a contract from the holding's income, the difficulty
-  mix, the employer's generosity and desperation; `generateAssault` builds the
-  standing bounty on a lair.
+  mix, the employer's generosity and desperation, limited by `treasuryShare`
+  of the required `QuestTerms.rewardTreasury` supplied by the Board before
+  applying `minimumReward`. `generateAssault` builds the standing bounty on a lair from the Board-supplied `AssaultFunding.rewardCap`. Standalone callers explicitly supply their whole treasury as that cap.
 - **`job-intel.ts`** — job intelligence. It is the only writer, after a job is
   created, of the two public facts (whether the encounter count is known, and
   how many encounters are revealed) and of what each company has tried: a free
@@ -209,7 +244,7 @@ enchanter buys back.
    items become `acOverride`, `hpOverride`, `speedOverride`,
    `additionalResistances`; a +1 weapon is rebuilt from the class's own main
    attack with the bonus folded into attack and damage.
-4. Runs the engine's `Encounter` to a conclusion or a round cap, using potions from the supplied pack between unfinished rounds, before checking whether to flee. Conscious Bloodied heroes drink; a fallen hero at 0 HP receives one from the first conscious companion in company order. If nobody is conscious, no potion is used.
+4. Runs the engine's `Encounter` to a conclusion or a round cap. Between unfinished rounds, before checking whether to flee, the adapter describes each living adventurer — hit points, the fight maximum (blessings and items included), and whether they are conscious — and asks the company for one drinking plan. It does not choose who drinks or which tier. For each drink it asks the potion what it does: the formula is rolled on `src/core/dice.ts` from the fight's dice, the potion leaves the fight's copy of the pack, and the total is passed to `heal`. The company's pack is not written; the outcome reports `potionsDrunk`. The engine does not roll the potion.
 5. Maps the result back to a `CombatOutcome`: winner (`party | monsters |
    retreat | stalemate`), rounds, per-hero HP / alive / kills, XP earned, potions
    drunk, and the engine's narration plus potion-drinking lines.
@@ -225,14 +260,17 @@ Its configuration is one plain object, `GameConfig`, composed in
 `src/sim/config.ts` from each module's own frozen default. `seed` sits at the
 top. A day is `TICKS_PER_DAY` (24) in `src/sim/game-rules.ts`, a calendar
 constant, not a tunable field. Every other value is a section
-(`board`, `roster`, `intel`, `expedition`, `services`, `lairs`, `quests`,
-`encounters`, `heroes`, `town`, `holdings`, `items`, `combat`, `world`).
+(`kinds`, `board`, `roster`, `intel`, `expedition`, `services`, `lairs`,
+`quests`, `encounters`, `heroes`, `potions`, `policies`, `town`, `holdings`,
+`items`, `combat`, `world`).
 `new Game(partial)` and `Game.forTesting` deep-merge that partial onto the
 defaults, replacing arrays and `[min, max]` pairs whole, then reject a result
 that is missing a section, has an unknown field, a section that is not an
 object, the wrong type, a count that is not a whole number, an empty weight
 list, a weight list whose weights are all zero, a name that is not in the
-catalogue it names (a holding, an employer kind, or a step), a negative price,
+catalogue it names (a holding, an employer kind, a town service in
+`board.rewardSetAsideFor`, or a step), a potion formula that does not parse,
+a duplicate potion tier name, a negative price,
 or a range whose minimum exceeds its maximum. A
 function that uses a section takes that section as a required argument, so
 forgetting it is a type error and an override reaches every use. Nothing in the object is a function, a
@@ -241,8 +279,9 @@ YAML. The field list is [Configuration](CONFIGURATION.md).
 
 The **Board** (`board.ts`) owns the contracts and bounties. It is the only
 code that posts them, accepts them, ends them, or writes the links between a
-holding, a lair, a company and that work. Its `BoardConfig` is plain numerical
-configuration (including inclusive cooldown ranges). Game's `board` section is
+holding, a lair, a company and that work. Its `BoardConfig` is plain data: numerical
+configuration (including inclusive cooldown ranges) and `rewardSetAsideFor`,
+a list of town service or employer kind names. Game's `board` section is
 that object: `travelTicks` and
 `difficultyScale` are not restated anywhere else. How long unanswered work
 stays open, and the renown a kind grants, live on `kinds`, keyed by the kind's
@@ -271,6 +310,30 @@ encounters and rewards. `knowledge` hands back learn-next and reveal-all;
 those operations live in job intelligence, and knowledge only grows. `recordsForScenario` and
 `replaceForScenario` are test-only, used by scenario setup; regression serialization uses `all()`.
 
+The Board's private `rewardTreasury(employer)` reads that employer's current treasury
+and, for an entry in `board.rewardSetAsideFor`, subtracts rewards on all its
+`open` and `taken` work, Contracts and Bounties. A service entry reaches its
+operator; a kind entry reaches every employer of that kind. Only the apothecary
+is enabled by default. `WorkContext` supplies this query to Contract generation.
+Its private `bountyRewardCap(employer, quests)` applies the rounded-down treasury share for
+listed employers and uses exactly the whole treasury otherwise; Bounty creation
+passes this cap to `generateAssault`, which also limits it by the per-level
+reward. No minimum applies to Bounties. Generation owns this formula; Board
+creation checks the returned reward and rejects a nonpositive amount before
+posting.
+
+No duplicate employer-to-work link or stored balance is introduced: terminal
+status releases the amount on payment, failure or Contract expiry. Posting moves
+no gold; Contract minimum rewards and upkeep retain their existing rules.
+Game asks `Board.canFundBounty(employer, threshold, quests)` for each lair:
+the reward-sizing treasury must meet the supplied threshold and the Bounty cap
+must be positive. Earlier postings in the same hour can defer later ones.
+Insufficient funding ends posting for that hour before drawing randomness. An unlisted
+guild keeps its whole-treasury threshold. Contract thresholds, both hourly and
+raids, still read the whole treasury. The default apothecary-only list never
+reaches Bounty posting; the default random draws and regression hashes remain
+unchanged.
+
 The ordering of `step()` is the game:
 
 ```
@@ -298,9 +361,13 @@ machine for one company and one hour:
 
 ```
 idle ──accept──► traveling ──arrive──► questing ──cleared/retreat──► returning ──► resting ──► idle
-  │                                        │
-  │                                        └── wiped ──► disbanded
+                                      │  ▲
+                             hurt win │  │ continue
+                                      ▼  │
+                                  short-resting ──retreat──► returning
   └── recruit / shop / merge / retire / take a lair bounty
+
+questing ──wiped──► disbanded
 ```
 
 `idle` delegates recruiting and merging to the roster, then chooses purchases and work: buying
@@ -308,9 +375,8 @@ potions, armour, items and blessings, paying guild dues and selling loot
 through `visitTownServices`,
 learning about a contract through `seekJobIntelligence`, and finally accepting one. During `questing`, the
 Expedition module resolves one fight per tick, applies casualties and XP,
-subtracts combat potions, handles retreat and recovery through `shortRest`
-(a configured fraction of maximum HP, default 0.5, then a potion for each hero
-still Bloodied while supplies last), and reports events synchronously. It takes a
+subtracts combat potions, schedules a Short rest for a hurt company after a
+non-final victory, and reports events synchronously. It takes a
 combat resolver through an interface: `runCombat` is the production adapter,
 while tests supply scripted outcomes. A wipe or homecoming resets expedition
 progress and hands the finished work and outcome to settlement exactly once.
@@ -323,6 +389,27 @@ a Contract without its employer or holding is an error before it is closed or
 counted; real games never remove those entities. Lost-loot storage stays in `Game` and is called at the same
 point in the journey. A broken lair's hoard is paid out by `Game` when the
 Board asks, after the bounty is paid and before the chronicle line.
+
+After a non-final victory, a hurt company spends the next tick in
+`short-resting`. Expedition records the original line for the retreat check.
+`adventurers/hit-dice.ts` derives die size and Constitution from the engine's
+`hpFormula` and purely calculates recovery, returning HP, spent dice and rolls.
+Its required pacing strategy receives hero, dice remaining and encounters ahead;
+the default spreads remaining dice with `ceil(D / E)`, stopping at full HP.
+The profile's `encounterCountSource` selects the configured upper bound when the
+count is unknown (the largest Contract count, or a Bounty's encounter total,
+the boss included), never below what job intelligence has revealed. A known
+count uses the exact total.
+The rest logs rolls, checks retreat using the resulting HP, then, if the company
+continues, asks the company for one drinking plan. Every living adventurer is
+conscious. Each drink is taken from the company's pack and rolled on the same
+local generator as the Hit Dice, after every Hit Die. The hero is healed by
+that total. An unhurt company checks losses in the combat tick and skips
+the rest. Level-up adds a remaining die without changing `hitDiceSpent`; death
+and resurrection preserve the pool. The town Long rest resets living heroes'
+spent dice alongside full HP at the end of eight hours, even without paid rooms
+or with a ruined tavern. Divergence from SRD 5.2.1: the game does not enforce
+one Long rest per 24 hours.
 
 Renderers cross two seams: `onEvent(listener)` pushes each log event as it
 happens, and `view()` returns a fresh immutable snapshot for the current frame.
@@ -373,32 +460,80 @@ fight badly hurt abandons the contract and walks home.
 - Every combat gets a child seed from `this.rng.seed()`, so a fight is
   reproducible on its own and the engine's internal rolls never disturb the
   world stream.
+- Every actual Short rest consumes exactly one world `seed()` and makes one
+  local `Rng` for all heroes' Hit Dice, in company order, and then for the
+  potions drunk by heroes still Bloodied. Spending, company size, pacing and
+  how many potions are drunk never alter that world-stream cost. An unhurt
+  company consumes no rest seed. Trajectories change with these new seeds but
+  reproduce themselves.
+- Each fight takes one child seed from the world. After the opening, deployment
+  and placement draws, the adapter takes one further `seed()` from that child
+  for potion rolls. Those rolls use a generator made from that seed, or the
+  dice source on the combat options when a test supplies one. The engine
+  receives a number from `heal` and does not roll the potion, so a low roll and a high roll leave the
+  same engine log until the first drink.
+- Potion rolls and Hit Dice go through `src/core/dice.ts`, which parses `NdM+K`
+  (also unmodified dice and a negative bonus) and rolls from an explicit
+  `int(min, max)` source. Game code does not call
+  the engine's `rollDice`. Outside the engine's `withRng`, that function falls
+  back to `Math.random()`.
+- Constituting a company draws its Potion sharing policy once, from the same
+  generator, after that company's classes and heroes are chosen and before its
+  name. The draw is one weighted roll whatever the weights are, so later world
+  draws move by that one step and a seed still reproduces itself. The company keeps
+  the result on a policies object. Combat and the Short rest ask the company
+  for one drinking plan, which orders its Bloodied adventurers by that policy.
+  A company with no recorded policy is served in company order. A merger keeps the host's policies.
 - The engine is itself deterministic under a seed, so `seed + tick order` fixes
   the entire run.
 
 Practical consequence: any change to the *order* of rolls in `step()` changes
 every seeded expectation downstream, including the smoke test. That is
 intentional — it is how a whole-world regression gets noticed. The smoke test
-checks repeatability; `simulation-regression.test.ts` additionally compares each
-400-hour trajectory against a reference recorded before the services extraction.
+checks repeatability. The three whole-world hashes and three stripped-world
+hashes were re-recorded once after Hit Dice, healing potions, sharing,
+production and reward set-aside, and those six tests are enabled. Smoke,
+combat-space seed 75, lairs seed 14, deployment, the company roster seeded
+loops and these hashes are the regression guard. The combat potion tests on
+seeds 1 and 2 keep those fights, with a scripted 2d4+2 of 8.
 
 ## Tests and calibration
 
 | Path | What it covers |
 | --- | --- |
+| `test/reward-set-aside.test.ts` | Board and hourly-game reward sizing with exact treasuries, open/taken obligations, Contract and Bounty endings, every configured merchant, service/kind isolation, empty and missing lists, mixed work accounting, fractional Bounty caps without a minimum, hourly threshold deferral, whole-treasury unlisted guilds, zero-reward rejection and unchanged upkeep |
+| `test/raid-posting-threshold.test.ts` | Hourly raids reject a treasury below the configured threshold, post at equality, and use a listed employer’s whole treasury despite rewards owed; exact rewards, raid counts and holding status |
+| `test/potions.test.ts` | Drinking one potion on the dice it is given, the pack and the drink's text, pack wording |
+| `test/apothecary-production.test.ts` | Exact per-potion sink/sale order and balances, one receipt after all pairs, independent configured costs, instant nonzero ticks, every tier from a treasury in debt, permanent ruin, game-view statistics and tuning report |
+| `test/coin.test.ts` | Coin reasons and holder accounting, including production moving only spent and lifetime production spending |
+| `test/coin-movements.test.ts` | Service purchases, paid rounds, resurrection, homecoming, retirement, income, expiry, windfall and purse movements, including a 400-hour bookkeeping run |
+| `test/game-config.test.ts` | Configuration validation, including required Reward set-aside lists, known service/kind names, empty-list disabling, required production costs and ticks, default zero ticks, invalid production values, whole-number potion prices, and formulas whose lowest total is below 1 |
+| `test/potion-buying.test.ts` | Stock target, tier choice, budget step-down, resurrection reserve, one tier per visit, ruined and empty catalogues, `potionCoverFraction` |
+| `test/potion-sharing.test.ts` | The company's drinking plan (order, tier, a fallen adventurer's maximum, a short pack, the conscious companion), one fight and one Short rest applying it, one draw per company, host policies on a merger, weight validation |
+| `test/dice.test.ts` | Formula parsing, scripted and seeded rolls, bounds, invalid formulas, derived Assured healing |
+| `test/hit-dice.test.ts` | Engine HP parser, minimum healing, pure spending, quota, full-HP stopping, exhausted heroes, level-up, death and resurrection |
+| `test/expedition.test.ts` | Separate Short rest hour, dice/retreat/potion order, shared local rolls including rest potions, world seed isolation, encounter bounds (a hidden Bounty count paces over the configured total, the boss included), Long rest in every lodging case |
+| `test/combat-potions.test.ts` | Between-round drinking, scripted 2d4+2, engine log stable until the first drink, and one world seed per fight however many potion dice are rolled |
+| `test/combat-space.test.ts` | A Gargantuan creature's space on the battlefield |
 | `test/smoke.test.ts` | A deterministic 400-hour run: no crashes, and the world produces contracts, deaths and coin |
 | `test/town-services.test.ts` | Public hourly ticks: purchase priorities, reserve thresholds, ledgers, stock, equipment allocation, guild renewal, blessings and retirement ordering |
 | `test/game-access.test.ts` | State boundary: scenario setup expires before the game runs, and event subscribers receive immutable data |
 | `test/game-view.test.ts` | Immutable renderer snapshots: party states, linked board data, town economy, lairs, counters and chronicle |
 | `test/simulation-regression.test.ts` | Three seeds, 400 hours each: SHA-256 references over every tick’s domain state, RNG state and event history |
+| `test/simulation-state.test.ts` | `regressionState()` reads domain facts and does not retain event history |
 | `test/company-roster.test.ts` | Existing hourly characterization of arrivals, recruiting, merging, disbanding and retirement |
 | `test/company-roster-interface.test.ts` | Direct roster operations, configuration, deeply read-only queries and synchronous event state |
+| `test/company-roster-ownership.test.ts` | Refusals of merge, burial and disbanding for companies outside the roster |
 | `test/town-service-steps.test.ts` | Caller-supplied service order with a made-up step between potions and armour |
 | `test/configured-steps.test.ts` | A configured service order the game follows, and names the validator rejects |
 | `test/registered-kind.test.ts` | A made-up kind posted, taken, fought and settled from its table entry |
 | `test/job-intel.test.ts` | Hourly characterization of learning a contract or bounty |
 | `test/job-intel-module.test.ts` | Job intelligence through its own interface: each way of learning, each refusal, and a made-up step |
-| `test/job-intel-regression.test.ts` | Three seeds, 400 hours: the world with investigations removed matches the run from before inquiries changed shape |
+| `test/job-intel-regression.test.ts` | Three seeds, 400 hours: with investigations removed, the world matches the re-recorded baseline |
+| `test/board.test.ts` | Board invariants, configuration, registered kinds, ownership and expedition hand-off |
+| `test/contract-lifecycle.test.ts` | Posting, levels, raids, bounties, choice, expiry, success, failure and lair respawn |
+| `test/contract-ruin.test.ts` | Employer ruin releases open contracts without changing holding status |
+| `test/tune.test.ts` | Seed ranges and lists, invalid arguments, default scales, unrounded reports, inclusive baseline comparison, apothecary treasury tracking and production spending from a real configured game purchase |
 | `scripts/combat-sweep.ts` | Long runs for seeds 1–150, 1,500 hours each, reporting crashes |
 | `test/party.test.ts` | Hero progression on the 5e thresholds, death and resurrection, merging, party levels |
 | `test/encounters.test.ts` | XP bands land inside the engine's own thresholds |
@@ -406,13 +541,46 @@ checks repeatability; `simulation-regression.test.ts` additionally compares each
 | `test/lairs.test.ts` | Boss selection, assault generation, skill checks, lairs inside a live game |
 | `test/deployment.test.ts` | Opening, surprise and grid placement |
 | `scripts/calibrate.ts` | Win/death rates per difficulty and level, single fresh fights |
-| `scripts/tune.ts` | Whole towns at several difficulty scales: deaths per contract, wipes |
+| `scripts/tune.ts` | Whole towns at several difficulty scales: unrounded tuning metrics, baseline deviations and tick-by-tick apothecary finances |
 | `scripts/variety.ts` | How many distinct monsters a long run throws up |
-| `scripts/assault.ts` | How often a level-matched company clears a lair |
+| `scripts/assault.ts` | One company against one lair's bounty: share cleared, share that reached the boss, deaths per attempt |
 | `scripts/lairs.ts` | A long run, lair events only |
 
-The scripts are measurement, not assertion: they print numbers you read before
-touching `difficultyScale` or the XP bands.
+The calibration scripts print numbers to read before touching `difficultyScale`
+or the XP bands. `scripts/tune.ts` also compares the five tuning metrics (quests,
+failed, deaths per quest, wiped, raised) with `scripts/tune-baseline.json`,
+printing each percentage deviation and PASS or FAIL at an inclusive +/-15%.
+A failed comparison exits with status 1. Deaths and companies arrived are
+printed alongside the five metrics; none of these values is rounded.
+
+```bash
+SEEDS=1..80 SCALES=1,1.15,1.25,1.5,1.75 TICKS=600 pnpm dlx vite-node scripts/tune.ts
+SEEDS=1..40 SCALES=1.15 TICKS=3000 pnpm dlx vite-node scripts/tune.ts
+```
+
+`SEEDS` accepts an inclusive ascending range or a comma list such as `1,2,3`.
+Empty entries, including a trailing comma, are errors. Seeds are non-negative
+whole numbers. Defaults are seeds `1,2,3`, 600 ticks and scales
+`1,1.15,1.25,1.5,1.75`. Scales must be positive finite numbers and ticks must
+be non-negative whole numbers. Parsing and report logic live in
+`scripts/tune-report.ts`, which can be imported without running a simulation.
+
+The baseline records the measured commit, commands, per-scale metrics and the
+3,000-tick apothecary figures. Comparisons require the baseline's tick count and
+seed sample: 600 ticks and seeds 1 through 80, each exactly once. Seed-list order
+does not matter. A different tick count or seed sample is reported as
+unavailable, prints no PASS or FAIL verdict and does not cause a failing exit
+status. This includes the default three seeds and the ten-seed scale-shape run.
+With matching ticks and seeds, an unrecorded scale exits with status 1. When
+initially recording a baseline, a missing file is reported as unavailable.
+
+The apothecary report reads `Game.view()` at initialization and after every tick.
+Ruined and total shops are counts across seeds; lowest treasury is the minimum
+of any apothecary at any observed tick, including after ruin. Treasury at the
+end is the mean final apothecary treasury total per seed. `goldSpentOnProduction`
+is the mean final lifetime statistic per seed, exposed by the game with its
+other gold statistics. Reports of older observations that lack it still print
+unavailable. Other services do not enter these figures.
 
 ## Extension points
 

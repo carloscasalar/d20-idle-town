@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createParty } from '../src/adventurers/party';
+import { DEFAULT_POLICIES_CONFIG } from '../src/adventurers/policies';
 import { Rng } from '../src/core/rng';
 import type { Quest } from '../src/quests/quest';
 import { Game, type GameEventView, type GameScenario } from '../src/sim/game';
@@ -14,7 +15,7 @@ function assertStateIsNotPublic(game: Game): void {
 
 describe('Game access boundaries', () => {
   it('builds a controlled scenario without exposing mutable state from a running game', () => {
-    const party = createParty(new Rng(9), 1, 4, 0, STARTING_GOLD);
+    const party = createParty(new Rng(9), 1, 4, 0, STARTING_GOLD, DEFAULT_POLICIES_CONFIG.potionSharing);
     let capturedScenario: GameScenario | undefined;
     const game = Game.forTesting({ seed: 9, roster: { maxCompanies: 1 }, world: { maxOpenQuests: 0 } }, (scenario) => {
       capturedScenario = scenario;

@@ -118,6 +118,8 @@ export function rollDifficulties(rng: Rng, count: number, quests: QuestConfig): 
 
 export interface QuestTerms {
   employer: Employer;
+  /** Supplied by the Board, after any Reward set-aside. */
+  rewardTreasury: number;
   asset: Asset;
   theme: ThemeId;
   level: number;
@@ -146,7 +148,7 @@ export function generateQuest(rng: Rng, terms: QuestTerms, generation: QuestGene
   const desperation = asset.status === 'ravaged' ? quests.ravagedPayFactor : 1;
   const base = asset.incomePerDay * quests.incomeDays + level * level * quests.levelPayFactor;
   const wanted = Math.round(base * payFactor * employer.generosity * desperation * quests.rewardScale);
-  const reward = Math.max(quests.minimumReward, Math.min(wanted, Math.floor(employer.treasury * quests.treasuryShare)));
+  const reward = Math.max(quests.minimumReward, Math.min(wanted, Math.floor(terms.rewardTreasury * quests.treasuryShare)));
   // Relics turn up in old places, and rich employers sometimes pay in kind.
   const itemChance = (quests.relicHoldings.includes(asset.kind) ? quests.relicItemChance : quests.ordinaryItemChance) + (employer.kind === 'noble' ? quests.nobleItemChance : 0);
   const itemReward = rng.chance(itemChance) ? rollLootItem(rng, level, items) : null;
@@ -173,13 +175,19 @@ export function generateQuest(rng: Rng, terms: QuestTerms, generation: QuestGene
   };
 }
 
+/** The Board supplies the treasury cap after any Reward set-aside and share. */
+export interface AssaultFunding {
+  id: string;
+  rewardCap: number;
+}
+
 const ASSAULT_TITLES = ['Break {lair}', 'End the reign of {boss}', 'Storm {place}', 'Bring back the head of {boss}'];
 
 /**
  * The standing contract to clear a lair: long, mostly hard, and the boss with
  * its guard at the end. The lair's own hoard is the prize, plus the guild's bounty.
  */
-export function generateAssault(rng: Rng, lair: Lair, guild: Employer, partySize: number, tick: number, difficultyScale: number, generation: QuestGeneration): Quest {
+export function generateAssault(rng: Rng, lair: Lair, funding: AssaultFunding, partySize: number, tick: number, difficultyScale: number, generation: QuestGeneration): Quest {
   const { quests, encounters: encountersRules, intel, items, kinds } = generation;
   const assault = kinds.assault;
   const count = rng.int(...assault.encounters);
@@ -187,14 +195,14 @@ export function generateAssault(rng: Rng, lair: Lair, guild: Employer, partySize
   const difficulties: Difficulty[] = Array.from({ length: count - 1 }, () => rng.weighted(assaultWeights));
   const encounters = difficulties.map((d) => buildEncounter(rng, lair.theme, partySize, lair.level, d, difficultyScale, encountersRules));
   encounters.push(buildBossEncounter(rng, lair, partySize, difficultyScale, quests, encountersRules));
-  const bounty = Math.min(guild.treasury, assault.rewardPerLevel * lair.level);
+  const bounty = Math.min(funding.rewardCap, assault.rewardPerLevel * lair.level);
   const title = rng.pick(ASSAULT_TITLES).replace('{lair}', lair.name).replace('{boss}', lair.boss).replace('{place}', lair.place);
   return {
     id: rng.id('quest'),
     kind: assaultProfile.id,
     title: title.charAt(0).toUpperCase() + title.slice(1),
     place: lair.place,
-    giverId: guild.id,
+    giverId: funding.id,
     assetId: null,
     lairId: lair.id,
     theme: lair.theme,

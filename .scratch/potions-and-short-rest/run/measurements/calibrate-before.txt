@@ -1,0 +1,15 @@
+L1 easy         band 100-170  win 95%  deaths/fight 0.23  tpk 5%  rounds 2.6
+L1 intermediate band 200-299  win 90%  deaths/fight 0.38  tpk 3%  rounds 3.5
+L1 hard         band 300-350  win 83%  deaths/fight 0.45  tpk 3%  rounds 3.5
+L2 easy         band 200-340  win 95%  deaths/fight 0.17  tpk 3%  rounds 3.1
+L2 intermediate band 400-599  win 88%  deaths/fight 0.47  tpk 5%  rounds 4.3
+L2 hard         band 600-700  win 85%  deaths/fight 0.40  tpk 0%  rounds 4.5
+L3 easy         band 300-510  win 98%  deaths/fight 0.05  tpk 0%  rounds 3.0
+L3 intermediate band 600-899  win 100%  deaths/fight 0.07  tpk 0%  rounds 4.0
+L3 hard         band 900-1250  win 80%  deaths/fight 0.60  tpk 3%  rounds 5.9
+L5 easy         band 1000-1700  win 100%  deaths/fight 0.10  tpk 0%  rounds 3.3
+L5 intermediate band 2000-2999  win 85%  deaths/fight 0.47  tpk 5%  rounds 5.2
+L5 hard         band 3000-3700  win 88%  deaths/fight 0.38  tpk 3%  rounds 6.3
+L8 easy         band 2000-3400  win 100%  deaths/fight 0.05  tpk 0%  rounds 5.2
+L8 intermediate band 4000-6799  win 83%  deaths/fight 0.53  tpk 5%  rounds 5.1
+L8 hard         band 6800-7600  win 60%  deaths/fight 1.02  tpk 5%  rounds 5.2

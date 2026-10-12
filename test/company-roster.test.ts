@@ -1,4 +1,5 @@
 import { CompanyRoster } from '../src/adventurers/company-roster';
+import { DEFAULT_POLICIES_CONFIG } from '../src/adventurers/policies';
 import { describe, expect, it } from 'vitest';
 import { HERO_CLASS_NAMES } from 'battlecast-engine';
 import { createHero, killHero, type Hero } from '../src/adventurers/hero';
@@ -22,7 +23,7 @@ import { DEFAULT_HOLDING_CONFIG } from '../src/town/assets';
 import { DEFAULT_COMPANY_ROSTER_CONFIG } from '../src/adventurers/company-roster';
 
 function rosterFor(...companies: Party[]): CompanyRoster {
-  const roster = new CompanyRoster(DEFAULT_COMPANY_ROSTER_CONFIG, DEFAULT_HERO_ECONOMY, DEFAULT_TOWN_CONFIG, DEFAULT_HOLDING_CONFIG);
+  const roster = new CompanyRoster(DEFAULT_COMPANY_ROSTER_CONFIG, DEFAULT_HERO_ECONOMY, DEFAULT_TOWN_CONFIG, DEFAULT_HOLDING_CONFIG, DEFAULT_POLICIES_CONFIG);
   roster.replaceForScenario(companies);
   return roster;
 }
@@ -72,7 +73,7 @@ let nextCompany = 1;
 
 /** A provisioned company whose hour will not be spent in a shop. */
 function company(rng: Rng, level: number, living: string[], dead: string[] = []): Party {
-  const party = createParty(rng, level, 1, TICK, STARTING_GOLD);
+  const party = createParty(rng, level, 1, TICK, STARTING_GOLD, DEFAULT_POLICIES_CONFIG.potionSharing);
   party.id = `company-${nextCompany++}`;
   party.members = [...living, ...dead].map((name) => {
     const hero = createHero(rng, level, 'Fighter');
@@ -82,7 +83,8 @@ function company(rng: Rng, level: number, living: string[], dead: string[] = [])
   });
   for (const hero of party.members) if (dead.includes(hero.name)) killHero(hero);
   party.gold = 0;
-  party.potions = 6;
+  // Six supreme cover six level-8 fighters, so this helper still skips the apothecary.
+  party.potions = { supreme: 6 };
   party.blessed = true;
   party.guildMember = true;
   party.duesPaidDay = DAY;
@@ -239,7 +241,7 @@ describe('who arrives', () => {
   it.each([5, 6])('a band of %i has its requested size, with four roles followed by random classes', (size) => {
     const extraClasses = new Set<string>();
     for (let seed = 1; seed <= 40; seed++) {
-      const party = createParty(new Rng(seed), 4, size, 17, STARTING_GOLD);
+      const party = createParty(new Rng(seed), 4, size, 17, STARTING_GOLD, DEFAULT_POLICIES_CONFIG.potionSharing);
       expect(party.members, `seed ${seed}`).toHaveLength(size);
       expect(party.members.every((hero) => hero.level === 4)).toBe(true);
       expect(coversFourRoles(party.members.slice(0, 4).map((hero) => hero.heroClass))).toBe(true);
@@ -252,22 +254,22 @@ describe('who arrives', () => {
   });
 
   it.each([1, 2, 3, 4])('a company asked for %i adventurers has that many, at the level asked', (size) => {
-    const party = createParty(new Rng(size), 4, size, 17, STARTING_GOLD);
+    const party = createParty(new Rng(size), 4, size, 17, STARTING_GOLD, DEFAULT_POLICIES_CONFIG.potionSharing);
     expect(party.members).toHaveLength(size);
     expect(party.members.map((hero) => hero.level)).toEqual(Array.from({ length: size }, () => 4));
   });
 
-  it('a level-4 company starts with 80 gp', () => {
-    expect(createParty(new Rng(4), 4, 4, 0, STARTING_GOLD).gold).toBe(80);
+  it('a level-4 company starts with 200 gp', () => {
+    expect(createParty(new Rng(4), 4, 4, 0, STARTING_GOLD, DEFAULT_POLICIES_CONFIG.potionSharing).gold).toBe(200);
   });
 
   it('a new company is idle, at the hour it arrived', () => {
-    const party = createParty(new Rng(3), 2, 4, 17, STARTING_GOLD);
-    expect(party).toMatchObject({ status: 'idle', idleTicks: 0, questId: null, arrivedAt: 17, potions: 0, renown: 0 });
+    const party = createParty(new Rng(3), 2, 4, 17, STARTING_GOLD, DEFAULT_POLICIES_CONFIG.potionSharing);
+    expect(party).toMatchObject({ status: 'idle', idleTicks: 0, questId: null, arrivedAt: 17, potions: {}, renown: 0 });
   });
 
   it('a new company has paid no dues, is outside the guild and is unblessed', () => {
-    const party = createParty(new Rng(3), 2, 4, 17, STARTING_GOLD);
+    const party = createParty(new Rng(3), 2, 4, 17, STARTING_GOLD, DEFAULT_POLICIES_CONFIG.potionSharing);
     expect(party).toMatchObject({ duesPaidDay: -1, guildMember: false, blessed: false });
   });
 
@@ -276,7 +278,7 @@ describe('who arrives', () => {
     game.step();
     const arrived = game.view().parties[0]!;
     expect(arrived.members.map((member) => member.level)).toEqual([1, 1, 1, 1]);
-    expect(arrived.gold).toBe(20);
+    expect(arrived.gold).toBe(50);
     expect(arrived.statusText).toBe('looking at the board');
   });
 
@@ -851,7 +853,7 @@ describe('survivors signing on', () => {
 
 describe('company level and capacity', () => {
   it('company level counts only the living', () => {
-    const mixed = createParty(new Rng(1), 1, 3, 0, STARTING_GOLD);
+    const mixed = createParty(new Rng(1), 1, 3, 0, STARTING_GOLD, DEFAULT_POLICIES_CONFIG.potionSharing);
     mixed.members[0]!.level = 1;
     mixed.members[1]!.level = 2;
     killHero(mixed.members[2]!);
@@ -860,19 +862,19 @@ describe('company level and capacity', () => {
   });
 
   it('company level is 1 when nobody is alive', () => {
-    const wiped = createParty(new Rng(2), 8, 2, 0, STARTING_GOLD);
+    const wiped = createParty(new Rng(2), 8, 2, 0, STARTING_GOLD, DEFAULT_POLICIES_CONFIG.potionSharing);
     for (const hero of wiped.members) killHero(hero);
     expect(partyLevel(wiped)).toBe(1);
   });
 
   it('three level-1 adventurers and one level-2 adventurer make a level-1 company', () => {
-    const party = createParty(new Rng(1), 1, 4, 0, STARTING_GOLD);
+    const party = createParty(new Rng(1), 1, 4, 0, STARTING_GOLD, DEFAULT_POLICIES_CONFIG.potionSharing);
     party.members[3]!.level = 2;
     expect(partyLevel(party)).toBe(1);
   });
 
   it('four living adventurers are a full company, and the dead do not count', () => {
-    const party = createParty(new Rng(3), 1, 4, 0, STARTING_GOLD);
+    const party = createParty(new Rng(3), 1, 4, 0, STARTING_GOLD, DEFAULT_POLICIES_CONFIG.potionSharing);
     expect(rosterFor(party).isReady(party)).toBe(true);
     killHero(party.members[0]!);
     expect(rosterFor(party).isReady(party)).toBe(false);
@@ -882,7 +884,7 @@ describe('company level and capacity', () => {
 
   it('a company has room until six living adventurers, and the dead do not count', () => {
     const rng = new Rng(5);
-    const party = createParty(rng, 1, 4, 0, STARTING_GOLD);
+    const party = createParty(rng, 1, 4, 0, STARTING_GOLD, DEFAULT_POLICIES_CONFIG.potionSharing);
     expect(rosterFor(party).hasRoom(party)).toBe(true);
     party.members.push(createHero(rng, 1, 'Fighter'));
     expect(aliveCount(party)).toBe(5);
@@ -898,12 +900,12 @@ describe('company level and capacity', () => {
 describe('merging and burying', () => {
   it('moves every survivor while the host has room for six', () => {
     const rng = new Rng(6);
-    const host = createParty(rng, 2, 4, 0, STARTING_GOLD);
-    const donor = createParty(rng, 2, 3, 0, STARTING_GOLD);
+    const host = createParty(rng, 2, 4, 0, STARTING_GOLD, DEFAULT_POLICIES_CONFIG.potionSharing);
+    const donor = createParty(rng, 2, 3, 0, STARTING_GOLD, DEFAULT_POLICIES_CONFIG.potionSharing);
     const fallen = donor.members[2]!;
     killHero(fallen);
     const survivors = donor.members.filter((hero) => hero.alive);
-    const leftover = rosterFor(host, donor).merge(host, donor, { coin: openCoin({ goldPaid: 0, goldSpentByHeroes: 0 }) });
+    const leftover = rosterFor(host, donor).merge(host, donor, { coin: openCoin({ goldPaid: 0, goldSpentByHeroes: 0, goldSpentOnProduction: 0 }) });
     expect(leftover).toEqual([]);
     expect(aliveCount(host)).toBe(6);
     expect(host.members).toEqual(expect.arrayContaining(survivors));
@@ -912,46 +914,46 @@ describe('merging and burying', () => {
 
   it('leaves the fallen with the donor', () => {
     const rng = new Rng(6);
-    const host = createParty(rng, 2, 4, 0, STARTING_GOLD);
-    const donor = createParty(rng, 2, 3, 0, STARTING_GOLD);
+    const host = createParty(rng, 2, 4, 0, STARTING_GOLD, DEFAULT_POLICIES_CONFIG.potionSharing);
+    const donor = createParty(rng, 2, 3, 0, STARTING_GOLD, DEFAULT_POLICIES_CONFIG.potionSharing);
     const fallen = donor.members[2]!;
     killHero(fallen);
-    rosterFor(host, donor).merge(host, donor, { coin: openCoin({ goldPaid: 0, goldSpentByHeroes: 0 }) });
+    rosterFor(host, donor).merge(host, donor, { coin: openCoin({ goldPaid: 0, goldSpentByHeroes: 0, goldSpentOnProduction: 0 }) });
     expect(donor.members).toEqual([fallen]);
     expect(host.members).not.toContain(fallen);
   });
 
   it('brings the donor purse into the host purse', () => {
     const rng = new Rng(6);
-    const host = createParty(rng, 2, 4, 0, STARTING_GOLD);
-    const donor = createParty(rng, 2, 2, 0, STARTING_GOLD);
+    const host = createParty(rng, 2, 4, 0, STARTING_GOLD, DEFAULT_POLICIES_CONFIG.potionSharing);
+    const donor = createParty(rng, 2, 2, 0, STARTING_GOLD, DEFAULT_POLICIES_CONFIG.potionSharing);
     host.gold = 10;
     donor.gold = 7;
-    rosterFor(host, donor).merge(host, donor, { coin: openCoin({ goldPaid: 0, goldSpentByHeroes: 0 }) });
+    rosterFor(host, donor).merge(host, donor, { coin: openCoin({ goldPaid: 0, goldSpentByHeroes: 0, goldSpentOnProduction: 0 }) });
     expect(host.gold).toBe(17);
     expect(donor.gold).toBe(0);
   });
 
   it('brings the donor potions into the host pack', () => {
     const rng = new Rng(6);
-    const host = createParty(rng, 2, 4, 0, STARTING_GOLD);
-    const donor = createParty(rng, 2, 2, 0, STARTING_GOLD);
-    host.potions = 1;
-    donor.potions = 3;
-    rosterFor(host, donor).merge(host, donor, { coin: openCoin({ goldPaid: 0, goldSpentByHeroes: 0 }) });
-    expect(host.potions).toBe(4);
-    expect(donor.potions).toBe(0);
+    const host = createParty(rng, 2, 4, 0, STARTING_GOLD, DEFAULT_POLICIES_CONFIG.potionSharing);
+    const donor = createParty(rng, 2, 2, 0, STARTING_GOLD, DEFAULT_POLICIES_CONFIG.potionSharing);
+    host.potions = { basic: 1, greater: 1 };
+    donor.potions = { basic: 3, superior: 1 };
+    rosterFor(host, donor).merge(host, donor, { coin: openCoin({ goldPaid: 0, goldSpentByHeroes: 0, goldSpentOnProduction: 0 }) });
+    expect(host.potions).toEqual({ basic: 4, greater: 1, superior: 1 });
+    expect(donor.potions).toEqual({});
   });
 
   it('brings the donor finds into the host stash', () => {
     const rng = new Rng(6);
-    const host = createParty(rng, 2, 4, 0, STARTING_GOLD);
-    const donor = createParty(rng, 2, 2, 0, STARTING_GOLD);
+    const host = createParty(rng, 2, 4, 0, STARTING_GOLD, DEFAULT_POLICIES_CONFIG.potionSharing);
+    const donor = createParty(rng, 2, 2, 0, STARTING_GOLD, DEFAULT_POLICIES_CONFIG.potionSharing);
     const hostFind = sword(rng);
     const donorFind = sword(rng);
     host.stash = [hostFind];
     donor.stash = [donorFind];
-    rosterFor(host, donor).merge(host, donor, { coin: openCoin({ goldPaid: 0, goldSpentByHeroes: 0 }) });
+    rosterFor(host, donor).merge(host, donor, { coin: openCoin({ goldPaid: 0, goldSpentByHeroes: 0, goldSpentOnProduction: 0 }) });
     expect(host.stash).toEqual([hostFind, donorFind]);
     expect(donor.stash).toEqual([]);
   });
@@ -961,22 +963,22 @@ describe('merging and burying', () => {
     { hostRenown: 9, donorRenown: 2 },
   ])('keeps the greater renown when the host has $hostRenown and the donor has $donorRenown', ({ hostRenown, donorRenown }) => {
     const rng = new Rng(6);
-    const host = createParty(rng, 2, 4, 0, STARTING_GOLD);
-    const donor = createParty(rng, 2, 2, 0, STARTING_GOLD);
+    const host = createParty(rng, 2, 4, 0, STARTING_GOLD, DEFAULT_POLICIES_CONFIG.potionSharing);
+    const donor = createParty(rng, 2, 2, 0, STARTING_GOLD, DEFAULT_POLICIES_CONFIG.potionSharing);
     host.renown = hostRenown;
     donor.renown = donorRenown;
-    rosterFor(host, donor).merge(host, donor, { coin: openCoin({ goldPaid: 0, goldSpentByHeroes: 0 }) });
+    rosterFor(host, donor).merge(host, donor, { coin: openCoin({ goldPaid: 0, goldSpentByHeroes: 0, goldSpentOnProduction: 0 }) });
     expect(host.renown).toBe(9);
   });
 
   it('returns the living who do not fit, and not the dead', () => {
     const rng = new Rng(7);
-    const host = createParty(rng, 2, 4, 0, STARTING_GOLD);
+    const host = createParty(rng, 2, 4, 0, STARTING_GOLD, DEFAULT_POLICIES_CONFIG.potionSharing);
     host.members.push(createHero(rng, 2, 'Fighter'));
-    const donor = createParty(rng, 2, 4, 0, STARTING_GOLD);
+    const donor = createParty(rng, 2, 4, 0, STARTING_GOLD, DEFAULT_POLICIES_CONFIG.potionSharing);
     const [first, second, third, fallen] = donor.members;
     killHero(fallen!);
-    const leftover = rosterFor(host, donor).merge(host, donor, { coin: openCoin({ goldPaid: 0, goldSpentByHeroes: 0 }) });
+    const leftover = rosterFor(host, donor).merge(host, donor, { coin: openCoin({ goldPaid: 0, goldSpentByHeroes: 0, goldSpentOnProduction: 0 }) });
     expect(leftover).toEqual([second, third]);
     expect(aliveCount(host)).toBe(6);
     expect(host.members).toContain(first);
@@ -985,18 +987,18 @@ describe('merging and burying', () => {
 
   it('a host of six takes nobody', () => {
     const rng = new Rng(8);
-    const host = createParty(rng, 2, 4, 0, STARTING_GOLD);
+    const host = createParty(rng, 2, 4, 0, STARTING_GOLD, DEFAULT_POLICIES_CONFIG.potionSharing);
     host.members.push(createHero(rng, 2, 'Fighter'), createHero(rng, 2, 'Fighter'));
-    const donor = createParty(rng, 2, 2, 0, STARTING_GOLD);
+    const donor = createParty(rng, 2, 2, 0, STARTING_GOLD, DEFAULT_POLICIES_CONFIG.potionSharing);
     const staying = [...donor.members];
-    const leftover = rosterFor(host, donor).merge(host, donor, { coin: openCoin({ goldPaid: 0, goldSpentByHeroes: 0 }) });
+    const leftover = rosterFor(host, donor).merge(host, donor, { coin: openCoin({ goldPaid: 0, goldSpentByHeroes: 0, goldSpentOnProduction: 0 }) });
     expect(leftover).toEqual(staying);
     expect(aliveCount(host)).toBe(6);
     expect(donor.members).toEqual(staying);
   });
 
   it('returns the fallen and leaves the living', () => {
-    const party = createParty(new Rng(9), 1, 4, 0, STARTING_GOLD);
+    const party = createParty(new Rng(9), 1, 4, 0, STARTING_GOLD, DEFAULT_POLICIES_CONFIG.potionSharing);
     const [ada, bev, cid, dot] = party.members;
     killHero(bev!);
     killHero(dot!);

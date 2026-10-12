@@ -27,6 +27,7 @@ import { DEFAULT_ENCOUNTER_CONFIG } from '../src/quests/encounters';
 import { DEFAULT_ITEM_CONFIG } from '../src/items/items';
 import { DEFAULT_COMPANY_ROSTER_CONFIG } from '../src/adventurers/company-roster';
 import { CompanyRoster } from '../src/adventurers/company-roster';
+import { DEFAULT_POLICIES_CONFIG } from '../src/adventurers/policies';
 
 const encounter: EncounterSpec = {
   difficulty: 'easy',
@@ -44,6 +45,7 @@ const survey: WorkProfile = Object.freeze({
   lairFigure: 'strength',
   lastFightForbidsRetreat: true,
   lairDepth: true,
+  encounterCountSource: 'quests',
   countAtPosting: true,
   offer: 'none',
 });
@@ -84,7 +86,7 @@ function outcome(party: Party): CombatOutcome {
     lines: ['A short survey.'],
     heroes: party.members.map((hero) => ({ heroId: hero.id, hp: hero.maxHp, alive: true, kills: 0 })),
     xpEarned: 0,
-    potionsDrunk: 0,
+    potionsDrunk: {},
   };
 }
 
@@ -102,7 +104,7 @@ describe('a registered kind of work', () => {
       rng,
       tick: 0,
       ledger,
-      coin: openCoin({ goldPaid: 0, goldSpentByHeroes: 0 }),
+      coin: openCoin({ goldPaid: 0, goldSpentByHeroes: 0, goldSpentOnProduction: 0 }),
       report: () => {},
       payHoard: () => '',
       companySize: DEFAULT_COMPANY_ROSTER_CONFIG.companySize,
@@ -119,7 +121,7 @@ describe('a registered kind of work', () => {
     expect(work).toMatchObject({ kind: survey.id, status: 'open', countRevealed: true, revealed: 1 });
     expect(work.encounters).toHaveLength(1);
 
-    const company = createParty(new Rng(1), 1, 4, 0, STARTING_GOLD);
+    const company = createParty(new Rng(1), 1, 4, 0, STARTING_GOLD, DEFAULT_POLICIES_CONFIG.potionSharing);
     company.gold = 1000;
     const departure = board.take(company, work, boardContext);
     startExpedition(company, departure.travelTicks);
@@ -128,14 +130,14 @@ describe('a registered kind of work', () => {
     expect(company.questId).toBe(work.id);
 
     const combat = vi.fn<CombatResolver>(() => outcome(company));
-    const roster = new CompanyRoster(DEFAULT_COMPANY_ROSTER_CONFIG, DEFAULT_HERO_ECONOMY, DEFAULT_TOWN_CONFIG, DEFAULT_HOLDING_CONFIG);
+    const roster = new CompanyRoster(DEFAULT_COMPANY_ROSTER_CONFIG, DEFAULT_HERO_ECONOMY, DEFAULT_TOWN_CONFIG, DEFAULT_HOLDING_CONFIG, DEFAULT_POLICIES_CONFIG);
     roster.replaceForScenario([company]);
     const expedition: ExpeditionContext = {
       quest: work,
       town,
       rng: new Rng(9),
       ledger: { heroesDied: 0, partiesWiped: 0 },
-      coin: openCoin({ goldPaid: 0, goldSpentByHeroes: 0 }),
+      coin: openCoin({ goldPaid: 0, goldSpentByHeroes: 0, goldSpentOnProduction: 0 }),
       ...expeditionRules({ travelTicks: 1, restTicks: 1 }),
       kinds: board.profiles(),
       combat,

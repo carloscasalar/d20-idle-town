@@ -27,8 +27,10 @@ home changes the game everywhere that value applies.
 `validateGameConfig` checks a complete document. It reports a missing section,
 a missing field, an unknown field, a section that is not an object, a wrong
 type, a count that is not a whole number, an empty weight list, a weight list
-whose weights are all zero, a negative price, or a range whose minimum exceeds
-its maximum. It also checks every name against the catalogue that defines it:
+whose weights are all zero, a negative price, a potion price that is not a
+whole number, a potion formula whose lowest total is below 1, or a range whose
+minimum exceeds its maximum. It also checks every name against the catalogue that defines it:
+`board.rewardSetAsideFor` against employer kinds and town services,
 `town.retiredHoldings` and `quests.relicHoldings` against holding kinds,
 `quests.guildOnlyKinds` against employer kinds, `services.steps` against the
 town-service registry (including `retirement`), and `intel.steps` against the
@@ -68,9 +70,9 @@ Tunables that belong to one kind of work, keyed by that kind's id. Defined in
 | `revealsCount` | true | When the profile says `configured`, posting reveals the encounter count |
 | `appetite` | 0.35 | Chance an idle company that can pay a resurrection takes this work |
 | `levelGap` | 1 | A bounty is posted once some company is within this many levels of the lair |
-| `encounters` | [3, 5] | Fights before the boss, inclusive, plus the boss |
+| `encounters` | [3, 5] | Total number of encounters, the boss included |
 | `difficultyWeights` | easy 2, intermediate 4, hard 2 | Weight of each difficulty on a bounty |
-| `rewardPerLevel` | 150 | Guild gold per lair level, limited by the guild's treasury |
+| `rewardPerLevel` | 150 | Guild gold per lair level, capped by the whole treasury or, for a listed guild, its treasury share after rewards owed |
 
 ## `board`
 
@@ -78,6 +80,7 @@ The Board. Defined in `src/sim/board.ts`.
 
 | Field | Default | Meaning |
 | --- | --- | --- |
+| `rewardSetAsideFor` | [apothecary] | Employers whose outstanding Contract and Bounty rewards are kept out of new reward sizing; town service or employer kind names |
 | `windfallDays` | 4 | Days of holding income recovered when a Contract succeeds |
 | `lootingDays` | 2 | Days of holding income lost when an unanswered Contract expires |
 | `failureRenownLoss` | 1 | Renown lost when work fails |
@@ -88,6 +91,28 @@ The Board. Defined in `src/sim/board.ts`.
 | `travelTicks` | 2 | Hours of outbound travel, handed to the expedition |
 | `difficultyScale` | 1.15 | Multiplier on every encounter's XP budget. The browser's `?difficulty=` sets this. |
 | `lairStrengthGain` | 1 | Strength a lair gains after an unanswered raid or a failed bounty |
+
+`board.rewardSetAsideFor` is required in a complete configuration. An entry
+matches either a town service (`tavern`, `temple`, `smith`, `apothecary`,
+`enchanter`, `guild`) or every employer of a kind (`noble`, `merchant`,
+`faction`, `temple`); unknown names are rejected. `temple`, present in both
+catalogues, matches either. An empty list disables the rule. Only the
+apothecary is enabled by default and measured for balance; the other employers
+remain untested for balance and can still go into debt.
+
+The Board computes the amount from that employer's `open` and `taken`
+Contracts and Bounties. Both new rewards apply `quests.treasuryShare` to treasury
+minus that amount, rounded down. A Contract still applies `quests.minimumReward`,
+which can exceed the remainder; a Bounty caps `kinds.assault.rewardPerLevel`
+times the lair's level by that share, without a minimum. Payment (`done`),
+failure and expiry (`failed`) release the amount. No gold moves when posting,
+and upkeep can still take the treasury below zero. Contract posting thresholds
+(hourly and raids) still read the full treasury. A listed guild's Bounty posting
+threshold reads the remainder, checked again for each lair in the hour; posting
+waits until it meets `world.postingThreshold`. No Bounty is posted for zero or
+less, even with a zero share or per-level reward. Outside the list, Bounties
+use the whole treasury for both sizing and the threshold, without a share;
+Contracts keep their existing whole-treasury sizing.
 
 ## `roster`
 
@@ -136,13 +161,18 @@ Recovery, rooms, and the decision to turn back. Defined in
 | Field | Default | Meaning |
 | --- | --- | --- |
 | `restTicks` | 8 | Hours of rest after a homecoming |
-| `shortRestHealFraction` | 0.5 | Share of maximum hit points restored at a short rest, rounded up |
 | `carousingShare` | 0.05 | Share of the purse spent carousing |
 | `carousingMinimum` | 10 | Least gold spent carousing when the company tells the tale |
 | `carousingRenown` | 1 | Renown gained by carousing, up to the roster's cap |
 | `roomFeePerLevel` | 3 | Gold per company level for rooms |
 | `retreatAliveDivisor` | 2 | Turn back when this fraction of the original company, or fewer, is standing. 2 means half or fewer. |
-| `retreatHpFraction` | 0.35 | Also turn back when the company is this badly hurt |
+| `retreatHpFraction` | 0.35 | Turn back when average living HP fraction is below this threshold, evaluated after the Short rest's Hit Dice and before potions |
+
+Between non-final victories, a hurt company takes one Short rest hour. Its
+living adventurers spend Hit Dice, paced over encounters ahead, before deciding
+whether to turn back. Only a company that continues shares potions with those
+still Bloodied. An unhurt company skips the hour. The Long rest restores living
+HP and every spent Hit Die at the end of `restTicks`, regardless of lodging.
 
 ## `services`
 
@@ -155,7 +185,22 @@ An idle hour in town. Defined in `src/town/services.ts`.
 | `blessingCostPerLevel` | 40 | Gold per company level for a blessing |
 | `blessingHpPerLevel` | 3 | Bonus hit points per level while blessed. Expedition receives this. |
 | `blessingReserveFactor` | 1.5 | Resurrection prices that must remain after a blessing |
+| `potionCoverFraction` | 0.5 | Share of each living hero's maximum hit points the pack should cover. From 0 to 1 |
 | `steps` | potions, loot, items, dues, blessing, retirement, armour | Idle-hour order, by step name. Any name in the town-service registry, including `retirement` |
+
+On a visit to an apothecary that is not ruined, the company buys one tier, once.
+For each living hero the need is `ceil(maxHp × potionCoverFraction)`. The pack
+should assure that much healing in total, and hold at least one potion per
+living hero. With `N` the average need, the tier is the strongest whose assured
+healing is at most `N / 2`, or the lowest tier when none is. That half is fixed
+in the step; it is not a field. The count is the fewest of that tier that meet
+the target. If the purse cannot pay it and still keep one resurrection, the
+company steps down to a cheaper tier whose count it can pay. If even the
+cheapest tier's count does not fit, it buys as many of that tier as the purse
+affords. Lowest follows assured healing. Cheaper and cheapest follow price.
+Catalogue order breaks a tie. A tier's name is not consulted. A ruined
+apothecary sells nothing, and that is the only limit the shop places on the
+purchase. The purse pays the treasury the full price as a `service`.
 
 ## `lairs`
 
@@ -186,8 +231,8 @@ How a Contract or Bounty is sized and paid. Defined in `src/quests/quest.ts`.
 | `incomeDays` | 2 | Days of holding income in the base reward |
 | `levelPayFactor` | 10 | Added as level × level × this |
 | `rewardScale` | 0.6 | Scale applied after generosity and desperation |
-| `minimumReward` | 20 | Lowest reward, in gold |
-| `treasuryShare` | 0.8 | Most of the employer's treasury a reward may take |
+| `minimumReward` | 20 | Lowest Contract reward, in gold; does not apply to Bounties |
+| `treasuryShare` | 0.8 | Most of the reward-sizing treasury a Contract or listed employer’s Bounty may take, rounded down after any Reward set-aside |
 | `relicHoldings` | archive, catacombs, shrine, cemetery | Holdings that can pay with a relic |
 | `relicItemChance` | 0.12 | Chance of an item reward from those holdings |
 | `ordinaryItemChance` | 0.04 | Chance of an item reward from any other holding |
@@ -224,10 +269,9 @@ hard bands still use the engine's DMG thresholds.
 Prices and healing for a hero. Defined in `src/adventurers/hero.ts`.
 Armour cost is `(armorBase + armorPerLevel × level) × armorTierFactor ^ tier`.
 Resurrection is `resurrectionBase + level² × resurrectionQuadratic`.
-A potion costs `potionBase + potionPerLevel × level` and heals at least
-`potionHealMinimum`, otherwise maximum hit points divided by `potionHealDivisor`,
-rounded up. Resurrection restores `resurrectedHpFraction` of maximum hit points,
-and at least `resurrectedHpMinimum`.
+Resurrection restores `resurrectedHpFraction` of maximum hit points,
+and at least `resurrectedHpMinimum`. Healing potions are not priced here;
+they live in `potions`.
 
 | Field | Default | Meaning |
 | --- | --- | --- |
@@ -237,14 +281,60 @@ and at least `resurrectedHpMinimum`.
 | `armorTierFactor` | 2.2 | Multiplier raised to the current tier |
 | `resurrectionBase` | 150 | Gold in a resurrection before the level term |
 | `resurrectionQuadratic` | 40 | Multiplier on level squared |
-| `potionBase` | 25 | Gold in a potion before level |
-| `potionPerLevel` | 10 | Gold added per level |
-| `potionHealMinimum` | 8 | Least a potion restores |
-| `potionHealDivisor` | 3 | Otherwise heal maximum hit points divided by this, rounded up |
-| `startingGoldPerLevel` | 20 | Gold a new company carries per level |
+| `startingGoldPerLevel` | 50 | Gold a new company carries per level |
 | `resurrectedHpFraction` | 0.5 | Share of maximum hit points restored |
 | `resurrectedHpMinimum` | 1 | Least hit points a resurrected hero is left with |
 | `skillAdvantageTiebreak` | 3 | Extra points a class with advantage counts for when choosing who attempts the check |
+
+## `potions`
+
+The Healing potion catalogue. Defined in `src/adventurers/potions.ts`.
+Each tier has a name, a dice formula, a selling price, an independent
+`productionCost` and `productionTicks`. Selling prices and production costs are
+finite, non-negative whole gold pieces; ticks are finite, non-negative whole
+numbers. The name is the key in a company's pack. Assured healing is not stored:
+the dice module derives it from the formula, and a smaller tier is one with lower
+assured healing. Replacing `tiers` replaces the whole list, so a tier can be
+dropped or changed. A formula that does not parse is rejected, as is a formula
+whose lowest total is below 1 (each die counts at least 1, plus the bonus). A
+duplicate tier name is rejected, for example `potions.tiers: duplicate tier "basic"`.
+
+| Tier | Formula | Price (gp) | Production cost (gp) | Assured healing |
+| --- | --- | --- | --- | --- |
+| basic | 2d4+2 | 50 | 25 | 8 |
+| greater | 4d4+4 | 200 | 100 | 16 |
+| superior | 8d4+8 | 2,000 | 1,000 | 32 |
+| supreme | 10d4+20 | 20,000 | 10,000 | 50 |
+
+The apothecary makes each potion on demand, sinking its configured cost from
+its treasury before receiving the full selling price. Every non-ruined
+apothecary offers every catalogue tier, whatever its treasury. There is no
+production reserve, treasury gate or shelf. Ruin remains permanent.
+
+| Tier | `productionTicks` |
+| --- | --- |
+| basic | 0 |
+| greater | 0 |
+| superior | 0 |
+| supreme | 0 |
+
+Production-time deviation: the SRD asks for 1 / 5 / 25 / 62.5 days per potion.
+The game makes them instantly. This table is the configuration switch for
+future production time: the model reads it, but a nonzero value currently has
+no behaviour and never delays a sale.
+
+## `policies`
+
+How a new company shares a short pack. Defined in `src/adventurers/policies.ts`.
+The company roster draws one policy when the company is constituted, with a
+single weighted roll, and stores it on the company. A merger keeps the host's
+policies. A company with no recorded policy is served in company order.
+
+| Field | Default | Meaning |
+| --- | --- | --- |
+| `potionSharing` | company order 50, most hurt 50 | Weighted list. `company-order` serves Bloodied heroes in company order. `most-hurt` serves fallen heroes at 0 hit points first, then the lowest hit point fraction. Weights 100 and 0 on those two entries always draw company order |
+
+The list must not be empty, and the weights must not all be zero.
 
 ## `town`
 
@@ -336,7 +426,7 @@ Defined in `src/sim/game-rules.ts`.
 | Field | Default | Meaning |
 | --- | --- | --- |
 | `maxOpenQuests` | 8 | Open jobs the Board will hold |
-| `postingThreshold` | 25 | Treasury an employer needs before posting a contract, and before a lair will raid one of their holdings. The guild also needs it before posting a bounty. |
+| `postingThreshold` | 25 | Treasury an employer needs before posting a contract, and before a lair will raid one of their holdings. For a listed guild, a Bounty needs this much treasury after outstanding rewards; otherwise it reads the whole treasury. |
 | `postingCooldown` | [12, 30] | Hours an employer waits after posting |
 | `ruinDays` | 3 | Days in debt before an employer is ruined |
 | `idleLevelWeight` | 3 | Weight of an idle or resting company's level when choosing what to post |
