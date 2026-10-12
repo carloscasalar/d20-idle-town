@@ -507,6 +507,8 @@ export class Game {
         return `on the road to ${quest?.place ?? '?'} (${party.ticksLeft}h)`;
       case 'questing':
         return `fighting at ${quest?.place ?? '?'} (${party.progress}/${quest?.encounters.length ?? '?'})`;
+      case 'short-resting':
+        return `taking a Short rest at ${quest?.place ?? '?'} (1h)`;
       case 'returning':
         return `returning (${party.ticksLeft}h)`;
       case 'resting':
@@ -698,6 +700,9 @@ export class Game {
       intel: this.config.intel,
       encounters: this.config.encounters,
       renownCap: this.config.roster.renownCap,
+      quests: this.config.quests,
+      kindConfigs: this.config.kinds,
+      restDice: (seed) => new Rng(seed),
       blessingHpPerLevel: this.config.services.blessingHpPerLevel,
       companySize: this.config.roster.companySize,
       heroes: this.config.heroes,

@@ -136,13 +136,18 @@ Recovery, rooms, and the decision to turn back. Defined in
 | Field | Default | Meaning |
 | --- | --- | --- |
 | `restTicks` | 8 | Hours of rest after a homecoming |
-| `shortRestHealFraction` | 0.5 | Share of maximum hit points restored at a short rest, rounded up |
 | `carousingShare` | 0.05 | Share of the purse spent carousing |
 | `carousingMinimum` | 10 | Least gold spent carousing when the company tells the tale |
 | `carousingRenown` | 1 | Renown gained by carousing, up to the roster's cap |
 | `roomFeePerLevel` | 3 | Gold per company level for rooms |
 | `retreatAliveDivisor` | 2 | Turn back when this fraction of the original company, or fewer, is standing. 2 means half or fewer. |
-| `retreatHpFraction` | 0.35 | Also turn back when the company is this badly hurt |
+| `retreatHpFraction` | 0.35 | Turn back when average living HP fraction is below this threshold, evaluated after the Short rest's Hit Dice and before potions |
+
+Between non-final victories, a hurt company takes one Short rest hour. Its
+living adventurers spend Hit Dice, paced over encounters ahead, before deciding
+whether to turn back. Only a company that continues shares potions with those
+still Bloodied. An unhurt company skips the hour. The Long rest restores living
+HP and every spent Hit Die at the end of `restTicks`, regardless of lodging.
 
 ## `services`
 

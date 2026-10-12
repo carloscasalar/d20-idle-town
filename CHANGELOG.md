@@ -10,6 +10,12 @@ Everything below is part of the first release, which has not been tagged yet.
 
 ### 2026-10-12
 
+- Hurt companies take a logged Short rest hour between encounters, spending
+  level-based Hit Dice before checking retreat and sharing potions. Die size
+  and Constitution come from the engine's class HP formula; each rest has one
+  seeded dice stream. A Long rest restores every living hero's spent dice.
+  Removed `expedition.shortRestHealFraction`.
+
 - `scripts/tune.ts` accepts seed ranges, rejects empty entries, includes scale
   1.15 by default, prints unrounded metrics and compares each of the five tuning
   metrics to the recorded baseline at +/-15%.

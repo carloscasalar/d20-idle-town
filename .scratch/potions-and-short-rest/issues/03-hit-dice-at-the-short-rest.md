@@ -107,3 +107,25 @@ Fixture migration: heroes gain `hitDiceSpent`; migrate any test helper or fixtur
 - `CHANGELOG.md`: Hit Dice at the Short rest. Do not mention re-recorded hashes; that note belongs to issue 09.
 
 ## Comments
+
+- Implementation decisions: `src/core/dice.ts` owns parsing, rolling and Assured
+  healing; `src/adventurers/hit-dice.ts` owns pure Hit Dice recovery and the
+  swappable required pacing function. Dice formulas accept optional bonuses,
+  including negative Constitution bonuses. No strategy configuration is added.
+- `short-resting` is an explicit one-hour company stage. Expedition records
+  `shortRestStartedWith` only while that rest is pending, then removes it; this
+  preserves the preceding fight's alive-count threshold. The log names each
+  hero who rolled and each die, Constitution bonus, total and resulting HP.
+  Exhausted heroes receive no special line; the rest itself is always logged.
+- `WorkProfile.encounterCountSource` selects Contract or Bounty configuration
+  bounds by data. Expedition receives the required quest/kind configuration and
+  a `restDice(seed)` source factory. Production makes one local `Rng`; tests
+  script dice through that same seam without searching for a lucky seed.
+- SRD confirmation: SRD 5.2.1, printed page 187, Rules Glossary, Short Rest,
+  Spend Hit Point Dice: “You regain Hit Points equal to the total (minimum of 1
+  Hit Point).” Found in the official SRD PDF (the source already identified by
+  the parent PRD). The requested minimum-of-1 rule is confirmed.
+- Starting HEAD was `02542b1`, a documentation-only turn brief immediately after
+  `4cead1d`. Implementation uses that actual clean tip; issue 02 files remain
+  unchanged. `RTK.md`, referenced by `AGENTS.md`, was not found in this repo or
+  the relevant parent/agent directories; no configuration files were changed.

@@ -10,7 +10,7 @@ import { jobInquiry } from '../src/quests/job-intel';
 import type { Quest } from '../src/quests/quest';
 import { Board, DEFAULT_BOARD_CONFIG } from '../src/sim/board';
 import { profilesById } from '../src/sim/work-kinds';
-import { advanceExpedition, type CombatResolver, type ExpeditionContext, type ExpeditionEvent } from '../src/sim/expedition';
+import { advanceExpedition, encountersAhead, type CombatResolver, type ExpeditionContext, type ExpeditionEvent } from '../src/sim/expedition';
 import { openCoin } from '../src/town/coin';
 import { generateTown, serviceOf } from '../src/town/town';
 import { expeditionRules } from './helpers/expedition-rules';
@@ -100,7 +100,7 @@ describe('an expedition hour', () => {
     expect(events.at(-1)?.text).toContain('reach Stonebridge');
   });
 
-  it('uses one world seed per fight, takes a short rest, and returns after clearing the contract', () => {
+  it('uses one world seed per fight and one for a separate Short rest hour', () => {
     const { party, quest, context, events } = setup();
     const expectedRng = new Rng(99);
     const seeds: number[] = [];
@@ -116,18 +116,25 @@ describe('an expedition hour', () => {
 
     advanceExpedition(party, context);
     expect(party.progress).toBe(1);
-    expect(party.status).toBe('questing');
-    const healedHp = Math.min(maxHp, woundedHp + Math.ceil(maxHp * 0.5));
-    expect(healedHp).toBeLessThan(maxHp);
-    expect(party.members[0]!.hp).toBe(healedHp);
-    expect(party.members[1]!.hp).toBe(party.members[1]!.maxHp);
+    expect(party.status).toBe('short-resting');
+    expect(party.members[0]!.hp).toBe(woundedHp);
+    expect(events).toHaveLength(1);
     expect(events[0]?.kind).toBe('combat');
+
+    advanceExpedition(party, context);
+    expect(party.status).toBe('questing');
+    expect(party.members[0]!.hp).toBeGreaterThan(woundedHp);
+    expect(party.members[0]!.hp).toBeLessThanOrEqual(maxHp);
+    expect(party.members[1]!.hp).toBe(party.members[1]!.maxHp);
+    expect(events.at(-1)?.text).toContain('Short rest');
 
     advanceExpedition(party, context);
     expect(party.progress).toBe(quest.encounters.length);
     expect(party.status).toBe('returning');
     expect(party.ticksLeft).toBe(2);
-    expect(seeds).toEqual([expectedRng.seed(), expectedRng.seed()]);
+    const firstFight = expectedRng.seed();
+    expectedRng.seed(); // One rest seed between fights.
+    expect(seeds).toEqual([firstFight, expectedRng.seed()]);
   });
 
   it('leaves all possessions before settlement when the company is wiped out', () => {
@@ -210,6 +217,7 @@ describe('an expedition hour', () => {
 
   it('abandons an unfinished contract after a costly victory', () => {
     const { party, context, calls } = setup();
+    for (const hero of party.members) hero.hitDiceSpent = hero.level;
     context.combat = () => ({
       ...outcome(party, 'party'),
       heroes: party.members.map((hero) => ({ heroId: hero.id, hp: 1, alive: true, kills: 0 })),
@@ -217,6 +225,8 @@ describe('an expedition hour', () => {
 
     advanceExpedition(party, context);
 
+    expect(party.status).toBe('short-resting');
+    advanceExpedition(party, context);
     expect(party.progress).toBe(1);
     expect(party.status).toBe('returning');
     expect(party.members.every((hero) => hero.hp === 1)).toBe(true);
@@ -285,11 +295,11 @@ describe('scripted combat outcomes', () => {
 
   it.each([
     { hp: 34, status: 'returning', healedHp: 34 },
-    { hp: 35, status: 'questing', healedHp: 85 },
-    { hp: 36, status: 'questing', healedHp: 86 },
-  ] as const)('at $hp% average HP, ends the victory hour $status', ({ hp, status, healedHp }) => {
+    { hp: 35, status: 'questing', healedHp: 35 },
+    { hp: 36, status: 'questing', healedHp: 36 },
+  ] as const)('at $hp% average HP, ends the Short rest hour $status', ({ hp, status, healedHp }) => {
     const { party, context } = setup();
-    for (const hero of party.members) hero.maxHp = 100;
+    for (const hero of party.members) { hero.maxHp = 100; hero.hitDiceSpent = hero.level; }
     context.combat = () => {
       const result = outcome(party, 'party');
       result.xpEarned = 0;
@@ -299,6 +309,8 @@ describe('scripted combat outcomes', () => {
 
     advanceExpedition(party, context);
 
+    expect(party.status).toBe('short-resting');
+    advanceExpedition(party, context);
     expect(aliveMembers(party)).toHaveLength(4);
     expect(party.status).toBe(status);
     expect(party.progress).toBe(1);
@@ -378,6 +390,110 @@ describe('scripted combat outcomes', () => {
 });
 
 describe('expedition potions and short rests', () => {
+  it.each([false, true])('skips the rest hour, log and world seed when unhurt (costly victory: %s)', (costly) => {
+    const { party, context, events, rng } = setup();
+    const mirror = new Rng(99);
+    context.combat = () => ({ ...outcome(party, 'party', costly ? [true, true, false, false] : undefined), xpEarned: 0 });
+    context.restDice = () => { throw new Error('unexpected rest stream'); };
+    advanceExpedition(party, context);
+    expect(party.status).toBe(costly ? 'returning' : 'questing');
+    expect(party.progress).toBe(1);
+    expect(party.shortRestStartedWith).toBeUndefined();
+    expect(events.some((event) => event.text.includes('Short rest'))).toBe(false);
+    mirror.seed(); // Only the combat seed, even when losses require retreat.
+    expect(rng.next()).toBe(mirror.next());
+    if (!costly) {
+      advanceExpedition(party, context);
+      expect(party.progress).toBe(2);
+      expect(party.status).toBe('returning');
+    }
+  });
+
+  it.each([
+    { size: 1, level: 1, spent: 1 },
+    { size: 4, level: 1, spent: 0 },
+    { size: 6, level: 5, spent: 1 },
+  ])('uses one rest seed for $size heroes at level $level with $spent already spent', ({ size, level, spent }) => {
+    const { party, quest, context, rng, events } = setup(level);
+    party.members = createParty(new Rng(4), level, size, 0, STARTING_GOLD).members;
+    quest.countRevealed = true;
+    context.config = { ...context.config, retreatHpFraction: 0 };
+    for (const hero of party.members) hero.hitDiceSpent = spent;
+    context.combat = () => ({ ...outcome(party, 'party'), xpEarned: 0,
+      heroes: party.members.map((hero) => ({ heroId: hero.id, hp: 1, alive: true, kills: 0 })),
+    });
+    const mirror = new Rng(99);
+    mirror.seed();
+    mirror.seed();
+    advanceExpedition(party, context);
+    advanceExpedition(party, context);
+    expect(rng.next()).toBe(mirror.next());
+    expect(events.filter((event) => event.text.includes('Short rest'))).toHaveLength(1);
+    if (spent === level) {
+      expect(party.members[0]!.hp).toBe(1);
+      expect(events.at(-1)!.text).toBe(`${party.name} take a Short rest (1 hour).`);
+    }
+  });
+
+  it('shares one local dice source across heroes and logs every roll in company order', () => {
+    const { party, quest, context } = setup(2);
+    quest.countRevealed = true;
+    party.members = party.members.slice(0, 2);
+    for (const hero of party.members) { hero.heroClass = 'Fighter'; hero.maxHp = 100; }
+    context.config = { ...context.config, retreatHpFraction: 0 };
+    const scripted = [1, 2, 3, 4];
+    const mirror = new Rng(99);
+    mirror.seed();
+    const restSeed = mirror.seed();
+    let streams = 0;
+    context.restDice = (seed) => {
+      expect(seed).toBe(restSeed);
+      expect(++streams).toBe(1);
+      return { int: () => scripted.shift()! };
+    };
+    context.combat = () => ({ ...outcome(party, 'party'), xpEarned: 0,
+      heroes: party.members.map((hero) => ({ heroId: hero.id, hp: 1, alive: true, kills: 0 })),
+    });
+    const lines: string[] = [];
+    context.report = (event) => lines.push(event.text);
+    advanceExpedition(party, context);
+    advanceExpedition(party, context);
+    expect(party.members.map((hero) => [hero.hp, hero.hitDiceSpent])).toEqual([[8, 2], [12, 2]]);
+    expect(lines.at(-1)).toBe(`${party.name} take a Short rest (1 hour). ${party.members[0]!.name}: 1+2=3, 2+2=4; 8/100 HP. ${party.members[1]!.name}: 3+2=5, 4+2=6; 12/100 HP.`);
+    expect(scripted).toEqual([]);
+  });
+
+  it('checks losses against the original line after the rest, then keeps potions on retreat', () => {
+    const { party, context } = setup();
+    party.potions = 4;
+    context.restDice = () => ({ int: () => 1 });
+    context.combat = () => {
+      const result = outcome(party, 'party', [true, true, false, false]);
+      result.xpEarned = 0;
+      result.heroes[0]!.hp -= 1;
+      return result;
+    };
+    advanceExpedition(party, context);
+    expect(party.status).toBe('short-resting');
+    advanceExpedition(party, context);
+    expect(party.status).toBe('returning');
+    expect(party.potions).toBe(4);
+    expect(party.members.map((hero) => hero.hitDiceSpent)).toEqual([1, 0, 0, 0]);
+  });
+
+  it('does not rest after a final victory even when hurt', () => {
+    const { party, context, events, rng } = setup();
+    party.progress = 1;
+    context.combat = () => ({ ...outcome(party, 'party'), xpEarned: 0,
+      heroes: party.members.map((hero) => ({ heroId: hero.id, hp: 1, alive: true, kills: 0 })),
+    });
+    advanceExpedition(party, context);
+    expect(party.status).toBe('returning');
+    expect(events.some((event) => event.text.includes('Short rest'))).toBe(false);
+    const mirror = new Rng(99);
+    mirror.seed();
+    expect(rng.next()).toBe(mirror.next());
+  });
   it.each(['party', 'monsters', 'retreat', 'stalemate'] as const)('accounts for combat potions after a %s outcome', (winner) => {
     const { party, context } = setup();
     party.potions = 4;
@@ -392,50 +508,73 @@ describe('expedition potions and short rests', () => {
   });
 
   it.each([
-    { potions: 4, hp: [84, 60, 85, 100], left: 2 },
-    { potions: 2, hp: [84, 60, 85, 100], left: 0 },
-    { potions: 1, hp: [84, 26, 85, 100], left: 0 },
-    { potions: 0, hp: [50, 26, 85, 100], left: 0 },
-  ])('heals first, then shares $potions potions among heroes still Bloodied', ({ potions, hp, left }) => {
+    { potions: 4, hp: [84, 35, 57, 100], left: 2 },
+    { potions: 2, hp: [84, 35, 57, 100], left: 0 },
+    { potions: 1, hp: [84, 1, 57, 100], left: 0 },
+    { potions: 0, hp: [50, 1, 57, 100], left: 0 },
+  ])('rolls Hit Dice, then shares $potions potions in company order, including an exhausted hero', ({ potions, hp, left }) => {
     const { party, context, events } = setup();
-    for (const hero of party.members) hero.maxHp = 100;
+    for (const hero of party.members) { hero.maxHp = 100; hero.heroClass = 'Fighter'; }
+    party.members[1]!.hitDiceSpent = 1;
     party.potions = potions;
-    context.config = { ...context.config, shortRestHealFraction: 0.25 };
+    const rolls = [2, 4];
+    context.restDice = () => ({ int: () => rolls.shift()! });
     context.combat = () => {
       const result = outcome(party, 'party');
       result.xpEarned = 0;
-      // The first reaches exactly half after resting; the third is above half.
-      result.heroes.forEach((hero, i) => { hero.hp = [25, 1, 60, 100][i]!; });
+      result.heroes.forEach((hero, i) => { hero.hp = [46, 1, 51, 100][i]!; });
       return result;
     };
 
+    advanceExpedition(party, context);
+    expect(party.status).toBe('short-resting');
+    expect(party.potions).toBe(potions);
     advanceExpedition(party, context);
 
     expect(party.status).toBe('questing');
     expect(party.members.map((hero) => hero.hp)).toEqual(hp);
+    expect(party.members.map((hero) => hero.hitDiceSpent)).toEqual([1, 1, 1, 0]);
     expect(party.potions).toBe(left);
+    expect(rolls).toEqual([]);
     expect(events.some((event) => event.text.includes('potion'))).toBe(potions > 0);
+    const rest = events.findIndex((event) => event.text.includes('Short rest'));
+    expect(events[rest]!.text).toContain(`${party.members[0]!.name}: 2+2=4; 50/100 HP.`);
+    if (potions > 0) expect(events.findIndex((event) => event.text.includes('potion'))).toBeGreaterThan(rest);
   });
 
-  it.each([
-    { maxHp: 100, before: [1, 50, 99, 100], after: [51, 100, 100, 100] },
-    { maxHp: 101, before: [1, 51, 100, 101], after: [52, 101, 101, 101] },
-  ])('uses the default half-HP short rest, rounded up and capped at $maxHp', ({ maxHp, before, after }) => {
-    const { party, context } = setup();
-    for (const hero of party.members) hero.maxHp = maxHp;
+  it('uses the HP after Hit Dice to continue when the company was below the retreat threshold', () => {
+    const { party, quest, context } = setup();
+    quest.countRevealed = true;
     party.potions = 4;
-    context.combat = () => {
-      const result = outcome(party, 'party');
-      result.xpEarned = 0;
-      result.heroes.forEach((hero, i) => { hero.hp = before[i]!; });
-      return result;
-    };
-
+    for (const hero of party.members) { hero.heroClass = 'Fighter'; hero.maxHp = 20; }
+    context.restDice = () => ({ int: () => 6 });
+    context.combat = () => ({ ...outcome(party, 'party'), xpEarned: 0,
+      heroes: party.members.map((hero) => ({ heroId: hero.id, hp: 2, alive: true, kills: 0 })),
+    });
     advanceExpedition(party, context);
-
+    expect(party.members.map((hero) => hero.hp)).toEqual([2, 2, 2, 2]);
+    advanceExpedition(party, context);
     expect(party.status).toBe('questing');
-    expect(party.members.map((hero) => hero.hp)).toEqual(after);
+    expect(party.members.map((hero) => hero.hp)).toEqual([18, 18, 18, 18]);
+    expect(party.potions).toBe(0);
+  });
+
+  it('keeps every potion when HP after Hit Dice still requires retreat', () => {
+    const { party, context, events } = setup();
+    for (const hero of party.members) { hero.heroClass = 'Fighter'; hero.maxHp = 100; }
+    party.potions = 4;
+    context.restDice = () => ({ int: () => 1 });
+    context.combat = () => ({ ...outcome(party, 'party'), xpEarned: 0,
+      heroes: party.members.map((hero) => ({ heroId: hero.id, hp: 1, alive: true, kills: 0 })),
+    });
+    advanceExpedition(party, context);
+    advanceExpedition(party, context);
+    expect(party.status).toBe('returning');
+    expect(party.members.map((hero) => hero.hp)).toEqual([4, 4, 4, 4]);
     expect(party.potions).toBe(4);
+    expect(events.slice(1).map((event) => event.text)).toEqual([
+      expect.stringContaining('Short rest'), expect.stringContaining('turn back'),
+    ]);
   });
 
   it('keeps the supply at zero when a scripted resolver reports excessive consumption', () => {
@@ -450,6 +589,25 @@ describe('expedition potions and short rests', () => {
 });
 
 describe('homecoming', () => {
+  it.each(['paid rooms', 'insufficient gold', 'ruined tavern'])('restores living HP and all Hit Dice only after eight hours with %s', (lodging) => {
+    const { party, context, town } = homecoming();
+    context.config = { ...context.config, restTicks: 8 };
+    if (lodging === 'insufficient gold') party.gold = 0;
+    if (lodging === 'ruined tavern') serviceOf(town, 'tavern').ruined = true;
+    for (const hero of party.members) { hero.hp = 1; hero.hitDiceSpent = 1; }
+    killHero(party.members[3]!);
+    advanceExpedition(party, context);
+    expect(party.ticksLeft).toBe(8);
+    context.quest = undefined;
+    for (let hour = 0; hour < 7; hour++) advanceExpedition(party, context);
+    expect(party.status).toBe('resting');
+    expect(party.members.map((hero) => hero.hitDiceSpent)).toEqual([1, 1, 1, 1]);
+    expect(party.members[0]!.hp).toBe(1);
+    advanceExpedition(party, context);
+    expect(party.status).toBe('idle');
+    expect(aliveMembers(party).every((hero) => hero.hp === hero.maxHp)).toBe(true);
+    expect(party.members.map((hero) => hero.hitDiceSpent)).toEqual([0, 0, 0, 1]);
+  });
   it('settles an incomplete contract as failed and does not carouse', () => {
     const { party, quest, context, settleQuest, events, statistics } = homecoming(false);
     const gold = party.gold;
@@ -667,6 +825,7 @@ describe('expedition guards', () => {
   it.each([
     ['traveling', 'missing'], ['traveling', 'mismatch'],
     ['questing', 'missing'], ['questing', 'mismatch'],
+    ['short-resting', 'missing'], ['short-resting', 'mismatch'],
     ['returning', 'missing'], ['returning', 'mismatch'],
   ] as const)('rejects a %s company with a %s quest', (status, problem) => {
     const { party, quest, context, combat } = setup();
@@ -676,5 +835,31 @@ describe('expedition guards', () => {
 
     expect(() => advanceExpedition(party, context)).toThrow(`Missing contract for ${party.name} while ${status}.`);
     expect(combat).not.toHaveBeenCalled();
+  });
+});
+
+describe('encounters ahead for Hit Dice pacing', () => {
+  it('uses the exact known count including the boss', () => {
+    const { quest, context } = setup();
+    quest.countRevealed = true;
+    quest.kind = 'assault';
+    expect(encountersAhead(quest, 1, context.kinds.assault!, context.quests, context.kindConfigs)).toBe(1);
+  });
+
+  it('uses the largest configured Contract count when unknown, never less than revealed', () => {
+    const { quest, context } = setup();
+    context.quests = { ...context.quests, encounterCounts: [{ count: 3, weight: 1 }, { count: 7, weight: 1 }] };
+    expect(encountersAhead(quest, 1, context.kinds.contract!, context.quests, context.kindConfigs)).toBe(6);
+    quest.revealed = 9;
+    expect(encountersAhead(quest, 2, context.kinds.contract!, context.quests, context.kindConfigs)).toBe(7);
+  });
+
+  it('uses the configured Bounty upper bound plus its boss when unknown, never less than revealed', () => {
+    const { quest, context } = setup();
+    quest.kind = 'assault';
+    context.kindConfigs = { ...context.kindConfigs, assault: { ...context.kindConfigs.assault, encounters: [2, 4] } };
+    expect(encountersAhead(quest, 1, context.kinds.assault!, context.quests, context.kindConfigs)).toBe(4);
+    quest.revealed = 7;
+    expect(encountersAhead(quest, 1, context.kinds.assault!, context.quests, context.kindConfigs)).toBe(6);
   });
 });

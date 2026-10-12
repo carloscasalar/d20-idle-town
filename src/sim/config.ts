@@ -151,7 +151,6 @@ const intelSpec = withFields(sectionField(GAME_SPEC, 'intel'), {
 });
 
 const expeditionSpec = withFields(sectionField(GAME_SPEC, 'expedition'), {
-  shortRestHealFraction: fraction,
   carousingShare: chance,
   carousingMinimum: price,
   roomFeePerLevel: price,

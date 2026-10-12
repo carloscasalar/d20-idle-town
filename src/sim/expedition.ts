@@ -1,5 +1,7 @@
 import { describeHero, gainXp, healHero, isBloodied, killHero, potionHeal, resurrectionCost, type Hero, type HeroEconomyConfig } from '../adventurers/hero';
 import { aliveMembers, deadMembers, partyLevel, type Party } from '../adventurers/party';
+import { pacedHitDice, spendHitDice } from '../adventurers/hit-dice';
+import type { DiceSource } from '../core/dice';
 import type { CombatOptions, CombatOutcome } from '../combat/battlecast';
 import { freeze } from '../core/freeze';
 import { listNames } from '../core/names';
@@ -7,7 +9,8 @@ import type { DeepReadonly } from '../core/readonly';
 import type { Rng } from '../core/rng';
 import { describeEncounter, scaleEncounter, type EncounterConfig, type EncounterSpec } from '../quests/encounters';
 import { learnOnArrival, readTheRoad, type JobIntelConfig, type JobKnowledge } from '../quests/job-intel';
-import { difficultyCode, type ReadonlyQuest } from '../quests/quest';
+import { difficultyCode, type ReadonlyQuest, type QuestConfig } from '../quests/quest';
+import type { WorkKindConfigs } from './kind-config';
 import { purse, treasury, type Coin } from '../town/coin';
 import type { WorkProfile } from './work-kinds';
 import { serviceOf, type Town } from '../town/town';
@@ -15,7 +18,6 @@ import { serviceOf, type Town } from '../town/town';
 /** Recovery, rooms and the decision to turn back. Travel time is received from the Board. */
 export interface ExpeditionConfig {
   restTicks: number;
-  shortRestHealFraction: number;
   carousingShare: number;
   /** Least gold spent carousing when the company tells the tale. */
   carousingMinimum: number;
@@ -28,7 +30,6 @@ export interface ExpeditionConfig {
 
 export const DEFAULT_EXPEDITION_CONFIG: ExpeditionConfig = freeze({
   restTicks: 8,
-  shortRestHealFraction: 0.5,
   carousingShare: 0.05,
   carousingMinimum: 10,
   carousingRenown: 1,
@@ -53,7 +54,7 @@ export interface ExpeditionLedger {
 }
 
 export interface ExpeditionContext {
-  /** Required while traveling, questing or returning; resting has no contract. */
+  /** Required while traveling, questing, short-resting or returning; resting has no contract. */
   quest?: ReadonlyQuest;
   town: Town;
   rng: Rng;
@@ -67,6 +68,10 @@ export interface ExpeditionContext {
   /** Job intelligence, including the skill difficulty of reading the road. */
   intel: JobIntelConfig;
   encounters: EncounterConfig;
+  quests: QuestConfig;
+  kindConfigs: WorkKindConfigs;
+  /** One shared local dice stream, made from the world's single Short rest seed. */
+  restDice: (seed: number) => DiceSource;
   /** Received from the company roster. */
   renownCap: number;
   /** Received from town services. */
@@ -101,6 +106,9 @@ export function advanceExpedition(p: Party, context: ExpeditionContext): void {
     case 'questing':
       resolveFight(p, currentQuest(p, context), context);
       return;
+    case 'short-resting':
+      shortRest(p, currentQuest(p, context), context);
+      return;
     case 'returning': {
       const quest = currentQuest(p, context);
       if (--p.ticksLeft > 0) return;
@@ -109,7 +117,10 @@ export function advanceExpedition(p: Party, context: ExpeditionContext): void {
     }
     case 'resting':
       if (--p.ticksLeft <= 0) {
-        for (const h of aliveMembers(p)) healHero(h, h.maxHp);
+        for (const h of aliveMembers(p)) {
+          healHero(h, h.maxHp);
+          h.hitDiceSpent = 0;
+        }
         p.status = 'idle';
         p.idleTicks = 0;
       }
@@ -200,16 +211,15 @@ function resolveFight(p: Party, q: ReadonlyQuest, context: ExpeditionContext): v
     }
 
     p.progress += 1;
-    if (p.progress < q.encounters.length && shouldRetreat(p, fighters.length, context.config)) {
-      log(context, 'party', `${p.name} are too battered to go on. They abandon ${q.place} and turn back.`);
-      headHome(p, travelTicks);
-      return;
-    }
     if (p.progress >= q.encounters.length) {
       log(context, 'quest', `${p.name} have cleared ${q.place} and head back to ${town.name}.`);
       headHome(p, travelTicks);
+    } else if (survivors.some((h) => h.hp < h.maxHp)) {
+      p.status = 'short-resting';
+      p.ticksLeft = 1;
+      p.shortRestStartedWith = fighters.length;
     } else {
-      shortRest(p, context);
+      turnBack(p, q, fighters.length, context);
     }
     return;
   }
@@ -244,11 +254,37 @@ function resolveFight(p: Party, q: ReadonlyQuest, context: ExpeditionContext): v
   headHome(p, travelTicks);
 }
 
-/** Between encounters, heal living heroes, then give each still-Bloodied hero one potion if available. */
-function shortRest(p: Party, context: ExpeditionContext): void {
+/** Exact when known; otherwise pace over the configured upper bound, including every revealed encounter. */
+export function encountersAhead(q: ReadonlyQuest, completed: number, profile: WorkProfile, quests: QuestConfig, kinds: WorkKindConfigs): number {
+  const maximum = profile.encounterCountSource === 'assault'
+    ? kinds.assault.encounters[1] + 1
+    : Math.max(...quests.encounterCounts.map((entry) => entry.count));
+  const total = q.countRevealed ? q.encounters.length : Math.max(maximum, q.revealed);
+  return Math.max(1, total - completed);
+}
+
+/** One hour: Hit Dice, then the retreat decision, then potions for those still Bloodied. */
+function shortRest(p: Party, q: ReadonlyQuest, context: ExpeditionContext): void {
+  const startedWith = p.shortRestStartedWith;
+  if (startedWith === undefined) throw new Error(`Missing original line for ${p.name}'s Short rest.`);
+  const source = context.restDice(context.rng.seed());
+  const ahead = encountersAhead(q, p.progress, fightProfile(q, context), context.quests, context.kindConfigs);
+  const details: string[] = [];
+  for (const h of aliveMembers(p)) {
+    const recovery = spendHitDice(h, ahead, source, pacedHitDice);
+    h.hp = recovery.hp;
+    h.hitDiceSpent = recovery.hitDiceSpent;
+    if (recovery.rolls.length > 0) {
+      details.push(`${h.name}: ${recovery.rolls.map((roll) => `${roll.dice[0]}${roll.bonus < 0 ? '' : '+'}${roll.bonus}=${roll.total}`).join(', ')}; ${h.hp}/${h.maxHp} HP.`);
+    }
+  }
+  delete p.shortRestStartedWith;
+  p.ticksLeft = 0;
+  p.status = 'questing';
+  log(context, 'party', `${p.name} take a Short rest (1 hour).${details.length ? ` ${details.join(' ')}` : ''}`);
+  if (turnBack(p, q, startedWith, context)) return;
   let drunk = 0;
   for (const h of aliveMembers(p)) {
-    healHero(h, Math.ceil(h.maxHp * context.config.shortRestHealFraction));
     if (p.potions > 0 && isBloodied(h)) {
       p.potions -= 1;
       drunk += 1;
@@ -256,6 +292,13 @@ function shortRest(p: Party, context: ExpeditionContext): void {
     }
   }
   if (drunk > 0) log(context, 'party', `${p.name} catch their breath. ${drunk} potion${drunk > 1 ? 's' : ''} drunk; ${p.potions} left.`);
+}
+
+function turnBack(p: Party, q: ReadonlyQuest, startedWith: number, context: ExpeditionContext): boolean {
+  if (!shouldRetreat(p, startedWith, context.config)) return false;
+  log(context, 'party', `${p.name} are too battered to go on. They abandon ${q.place} and turn back.`);
+  headHome(p, context.travelTicks);
+  return true;
 }
 
 function headHome(p: Party, travelTicks: number): void {

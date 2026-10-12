@@ -9,6 +9,7 @@ export type PartyStatus =
   | 'idle'
   | 'traveling'
   | 'questing'
+  | 'short-resting'
   | 'returning'
   | 'resting'
   | 'disbanded';
@@ -24,6 +25,8 @@ export interface Party {
   progress: number;
   /** Ticks left in the current timed status. */
   ticksLeft: number;
+  /** Original line in the fight preceding the pending Short rest; owned by Expedition. */
+  shortRestStartedWith?: number;
   /** Ticks spent waiting idle (used to escalate recruitment). */
   idleTicks: number;
   questsDone: number;

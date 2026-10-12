@@ -14,6 +14,11 @@ function document(): Record<string, unknown> {
 }
 
 describe('game configuration', () => {
+  it('rejects the removed Short rest flat-healing key as unknown', () => {
+    expect(resolveGameConfig({ expedition: { shortRestHealFraction: 0.5 } })).toEqual({
+      ok: false, errors: ['unknown field expedition.shortRestHealFraction'],
+    });
+  });
   it('is plain data: a JSON round trip is the same configuration', () => {
     const parsed = document();
     const checked = validateGameConfig(parsed);

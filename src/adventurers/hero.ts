@@ -14,6 +14,8 @@ export interface Hero {
   xp: number;
   maxHp: number;
   hp: number;
+  /** Dice spent since the last Long rest; remaining dice are level minus this count. */
+  hitDiceSpent: number;
   alive: boolean;
   kills: number;
   deaths: number;
@@ -123,6 +125,7 @@ export function createHero(rng: Rng, level: number, heroClass?: HeroClassName): 
     xp: 0,
     maxHp,
     hp: maxHp,
+    hitDiceSpent: 0,
     alive: true,
     kills: 0,
     deaths: 0,

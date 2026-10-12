@@ -55,6 +55,11 @@ services using narrow contexts. No domain module imports Game.
 
 ### `src/core` — primitives with no domain in them
 
+`dice.ts` parses `NdM+K` (also unmodified dice and negative bonuses), rolls from
+an explicit `int(min, max)` source and derives Assured healing from the formula.
+Game code never calls the engine's exported `rollDice`: outside `withRng` it
+falls back to `Math.random()`. Every game-side die uses this core module.
+
 | File | What it holds |
 | --- | --- |
 | `rng.ts` | `Rng`, a mulberry32 PRNG. `int`, `chance`, `pick`, `weighted`, `shuffle`, and `seed()` which forks a child seed for one combat. It also allocates namespaced IDs from counters owned by that RNG, without consuming random values. `hashString` turns a `?seed=` URL string into a number. |
@@ -298,9 +303,13 @@ machine for one company and one hour:
 
 ```
 idle ──accept──► traveling ──arrive──► questing ──cleared/retreat──► returning ──► resting ──► idle
-  │                                        │
-  │                                        └── wiped ──► disbanded
+                                      │  ▲
+                             hurt win │  │ continue
+                                      ▼  │
+                                  short-resting ──retreat──► returning
   └── recruit / shop / merge / retire / take a lair bounty
+
+questing ──wiped──► disbanded
 ```
 
 `idle` delegates recruiting and merging to the roster, then chooses purchases and work: buying
@@ -308,9 +317,8 @@ potions, armour, items and blessings, paying guild dues and selling loot
 through `visitTownServices`,
 learning about a contract through `seekJobIntelligence`, and finally accepting one. During `questing`, the
 Expedition module resolves one fight per tick, applies casualties and XP,
-subtracts combat potions, handles retreat and recovery through `shortRest`
-(a configured fraction of maximum HP, default 0.5, then a potion for each hero
-still Bloodied while supplies last), and reports events synchronously. It takes a
+subtracts combat potions, schedules a Short rest for a hurt company after a
+non-final victory, and reports events synchronously. It takes a
 combat resolver through an interface: `runCombat` is the production adapter,
 while tests supply scripted outcomes. A wipe or homecoming resets expedition
 progress and hands the finished work and outcome to settlement exactly once.
@@ -323,6 +331,24 @@ a Contract without its employer or holding is an error before it is closed or
 counted; real games never remove those entities. Lost-loot storage stays in `Game` and is called at the same
 point in the journey. A broken lair's hoard is paid out by `Game` when the
 Board asks, after the bounty is paid and before the chronicle line.
+
+After a non-final victory, a hurt company spends the next tick in
+`short-resting`. Expedition records the original line for the retreat check.
+`adventurers/hit-dice.ts` derives die size and Constitution from the engine's
+`hpFormula` and purely calculates recovery, returning HP, spent dice and rolls.
+Its required pacing strategy receives hero, dice remaining and encounters ahead;
+the default spreads remaining dice with `ceil(D / E)`, stopping at full HP.
+The profile's `encounterCountSource` selects the configured upper bound when the
+count is unknown (Contract counts, or Bounty upper bound plus the boss), never
+below what job intelligence has revealed. A known count uses the exact total.
+The rest logs rolls, checks retreat using the resulting HP, then gives each
+still-Bloodied living hero one old flat-healing potion in company order if the
+company continues. An unhurt company checks losses in the combat tick and skips
+the rest. Level-up adds a remaining die without changing `hitDiceSpent`; death
+and resurrection preserve the pool. The town Long rest resets living heroes'
+spent dice alongside full HP at the end of eight hours, even without paid rooms
+or with a ruined tavern. Divergence from SRD 5.2.1: the game does not enforce
+one Long rest per 24 hours.
 
 Renderers cross two seams: `onEvent(listener)` pushes each log event as it
 happens, and `view()` returns a fresh immutable snapshot for the current frame.
@@ -373,19 +399,29 @@ fight badly hurt abandons the contract and walks home.
 - Every combat gets a child seed from `this.rng.seed()`, so a fight is
   reproducible on its own and the engine's internal rolls never disturb the
   world stream.
+- Every actual Short rest consumes exactly one world `seed()` and makes one
+  local `Rng` for all heroes' Hit Dice, in company order. Spending, company size
+  and pacing never alter that world-stream cost. An unhurt company consumes no
+  rest seed. Trajectories change with these new seeds but reproduce themselves.
 - The engine is itself deterministic under a seed, so `seed + tick order` fixes
   the entire run.
 
 Practical consequence: any change to the *order* of rolls in `step()` changes
 every seeded expectation downstream, including the smoke test. That is
 intentional — it is how a whole-world regression gets noticed. The smoke test
-checks repeatability; `simulation-regression.test.ts` additionally compares each
-400-hour trajectory against a reference recorded before the services extraction.
+checks repeatability. The three whole-world hashes and three stripped-world
+hashes are temporarily skipped until issue 09 of the potions and Short rest
+effort re-records them once. Until then, the unchanged smoke, combat-space,
+lairs, deployment, company roster seeded loops and combat potion tests are the
+regression guard; their fixtures and expectations remain unchanged.
 
 ## Tests and calibration
 
 | Path | What it covers |
 | --- | --- |
+| `test/dice.test.ts` | Formula parsing, scripted and seeded rolls, bounds, invalid formulas, derived Assured healing |
+| `test/hit-dice.test.ts` | Engine HP parser, minimum healing, pure spending, quota, full-HP stopping, exhausted heroes, level-up, death and resurrection |
+| `test/expedition.test.ts` | Separate Short rest hour, dice/retreat/potion order, shared local rolls, world seed isolation, encounter bounds, Long rest in every lodging case |
 | `test/smoke.test.ts` | A deterministic 400-hour run: no crashes, and the world produces contracts, deaths and coin |
 | `test/town-services.test.ts` | Public hourly ticks: purchase priorities, reserve thresholds, ledgers, stock, equipment allocation, guild renewal, blessings and retirement ordering |
 | `test/game-access.test.ts` | State boundary: scenario setup expires before the game runs, and event subscribers receive immutable data |

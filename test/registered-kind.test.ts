@@ -44,6 +44,7 @@ const survey: WorkProfile = Object.freeze({
   lairFigure: 'strength',
   lastFightForbidsRetreat: true,
   lairDepth: true,
+  encounterCountSource: 'quests',
   countAtPosting: true,
   offer: 'none',
 });
