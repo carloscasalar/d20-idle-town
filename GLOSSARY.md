@@ -15,11 +15,11 @@ What a **Being** is, as far as its needs go: a set of need rules, each reading t
 _Avoid_: NeedsAssessor, Instinct, category
 
 **Need**:
-Something a **Being** lacks right now, with an **Urgency**. Its **Nature** derives it afresh from the Being's state each time; a need is never stored, so it vanishes when the state no longer gives it.
+Something a **Being** lacks right now, with an **Urgency**, sometimes about a **Thing**: two threatened Holdings give two needs to protect, one about each. Its **Nature** derives it afresh from the Being's state each time; a need is never stored, so it vanishes when the state no longer gives it.
 _Avoid_: Desire, Goal (a need is not yet a choice)
 
 **Urgency**:
-How pressing a **Need** is, comparable across all the needs of one **Being**.
+How pressing a **Need** is, from 1 to 20 like a d20 roll, comparable across all the needs of one **Being**.
 _Avoid_: Priority (fixed per kind)
 
 **Mind**:
@@ -31,7 +31,7 @@ One step a **Being** attempts in the world, such as buying a potion or travellin
 _Avoid_: Move, Command
 
 **Plan**:
-The sequence of **Actions** a **Mind** commits to in order to meet one **Need**, such as travel, fight, return and collect. The Being follows it step by step and decides again only when it ends, when a step fails, or when its Mind chooses to break it off.
+The fixed sequence of **Actions** a **Mind** commits to in order to meet one **Need**, such as travel, fight, return and collect. The Being follows it step by step and decides again only when it ends, when its Need is gone, when a step fails, when it learns something new about a **Thing** the Plan relies on, or when another Need meets its **Resolve**. Waiting is a Plan with no steps.
 _Avoid_: Course, Undertaking, Task
 
 **Group**:
@@ -119,11 +119,11 @@ A roll between the Beings of a **Claim**, with the check the **Action** calls fo
 _Avoid_: Tie-break, Opposed roll
 
 **Resolve**:
-The **Urgency** above which a **Being** breaks off its **Plan**, set by its **Mind** when it commits: a brave Mind sets it high, a cowardly one low. Checking it does not consult the Mind.
+The **Urgency** at which another **Need** makes a **Being** break off its **Plan**, set by its **Mind** when it commits, like a DC: a brave Mind sets it high, a cowardly one low. The Need the Plan serves never counts; checking it does not consult the Mind, and a Mind that carries on past it sets a higher one. A Need at 20 cannot be put off.
 _Avoid_: Threshold, Breaking point
 
 **Tick**:
-One hour of world time. Each tick every **Being**'s **Nature** derives its needs afresh and the Being takes the next step of its **Plan**; its **Mind** is consulted only when it has no Plan, a step fails, requests reach it as an **Owner**, or a need passes its **Resolve**.
+One hour of world time. Each tick every **Being**'s **Nature** derives its needs afresh and the Being takes the next step of its **Plan**; its **Mind** is consulted only when it has no Plan, a step fails, it learns something new about a **Thing** its Plan relies on, requests reach it as an **Owner**, or a need meets its **Resolve**.
 _Avoid_: Turn, Round (those belong to combat)
 
 **Fight**:

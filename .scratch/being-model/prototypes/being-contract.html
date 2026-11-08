@@ -1,0 +1,627 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Being contract prototype</title>
+<style>
+  :root { --ink:#1d2330; --mute:#6b7385; --line:#e3e6ec; --bg:#f7f8fa; --card:#fff; --accent:#2f6fdb; --soft:#e9f0fc; --bad:#c2412d; --ok:#2f8a4e; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width:1180px; margin:0 auto; padding:24px 16px 64px; }
+  h1 { font-size:24px; margin:0 0 4px; }
+  h2 { font-size:17px; margin:28px 0 10px; }
+  h3 { font-size:15px; margin:0 0 6px; }
+  p { margin:6px 0; }
+  .mute { color:var(--mute); }
+  .banner { background:#fff6e5; border:1px solid #f0d9a8; border-radius:8px; padding:10px 14px; margin:12px 0; font-size:14px; }
+  .panel { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:14px 16px; }
+  .row { display:flex; gap:12px; flex-wrap:wrap; align-items:center; }
+  button { font:inherit; font-size:14px; border:1px solid var(--line); background:#fff; border-radius:7px; padding:6px 11px; cursor:pointer; }
+  button:hover:not(:disabled) { border-color:var(--accent); }
+  button.primary { background:var(--accent); color:#fff; border-color:var(--accent); }
+  button:disabled { opacity:.45; cursor:default; }
+  button.done { background:var(--soft); color:var(--mute); }
+  .beings { display:grid; grid-template-columns:repeat(auto-fit, minmax(330px, 1fr)); gap:12px; }
+  .kv { display:grid; grid-template-columns:120px 1fr; gap:2px 10px; font-size:14px; }
+  .kv dt { color:var(--mute); }
+  .kv dd { margin:0; }
+  .stale { color:var(--bad); font-size:13px; }
+  .need { display:grid; grid-template-columns:70px 1fr 34px; gap:8px; align-items:center; font-size:14px; }
+  .bar { height:8px; background:var(--line); border-radius:4px; position:relative; }
+  .bar > i { position:absolute; inset:0 auto 0 0; background:var(--accent); border-radius:4px; }
+  .bar > b { position:absolute; top:-3px; bottom:-3px; width:2px; background:var(--bad); }
+  .steps { margin:4px 0 0; padding-left:20px; font-size:14px; }
+  .steps li.done { color:var(--mute); text-decoration:line-through; }
+  .steps li.next { font-weight:600; }
+  .tag { display:inline-block; font-size:12px; padding:1px 7px; border-radius:10px; background:var(--soft); color:var(--accent); }
+  .changed { background:#fff3c4; border-radius:3px; }
+  table { width:100%; border-collapse:collapse; font-size:14px; }
+  th, td { text-align:left; vertical-align:top; padding:6px 8px; border-bottom:1px solid var(--line); }
+  th { color:var(--mute); font-weight:500; }
+  .ok { color:var(--ok); } .bad { color:var(--bad); }
+  .tabs { display:flex; gap:4px; flex-wrap:wrap; margin-bottom:10px; }
+  .tabs button.on { background:var(--accent); color:#fff; border-color:var(--accent); }
+  .walk ol { padding-left:20px; } .walk li { margin:6px 0; }
+  .walk .watch { font-size:13px; color:var(--mute); display:block; }
+  pre { background:#f2f4f8; border-radius:8px; padding:12px; overflow:auto; font-size:12.5px; line-height:1.45; }
+  label { font-size:14px; }
+  .opt { margin:6px 0; }
+  .err { color:var(--bad); font-weight:600; }
+  .history { max-height:320px; overflow:auto; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Being contract — prototype</h1>
+  <p class="mute">Throwaway prototype for the wayfinder ticket "Being contract". Not part of <code>src/</code>.</p>
+  <div class="panel">
+    <p><b>The question.</b> What does a Being implement, as code? A <b>Nature</b> is a list of need rules that read only the Being's state and Knowledge and give <b>Needs</b>, each with an <b>Urgency</b> from 0 to 100. A <b>Mind</b> is consulted only when the Being has no <b>Plan</b>, a step failed, requests reached it as an <b>Owner</b>, or a Need passed its <b>Resolve</b>. It returns a <b>Decision</b> with a <b>Reason</b>. The Being then takes its Plan's next <b>Action</b>, one per Tick, without asking the Mind again.</p>
+    <p>Here Brom and Ilsa share the same fighter Nature but have different Minds: Brom is bold, Ilsa is cautious. Mara keeps the potion shop and is the Owner of its potions. Press <b>Next Tick</b> and watch who gets consulted, and why.</p>
+  </div>
+  <div class="banner"><b>The world here is a stub, not the Tick settlement design.</b> It only applies Actions and hands back outcomes. The ticket "Tick settlement" will decide how Actions are gathered, ordered and settled, how Claims and Contests work, and how Actions that last several Ticks work. The stub also leaves out Groups, how Knowledge is learned, and the Journal format and configuration.</div>
+
+  <h2>Open choices in the contract</h2>
+  <div class="panel" id="choices"></div>
+
+  <h2>Guided walkthroughs</h2>
+  <div class="panel walk">
+    <div class="tabs" id="tabs"></div>
+    <div id="walk"></div>
+  </div>
+
+  <h2>The world now <span class="mute" id="tickLabel"></span></h2>
+  <div class="row" style="margin-bottom:10px" id="freeplay"></div>
+  <div class="beings" id="beings"></div>
+
+  <h2>What happened last Tick</h2>
+  <div class="panel" id="last"></div>
+
+  <h2>Every Decision so far</h2>
+  <div class="panel history" id="history"></div>
+
+  <h2>The contract as code</h2>
+  <details class="panel"><summary>Show the shapes (TypeScript sketch of the module below)</summary>
+<pre>
+type Urgency = number                     // integer 0–100, comparable across one Being's Needs
+type Need = { kind: string; urgency: Urgency; note: string }
+type NeedRule&lt;S, K&gt; = (state: S, knowledge: K) =&gt; Need | null   // no world in the signature
+type Nature&lt;S, K&gt; = { name: string; rules: NeedRule&lt;S, K&gt;[] }
+
+type Action = { kind: string; [arg: string]: unknown }
+type Plan = { forNeed: string | null; steps: Action[]; next: number; resolve: Urgency; waiting?: true }
+
+type Trigger = 'no-plan' | 'plan-ended' | 'need-gone' | 'step-failed' | 'resolve-passed'
+type Failure = { action: Action; how: 'refused' | 'contest-lost' | 'impossible'; why: string }
+type Reason = string
+
+type Decision =
+  | { kind: 'commit';   forNeed: string; steps: Action[]; resolve: Urgency; reason: Reason }
+  | { kind: 'carry-on'; resolve: Urgency; reason: Reason }   // keep the Plan, set a new Resolve
+  | { kind: 'wait';     resolve: Urgency; reason: Reason }   // nothing to do until a Need passes Resolve
+
+type Request = { id: string; from: BeingId; fromName: string; action: Action }
+type Answer = { request: string; accept: boolean; reason: Reason }
+
+interface Mind&lt;S, K&gt; {
+  decide(c: { trigger: Trigger; brokenBy?: Need; failure?: Failure; plan?: Plan;
+              needs: Need[]; state: S; knowledge: K; rng: Rng }): Decision
+  answer(c: { requests: Request[]; needs: Need[]; state: S; knowledge: K; rng: Rng }): Answer[]
+}
+
+// The Being's side of a Tick, all without the world:
+takeTurn(being, nature, mind, rng)  =&gt; { being, needs, consulted, decision, action }
+afterOutcome(being, outcome)        =&gt; being   // success moves to the next step; failure is kept for the Mind
+type Outcome = { ok: true; note?: string } | { ok: false; how: Failure['how']; why: string }
+</pre>
+  </details>
+</main>
+
+<script>
+// =====================================================================
+// BEING CONTRACT — the portable module. Pure: no DOM, no world access.
+// =====================================================================
+const BeingContract = (() => {
+  const urgency = n => Math.max(0, Math.min(100, Math.round(n)));
+
+  // A Nature's rules read only state and Knowledge. Needs are derived afresh, never stored.
+  function deriveNeeds(nature, state, knowledge) {
+    const needs = [];
+    for (const rule of nature.rules) {
+      const n = rule(state, knowledge);
+      if (n) needs.push({ kind: n.kind, urgency: urgency(n.urgency), note: n.note });
+    }
+    return needs.sort((a, b) => b.urgency - a.urgency || (a.kind < b.kind ? -1 : 1));
+  }
+
+  // Why the Mind must be consulted this Tick, or null. Checking Resolve never calls the Mind.
+  function whyConsult(being, needs, choices) {
+    const plan = being.plan;
+    if (being.failure) return { trigger: 'step-failed' };
+    if (!plan) return { trigger: 'no-plan' };
+    if (!plan.waiting && plan.next >= plan.steps.length) return { trigger: 'plan-ended' };
+    if (!plan.waiting && choices.planEndsWhenNeedGone && !needs.some(n => n.kind === plan.forNeed))
+      return { trigger: 'need-gone' };
+    const breaking = needs.filter(n => n.urgency > plan.resolve &&
+      (plan.waiting || choices.ownNeedPassesResolve || n.kind !== plan.forNeed));
+    if (breaking.length) return { trigger: 'resolve-passed', need: breaking[0] };
+    return null;
+  }
+
+  function checkDecision(d) {
+    const errs = [];
+    if (!d || !['commit', 'carry-on', 'wait'].includes(d.kind)) errs.push('unknown Decision');
+    else {
+      if (!d.reason) errs.push('a Decision needs a Reason');
+      if (!Number.isInteger(d.resolve) || d.resolve < 0 || d.resolve > 100) errs.push('Resolve must be an Urgency, 0–100');
+      if (d.kind === 'commit' && !(d.steps && d.steps.length)) errs.push('a Plan needs at least one step');
+    }
+    if (errs.length) throw new Error('Contract broken: ' + errs.join('; '));
+  }
+
+  function applyDecision(being, d, choices) {
+    if (d.kind === 'commit')
+      return { ...being, failure: null, plan: { forNeed: d.forNeed, steps: d.steps, next: 0, resolve: d.resolve } };
+    if (d.kind === 'carry-on')
+      return { ...being, failure: null, plan: { ...being.plan, resolve: d.resolve } };
+    // wait
+    return { ...being, failure: null,
+      plan: choices.idle === 'waiting-plan' ? { forNeed: null, steps: [], next: 0, resolve: d.resolve, waiting: true } : null };
+  }
+
+  function takeTurn(being, nature, mind, rng, choices) {
+    const needs = deriveNeeds(nature, being.state, being.knowledge);
+    const consulted = whyConsult(being, needs, choices);
+    let decision = null, b = being;
+    if (consulted) {
+      decision = mind.decide({ trigger: consulted.trigger, brokenBy: consulted.need, failure: being.failure,
+        plan: being.plan, needs, state: being.state, knowledge: being.knowledge, rng });
+      checkDecision(decision);
+      b = applyDecision(being, decision, choices);
+    }
+    const action = b.plan && !b.plan.waiting ? b.plan.steps[b.plan.next] : null;
+    return { being: b, needs, consulted, decision, action };
+  }
+
+  function answerRequests(being, nature, mind, requests, rng) {
+    const needs = deriveNeeds(nature, being.state, being.knowledge);
+    const answers = mind.answer({ requests, needs, state: being.state, knowledge: being.knowledge, rng });
+    const ids = new Set(answers.map(a => a.request));
+    if (answers.length !== requests.length || requests.some(r => !ids.has(r.id)) || answers.some(a => !a.reason))
+      throw new Error('Contract broken: every request needs exactly one answer with a Reason');
+    return answers;
+  }
+
+  function afterOutcome(being, outcome) {
+    if (!outcome || !being.plan || being.plan.waiting) return being;
+    if (outcome.ok) return { ...being, plan: { ...being.plan, next: being.plan.next + 1 } };
+    return { ...being, failure: { action: outcome.action, how: outcome.how, why: outcome.why } };
+  }
+
+  return { deriveNeeds, takeTurn, answerRequests, afterOutcome };
+})();
+
+// =====================================================================
+// TOY NATURES AND MINDS — examples of what a Being implements.
+// =====================================================================
+const PRICE = 5;
+const NATURES = {
+  fighter: { name: 'Fighter', rules: [
+    function heal(s) {
+      const missing = s.maxHp - s.hp; if (missing <= 0) return null;
+      const inWoods = s.place === 'woods';
+      return { kind: 'heal', urgency: missing / s.maxHp * 100 * (inWoods ? 1.5 : 1),
+        note: `hit points ${s.hp}/${s.maxHp}${inWoods ? ', and in the woods' : ''}` };
+    },
+    function gold(s) {
+      if (s.gold >= 10) return null;
+      return { kind: 'gold', urgency: (10 - s.gold) * 6, note: `${s.gold} gold in the Purse` };
+    },
+    function safety(s, k) {
+      if (s.place !== 'woods' || !k.wolfInWoods) return null;
+      const bloodied = s.hp * 2 <= s.maxHp;
+      return { kind: 'safety', urgency: bloodied ? 90 : 70, note: bloodied ? 'knows a wolf is near, and is Bloodied' : 'knows a wolf is near' };
+    },
+  ]},
+  shopkeeper: { name: 'Shopkeeper', rules: [
+    function restock(s, k) { return k.shopStock > 0 ? null : { kind: 'restock', urgency: 60, note: 'no potions on the shelf' }; },
+  ]},
+};
+
+const T = (kind, extra) => ({ kind, ...extra });
+const rests = n => Array.from({ length: n }, () => T('rest'));
+
+function fighterMind(temper) {
+  function planFor(need, s, k) {
+    if (need.kind === 'safety') return { steps: [T('travel', { to: 'village' })], reason: 'a wolf in the woods: back to the village' };
+    if (need.kind === 'heal') {
+      if (s.potions > 0) return { steps: [T('drink')], reason: 'drink a Healing potion' };
+      const canBuy = k.shopStock > 0 && s.gold >= PRICE;
+      const n = Math.min(3, Math.ceil((s.maxHp - s.hp) / 4));
+      if (s.place === 'village') return canBuy
+        ? { steps: [T('buy'), T('drink')], reason: 'buy a Healing potion from Mara and drink it' }
+        : { steps: rests(n), reason: 'rest at the inn' };
+      return canBuy
+        ? { steps: [T('travel', { to: 'village' }), T('buy'), T('drink')], reason: 'back to the village for a Healing potion' }
+        : { steps: [T('travel', { to: 'village' }), ...rests(n)], reason: 'back to the village to rest' };
+    }
+    if (need.kind === 'gold') {
+      if (temper.cautious && k.wolfInWoods) return { wait: true, reason: 'a wolf in the woods: no work there for now' };
+      const go = s.place === 'woods' ? [] : [T('travel', { to: 'woods' })];
+      return { steps: [...go, T('work'), T('work'), T('work'), T('travel', { to: 'village' })], reason: 'earn gold working in the woods' };
+    }
+  }
+  return {
+    name: temper.name,
+    decide(c) {
+      const s = c.state, k = c.knowledge;
+      if (!c.needs.length) return { kind: 'wait', resolve: 0, reason: 'nothing lacking' };
+      if (c.trigger === 'resolve-passed' && temper.bold && c.brokenBy.kind === 'safety' && s.hp * 2 > s.maxHp)
+        return { kind: 'carry-on', resolve: Math.min(100, c.brokenBy.urgency + 15), reason: 'a wolf will not scare me off the job' };
+      const top = c.brokenBy || c.needs[0];
+      const p = planFor(top, s, k);
+      const why = c.trigger === 'step-failed' ? `${c.failure.why}, so ` : '';
+      if (p.wait) return { kind: 'wait', resolve: top.urgency, reason: why + p.reason };
+      return { kind: 'commit', forNeed: top.kind, steps: p.steps, resolve: temper.resolve, reason: why + p.reason };
+    },
+    answer(c) { return c.requests.map(r => ({ request: r.id, accept: false, reason: 'I own nothing to give' })); },
+  };
+}
+
+const MINDS = {
+  bold: fighterMind({ name: 'Bold', resolve: 65, bold: true }),
+  cautious: fighterMind({ name: 'Cautious', resolve: 35, cautious: true }),
+  shrewd: {
+    name: 'Shrewd',
+    decide(c) {
+      if (!c.needs.length) return { kind: 'wait', resolve: 0, reason: 'the shelf is stocked' };
+      if (c.state.gold < 6) return { kind: 'wait', resolve: 60, reason: 'no gold to order potions' };
+      return { kind: 'commit', forNeed: 'restock', steps: [T('restock')], resolve: 50, reason: 'the shelf is empty: order potions' };
+    },
+    answer(c) {
+      let left = c.knowledge.shopStock;
+      const ranked = c.requests
+        .map(r => ({ r, regular: c.knowledge.regulars[r.from] || 0, roll: c.rng.next() }))
+        .sort((a, b) => b.regular - a.regular || a.roll - b.roll);
+      const sold = [];
+      return ranked.map(({ r, regular }) => {
+        if (left <= 0) return { request: r.id, accept: false,
+          reason: sold.length ? `none left after ${sold.join(' and ')}, a better customer` : 'none left on the shelf' };
+        left--; sold.push(r.fromName);
+        return { request: r.id, accept: true, reason: regular ? `${r.fromName} is a regular: sold` : `sold to ${r.fromName}` };
+      });
+    },
+  },
+};
+
+// =====================================================================
+// WORLD STUB — throwaway. Not the Tick settlement design.
+// =====================================================================
+function makeRng(holder) {
+  return { next() { let a = holder.s = (holder.s + 0x6D2B79F5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; } };
+}
+
+function initialWorld() {
+  const fighter = (id, name, mind, gold) => ({ id, name, kind: 'Fighter', nature: 'fighter', mind,
+    state: { hp: 12, maxHp: 12, gold, place: 'village', potions: 0 },
+    knowledge: { shopStock: 2, wolfInWoods: false }, plan: null, failure: null });
+  return {
+    tick: 0, rng: { s: 42 }, wolfInWoods: false,
+    shop: { owner: 'mara', stock: 2 },
+    beings: [
+      fighter('brom', 'Brom', 'bold', 3),
+      fighter('ilsa', 'Ilsa', 'cautious', 30),
+      { id: 'mara', name: 'Mara', kind: 'Shopkeeper', nature: 'shopkeeper', mind: 'shrewd',
+        state: { gold: 20, place: 'village' }, knowledge: { shopStock: 2, regulars: {} }, plan: null, failure: null },
+    ],
+    consults: { brom: 0, ilsa: 0, mara: 0 },
+    history: [], error: null,
+  };
+}
+
+const clone = o => JSON.parse(JSON.stringify(o));
+const byId = (w, id) => w.beings.find(b => b.id === id);
+
+function see(w, b) { // what a Being sees where it is (stub)
+  if (b.state.place === 'village') b.knowledge.shopStock = w.shop.stock;
+  if (b.state.place === 'woods' && 'wolfInWoods' in b.knowledge) b.knowledge.wolfInWoods = w.wolfInWoods;
+}
+
+function settle(w, b, action) {
+  const s = b.state, fail = (how, why) => ({ ok: false, action, how, why });
+  switch (action.kind) {
+    case 'travel': s.place = action.to; return { ok: true, note: `now in the ${action.to}` };
+    case 'work': {
+      if (s.place !== 'woods') return fail('impossible', 'not in the woods');
+      s.gold += 2; let note = '+2 gold';
+      if (w.wolfInWoods) { s.hp = Math.max(0, s.hp - 3); note += '; the wolf bit: −3 hit points'; }
+      return { ok: true, note };
+    }
+    case 'rest': if (s.place !== 'village') return fail('impossible', 'no inn here');
+      s.hp = Math.min(s.maxHp, s.hp + 4); return { ok: true, note: `hit points ${s.hp}` };
+    case 'drink': if (!s.potions) return fail('impossible', 'no Healing potion to drink');
+      s.potions--; s.hp = Math.min(s.maxHp, s.hp + 7); return { ok: true, note: `hit points ${s.hp}` };
+    case 'restock': if (s.gold < 6) return fail('impossible', 'not enough gold');
+      s.gold -= 6; w.shop.stock += 3; return { ok: true, note: 'three potions on the shelf' };
+    default: return { ok: true };
+  }
+}
+
+function step(world, choices) {
+  const w = clone(world); w.tick++; w.error = null;
+  const rng = makeRng(w.rng);
+  const report = { tick: w.tick, rows: [], answers: [] };
+  try {
+    w.beings.forEach(b => see(w, b));
+    // 1. Every Being takes its turn: Needs, maybe the Mind, then its next Action.
+    const turns = w.beings.map(b => {
+      const t = BeingContract.takeTurn(b, NATURES[b.nature], MINDS[b.mind], rng, choices);
+      if (t.consulted) w.consults[b.id]++;
+      return t;
+    });
+    turns.forEach((t, i) => { w.beings[i] = t.being; });
+    const outcomes = {};
+    // 2. Requests to an Owner (buying a potion) go to the Owner's Mind, all at once.
+    const buyers = turns.filter(t => t.action && t.action.kind === 'buy').map(t => t.being);
+    const requests = [];
+    buyers.forEach(b => {
+      if (b.state.place !== 'village') outcomes[b.id] = { ok: false, action: T('buy'), how: 'impossible', why: 'no shop here' };
+      else if (b.state.gold < PRICE) outcomes[b.id] = { ok: false, action: T('buy'), how: 'impossible', why: 'not enough gold' };
+      else requests.push({ id: 'req-' + b.id, from: b.id, fromName: b.name, action: T('buy') });
+    });
+    if (requests.length) {
+      const owner = byId(w, w.shop.owner);
+      const answers = BeingContract.answerRequests(owner, NATURES[owner.nature], MINDS[owner.mind], requests, rng);
+      w.consults[owner.id]++;
+      report.answers = answers.map(a => ({ ...a, who: requests.find(r => r.id === a.request).fromName }));
+      answers.forEach(a => {
+        const b = byId(w, a.request.slice(4));
+        if (a.accept && w.shop.stock > 0) {
+          w.shop.stock--; b.state.gold -= PRICE; b.state.potions++; owner.state.gold += PRICE;
+          owner.knowledge.regulars[b.id] = (owner.knowledge.regulars[b.id] || 0) + 1;
+          outcomes[b.id] = { ok: true, note: 'bought a Healing potion' };
+        } else outcomes[b.id] = { ok: false, action: T('buy'), how: 'refused', why: `Mara refused: ${a.reason}` };
+        see(w, b);
+      });
+    }
+    // 3. Every other Action is simply applied.
+    turns.forEach(t => {
+      if (t.action && t.action.kind !== 'buy') outcomes[t.being.id] = settle(w, byId(w, t.being.id), t.action);
+    });
+    // 4. Outcomes go back to each Being.
+    w.beings = w.beings.map(b => BeingContract.afterOutcome(b, outcomes[b.id]));
+    report.rows = turns.map(t => ({ who: t.being.name, needs: t.needs, consulted: t.consulted,
+      decision: t.decision, action: t.action, outcome: outcomes[t.being.id], resolveWas: world.beings.find(x => x.id === t.being.id).plan?.resolve }));
+  } catch (e) { w.error = e.message; }
+  w.history.push(report);
+  return w;
+}
+
+// =====================================================================
+// PAGE — throwaway shell over the module above.
+// =====================================================================
+const DEFAULT_CHOICES = { planEndsWhenNeedGone: true, ownNeedPassesResolve: false, idle: 'waiting-plan' };
+let choices = { ...DEFAULT_CHOICES };
+let world = initialWorld();
+let prevWorld = null;
+let walk = { tab: 0, done: 0 };
+
+const actionLabel = a => !a ? '—' : ({
+  travel: `travel to the ${a.to}`, work: 'work in the woods', rest: 'rest at the inn',
+  buy: 'buy a Healing potion', drink: 'drink a Healing potion', restock: 'order potions', }[a.kind] || a.kind);
+const triggerLabel = (c, resolveWas) => !c ? null : ({
+  'no-plan': 'it has no Plan', 'plan-ended': 'its Plan is finished', 'need-gone': "its Plan's Need is gone",
+  'step-failed': 'a step failed',
+  'resolve-passed': `${c.need?.kind} ${c.need?.urgency} passed its Resolve ${resolveWas}`,
+}[c.trigger]);
+function decisionLabel(d) {
+  if (!d) return '';
+  if (d.kind === 'commit') return `commits to a Plan for ${d.forNeed}: ${d.steps.map(actionLabel).join(' → ')} · Resolve ${d.resolve}`;
+  if (d.kind === 'carry-on') return `carries on with its Plan · Resolve now ${d.resolve}`;
+  return choices.idle === 'waiting-plan' ? `waits until a Need passes Resolve ${d.resolve}` : 'waits (asked again next Tick)';
+}
+
+// --- world events for free play (the world changing, not a Being acting)
+const EVENTS = {
+  tick: ['Next Tick', w => step(w, choices)],
+  wolf: ['A wolf moves into the woods', w => { w = clone(w); w.wolfInWoods = true; return w; }],
+  nowolf: ['The wolf leaves the woods', w => { w = clone(w); w.wolfInWoods = false; return w; }],
+  hurtBrom: ['Brom is wounded (−5 hit points)', w => { w = clone(w); const s = byId(w, 'brom').state; s.hp = Math.max(0, s.hp - 5); return w; }],
+  hurtIlsa: ['Ilsa is wounded (−5 hit points)', w => { w = clone(w); const s = byId(w, 'ilsa').state; s.hp = Math.max(0, s.hp - 5); return w; }],
+  priest: ['A priest heals Brom fully', w => { w = clone(w); const s = byId(w, 'brom').state; s.hp = s.maxHp; return w; }],
+  stranger: ['A stranger buys every potion in the shop', w => { w = clone(w); w.shop.stock = 0; return w; }],
+  goldBrom: ['Give Brom 10 gold', w => { w = clone(w); byId(w, 'brom').state.gold += 10; return w; }],
+};
+function run(key) { prevWorld = world; world = EVENTS[key][1](world); render(); }
+
+// --- walkthroughs
+const setBeing = (w, id, f) => { f(byId(w, id)); };
+const tickStep = watch => ({ label: 'Next Tick', act: 'tick', watch });
+const WALKS = [
+  { name: 'A Plan, step by step',
+    about: 'Brom has 3 gold, so his Nature gives him a gold Need. His Mind is consulted once, commits to a Plan, and is then left alone while he follows it. Ilsa and Mara have nothing they lack.',
+    setup: w => w,
+    steps: [
+      tickStep('Brom is consulted because he has no Plan. He commits to five steps with Resolve 65 and takes the first. Ilsa and Mara wait.'),
+      tickStep('Nobody is consulted. Brom takes step two.'),
+      tickStep('Still nobody is consulted. The gold Need shrinks as his Purse grows.'),
+      tickStep('Step four.'),
+      tickStep('Last step: back to the village.'),
+      tickStep('His Plan is finished, so his Mind is consulted again. He still has under 10 gold, so the gold Need remains.'),
+    ] },
+  { name: 'Same Nature, different Mind',
+    about: 'Brom (bold, Resolve 65) and Ilsa (cautious, Resolve 35) both go to work in the woods. Then a wolf moves in. Their Natures give the same safety Need, and their Minds answer it differently.',
+    setup: w => { setBeing(w, 'ilsa', b => b.state.gold = 3); return w; },
+    steps: [
+      tickStep('Both commit to the same work Plan and set off.'),
+      tickStep('Both work.'),
+      { label: 'A wolf moves into the woods', act: 'wolf', watch: 'Nothing changes yet: they have not seen it.' },
+      tickStep('They see the wolf, so their Knowledge changes and their Natures give safety 70. That passes both Resolves. Ilsa flees. Brom carries on and raises his Resolve to 85, so he is not asked again every Tick.'),
+      tickStep('The wolf bites Brom, and nobody asks his Mind. Ilsa is back with her Plan finished: she remembers the wolf, so her cautious Mind will not go back to work and she waits.'),
+      tickStep('Brom is Bloodied, so his safety Need rises to 90 and passes 85. This time his Mind tells him to flee.'),
+      tickStep('Brom is safe and his Plan is finished, so he is consulted and plans to heal. Ilsa still waits.'),
+    ] },
+  { name: 'Two buyers, one potion',
+    about: 'Brom and Ilsa are both hurt and in the village, and the shop has one potion left. Both try to buy it in the same Tick. Mara is the Owner, so her Mind answers both requests at once, each answer with a Reason. Brom has bought from her twice before.',
+    setup: w => { ['brom', 'ilsa'].forEach(id => setBeing(w, id, b => { b.state.hp = 5; b.state.gold = 10; })); w.shop.stock = 1;
+      byId(w, 'mara').knowledge.regulars = { brom: 2 }; w.beings.forEach(b => b.knowledge.shopStock = 1); return w; },
+    steps: [
+      tickStep('Both commit to buy and drink. Mara is consulted as Owner: she sells to Brom and refuses Ilsa. Ilsa\'s step failed.'),
+      tickStep('Brom drinks. Ilsa is consulted because her step failed. She saw the empty shelf, so she plans to rest. Mara is consulted too: her restock Need passes the Resolve 0 she was waiting with, and she orders potions.'),
+      tickStep('Ilsa now sees potions on the shelf, but new Knowledge does not consult her Mind, so she keeps resting.'),
+    ] },
+  { name: 'Out-of-date Knowledge, failed step',
+    about: 'Brom is hurt in the woods and remembers one potion in the shop. On his way back a stranger buys it. Brom learns this when he arrives, but nothing asks his Mind, so he still tries to buy, and is refused.',
+    setup: w => { setBeing(w, 'brom', b => { b.state.place = 'woods'; b.state.hp = 5; b.state.gold = 8; b.knowledge.shopStock = 1; });
+      w.shop.stock = 1; setBeing(w, 'mara', b => { b.state.gold = 2; b.knowledge.shopStock = 1; }); return w; },
+    steps: [
+      tickStep('Brom commits to: back to the village, buy, drink. He travels.'),
+      { label: 'A stranger buys every potion in the shop', act: 'stranger', watch: 'Brom\'s Knowledge is now out of date (marked in red).' },
+      tickStep('Brom sees the empty shelf, but his Plan goes on: he asks to buy. Mara refuses. Mara has no gold to restock, so she waits.'),
+      tickStep('His step failed, so his Mind is consulted. The Reason starts with the failure, and he plans to rest.'),
+    ] },
+  { name: 'Its Need goes away mid-Plan',
+    about: 'Brom is badly hurt and cannot afford a potion, so he plans three rests. After the first one a priest heals him fully. Does the Plan end? Try this with the choice "A Plan ends when its own Need is gone" on, then off.',
+    setup: w => { setBeing(w, 'brom', b => { b.state.hp = 1; b.state.gold = 0; b.knowledge.shopStock = 0; }); w.shop.stock = 0;
+      byId(w, 'mara').knowledge.shopStock = 0; return w; },
+    steps: [
+      tickStep('Brom commits to rest, rest, rest, and rests once.'),
+      { label: 'A priest heals Brom fully', act: 'priest', watch: 'The heal Need is gone from "Needs now".' },
+      tickStep('With the choice on, his Plan\'s Need is gone, so he is consulted and goes to earn gold. With it off, he keeps resting at full hit points.'),
+      tickStep('With it off, he rests again.'),
+    ] },
+  { name: 'Its own Need passes Resolve',
+    about: 'Ilsa has no gold, so her gold Need is 60. Her cautious Mind still commits with Resolve 35. If a Plan\'s own Need can pass its Resolve, her Mind is asked every Tick until that Need falls below 35.',
+    setup: w => { setBeing(w, 'ilsa', b => b.state.gold = 0); setBeing(w, 'brom', b => b.state.gold = 30); return w; },
+    steps: [
+      { label: 'Turn on: its own Need can pass Resolve', act: () => { choices.ownNeedPassesResolve = true; }, watch: '' },
+      tickStep('She commits and travels.'),
+      tickStep('Gold 60 is still above 35, so she is asked again and commits to a fresh Plan.'),
+      tickStep('Asked again.'),
+      tickStep('Asked again. Compare the count of times consulted with Brom and Mara.'),
+      { label: 'Turn it back off', act: () => { choices.ownNeedPassesResolve = false; }, watch: '' },
+      tickStep('Now she is left alone.'),
+    ] },
+  { name: 'Nothing to do',
+    about: 'Nobody lacks anything. If "no Plan" always means the Mind is asked, every idle Being is consulted every Tick, which costs a lot with an LLM Mind. The alternative: waiting is a Plan with no steps, with a Resolve, so the Being is asked again only when a Need passes that Resolve.',
+    setup: w => { setBeing(w, 'brom', b => b.state.gold = 30); return w; },
+    steps: [
+      { label: 'Use: idle Beings are asked every Tick', act: () => { choices.idle = 'every-tick'; }, watch: '' },
+      tickStep('All three are asked.'), tickStep('All three are asked again.'), tickStep('And again.'),
+      { label: 'Use: waiting is a Plan with Resolve', act: () => { choices.idle = 'waiting-plan'; }, watch: '' },
+      tickStep('Asked once more, and each now waits with Resolve 0.'),
+      tickStep('Nobody is asked.'),
+      { label: 'Brom is wounded (−5 hit points)', act: 'hurtBrom', watch: '' },
+      tickStep('His heal Need passes Resolve 0, so Brom is asked and plans to buy a potion.'),
+    ] },
+];
+function startWalk(i) {
+  walk = { tab: i, done: 0 }; choices = { ...DEFAULT_CHOICES };
+  prevWorld = null; world = WALKS[i].setup(initialWorld()); render();
+}
+function doWalkStep(i) {
+  const st = WALKS[walk.tab].steps[i];
+  prevWorld = world;
+  if (typeof st.act === 'function') st.act(); else world = EVENTS[st.act][1](world);
+  walk.done = i + 1; render();
+}
+
+// --- rendering
+const esc = s => String(s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+function mark(cur, prev) { return prev !== undefined && JSON.stringify(cur) !== JSON.stringify(prev) ? ' class="changed"' : ''; }
+
+function renderChoices() {
+  document.getElementById('choices').innerHTML = `
+    <div class="opt"><label><input type="checkbox" id="c1" ${choices.planEndsWhenNeedGone ? 'checked' : ''}> A Plan ends when its own Need is gone (for example, someone else healed you)</label></div>
+    <div class="opt"><label><input type="checkbox" id="c2" ${choices.ownNeedPassesResolve ? 'checked' : ''}> A Plan's own Need can pass its Resolve (otherwise only other Needs break a Plan)</label></div>
+    <div class="opt">When a Being has nothing to do:
+      <label><input type="radio" name="idle" value="waiting-plan" ${choices.idle === 'waiting-plan' ? 'checked' : ''}> it waits with a Resolve, and is asked again only when a Need passes it</label>
+      <label><input type="radio" name="idle" value="every-tick" ${choices.idle === 'every-tick' ? 'checked' : ''}> it is asked every Tick</label></div>
+    <p class="mute" style="font-size:13px">The checked options are the prototype's proposal. Changing them applies from the next Tick.</p>`;
+  document.getElementById('c1').onchange = e => { choices.planEndsWhenNeedGone = e.target.checked; };
+  document.getElementById('c2').onchange = e => { choices.ownNeedPassesResolve = e.target.checked; };
+  document.querySelectorAll('input[name=idle]').forEach(r => r.onchange = e => { choices.idle = e.target.value; });
+}
+
+function renderWalk() {
+  document.getElementById('tabs').innerHTML = WALKS.map((wk, i) =>
+    `<button class="${i === walk.tab ? 'on' : ''}" onclick="startWalk(${i})">${i + 1}. ${esc(wk.name)}</button>`).join('');
+  const wk = WALKS[walk.tab];
+  document.getElementById('walk').innerHTML = `<p>${esc(wk.about)}</p>
+    <ol>${wk.steps.map((st, i) => `<li><button ${i === walk.done ? 'class="primary"' : i < walk.done ? 'class="done" disabled' : 'disabled'}
+      onclick="doWalkStep(${i})">${esc(st.label)}</button>${st.watch ? `<span class="watch">${esc(st.watch)}</span>` : ''}</li>`).join('')}</ol>
+    <button onclick="startWalk(${walk.tab})">Restart this walkthrough</button>`;
+}
+
+function renderBeing(b) {
+  const p = prevWorld ? prevWorld.beings.find(x => x.id === b.id) : undefined;
+  const s = b.state, k = b.knowledge;
+  const needs = BeingContract.deriveNeeds(NATURES[b.nature], s, k);
+  const resolve = b.plan ? b.plan.resolve : null;
+  const stateRows = b.kind === 'Fighter'
+    ? [['Hit points', `${s.hp}/${s.maxHp}`, p && `${p.state.hp}/${p.state.maxHp}`], ['Gold', s.gold, p?.state.gold],
+       ['Place', s.place, p?.state.place], ['Healing potions', s.potions, p?.state.potions]]
+    : [['Gold', s.gold, p?.state.gold], ['Place', s.place, p?.state.place]];
+  const truth = { shopStock: world.shop.stock, wolfInWoods: world.wolfInWoods };
+  const kRows = [['Shop stock', k.shopStock, 'shopStock'], ...('wolfInWoods' in k ? [['Wolf in the woods', k.wolfInWoods ? 'yes' : 'no', 'wolfInWoods']] : []),
+    ...(k.regulars ? [['Regulars', Object.entries(k.regulars).map(([id, n]) => `${id} ×${n}`).join(', ') || 'none', null]] : [])];
+  const plan = b.plan;
+  let planHtml = '<p class="mute">No Plan.</p>';
+  if (plan && plan.waiting) planHtml = `<p>Waiting · <span class="tag">Resolve ${plan.resolve}</span></p>`;
+  else if (plan) planHtml = `<p>For <b>${plan.forNeed}</b> · <span class="tag">Resolve ${plan.resolve}</span></p>
+    <ol class="steps">${plan.steps.map((a, i) => `<li class="${i < plan.next ? 'done' : i === plan.next ? 'next' : ''}">${actionLabel(a)}</li>`).join('')}</ol>
+    ${plan.next >= plan.steps.length ? '<p class="mute">All steps taken.</p>' : ''}`;
+  return `<div class="panel">
+    <h3>${b.name} <span class="mute">· ${NATURES[b.nature].name} Nature · ${MINDS[b.mind].name} Mind</span></h3>
+    <dl class="kv">${stateRows.map(([l, v, pv]) => `<dt>${l}</dt><dd${mark(v, pv)}>${esc(v)}</dd>`).join('')}</dl>
+    <p class="mute" style="margin-top:8px;font-size:13px">Knowledge (what ${b.name} believes)</p>
+    <dl class="kv">${kRows.map(([l, v, key]) => {
+      const stale = key && k[key] !== truth[key];
+      return `<dt>${l}</dt><dd>${esc(v)}${stale ? ` <span class="stale">out of date: really ${key === 'wolfInWoods' ? (truth[key] ? 'yes' : 'no') : truth[key]}</span>` : ''}</dd>`; }).join('')}</dl>
+    <p class="mute" style="margin-top:8px;font-size:13px">Needs now (derived afresh from state and Knowledge; the red mark is the Plan's Resolve)</p>
+    ${needs.length ? needs.map(n => `<div class="need"><span>${n.kind}</span><span class="bar"><i style="width:${n.urgency}%"></i>${resolve !== null ? `<b style="left:${resolve}%"></b>` : ''}</span><span>${n.urgency}</span></div>
+      <div class="mute" style="font-size:12px;margin:-2px 0 4px 78px">${esc(n.note)}</div>`).join('') : '<p class="mute">None.</p>'}
+    <p class="mute" style="margin-top:8px;font-size:13px">Plan</p>${planHtml}
+    ${b.failure ? `<p class="bad">Step failed (${b.failure.how}): ${esc(b.failure.why)}. Its Mind will be consulted.</p>` : ''}
+    <p class="mute" style="font-size:13px">Mind consulted <b${mark(world.consults[b.id], prevWorld?.consults[b.id])}>${world.consults[b.id]}</b> times</p>
+  </div>`;
+}
+
+function renderLast() {
+  const r = world.history[world.history.length - 1];
+  const el = document.getElementById('last');
+  if (world.error) { el.innerHTML = `<p class="err">${esc(world.error)}</p>`; return; }
+  if (!r) { el.innerHTML = '<p class="mute">No Tick yet.</p>'; return; }
+  el.innerHTML = `<p class="mute">Tick ${r.tick}</p><table><tr><th>Being</th><th>Mind consulted because</th><th>Decision and Reason</th><th>Action</th><th>Outcome</th></tr>
+    ${r.rows.map(x => `<tr><td>${x.who}</td><td>${x.consulted ? esc(triggerLabel(x.consulted, x.resolveWas)) : '<span class="mute">not consulted</span>'}</td>
+      <td>${x.decision ? `${esc(decisionLabel(x.decision))}<br><i>“${esc(x.decision.reason)}”</i>` : ''}</td>
+      <td>${actionLabel(x.action)}</td>
+      <td>${!x.outcome ? '' : x.outcome.ok ? `<span class="ok">done</span> ${esc(x.outcome.note || '')}` : `<span class="bad">failed (${x.outcome.how})</span> ${esc(x.outcome.why)}`}</td></tr>`).join('')}
+    ${r.answers.length ? `<tr><td>Mara</td><td>requests reached her as Owner</td><td colspan="3">${r.answers.map(a =>
+      `${a.accept ? '<span class="ok">accepts</span>' : '<span class="bad">refuses</span>'} ${a.who}: <i>“${esc(a.reason)}”</i>`).join('<br>')}</td></tr>` : ''}
+  </table>`;
+}
+
+function renderHistory() {
+  const lines = [];
+  world.history.forEach(r => {
+    r.rows.forEach(x => { if (x.decision) lines.push(`<b>Tick ${r.tick} · ${x.who}</b> (${esc(triggerLabel(x.consulted, x.resolveWas))}): ${esc(decisionLabel(x.decision))} — <i>“${esc(x.decision.reason)}”</i>`); });
+    r.answers.forEach(a => lines.push(`<b>Tick ${r.tick} · Mara</b> (request as Owner): ${a.accept ? 'accepts' : 'refuses'} ${a.who} — <i>“${esc(a.reason)}”</i>`));
+  });
+  document.getElementById('history').innerHTML = lines.length ? lines.reverse().map(l => `<p>${l}</p>`).join('') : '<p class="mute">None yet.</p>';
+}
+
+function render() {
+  renderChoices(); renderWalk();
+  document.getElementById('tickLabel').textContent = `· Tick ${world.tick} · wolf in the woods: ${world.wolfInWoods ? 'yes' : 'no'} · shop stock: ${world.shop.stock}`;
+  document.getElementById('freeplay').innerHTML = Object.entries(EVENTS).map(([key, [label]]) =>
+    `<button ${key === 'tick' ? 'class="primary"' : ''} onclick="run('${key}')">${esc(label)}</button>`).join('') +
+    `<button onclick="startWalk(walk.tab)">Reset</button>`;
+  document.getElementById('beings').innerHTML = world.beings.map(renderBeing).join('');
+  renderLast(); renderHistory();
+}
+startWalk(0);
+</script>
+</body>
+</html>
