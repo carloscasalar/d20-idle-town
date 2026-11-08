@@ -58,7 +58,7 @@ No random draw is added, removed or reordered. Results of the default game chang
 - [ ] A ruined temple raises nobody and moves no gold.
 - [ ] The regression hashes are re-recorded in this change and the report says which tests changed and why; no other seeded expectation is edited without naming it in the report.
 - [ ] The tuning comparison of `scripts/tune.ts` against `scripts/tune-baseline.json` is run and its output recorded in the Comments. If a metric leaves its band, no tuning value is moved: the output and the metric are reported and the issue is left for the owner.
-- [ ] `docs/ARCHITECTURE.md` and `CHANGELOG.md` describe the rule; `CONTEXT.md` is changed only if it describes the order of raising.
+- [ ] `docs/ARCHITECTURE.md` and `CHANGELOG.md` describe the rule; `GLOSSARY.md` is changed only if it describes the order of raising.
 - [ ] `pnpm typecheck` and `pnpm test` are green.
 
 **Out of scope:**

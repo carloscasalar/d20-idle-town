@@ -59,7 +59,7 @@ A **Being** that leads a **Horde** and needs to gather wealth, followers, minion
 _Avoid_: Villain, Overlord
 
 **Business**:
-A **Group** that makes or sells something, headed by its **Proprietor** and staffed by **Workers**. It is the **Owner** of its stock, its building and its own gold, which is not its Proprietor's.
+A **Group** that makes or sells something, headed by its **Proprietor** and staffed by **Workers**. It is the **Owner** of its stock and its building, and its **Purse** is not its Proprietor's.
 _Avoid_: Shop, Establishment, Company
 
 **Proprietor**:
@@ -71,7 +71,7 @@ A **Being** hired by a **Business** from a **Folk**, who needs above all to earn
 _Avoid_: Employee, Labourer
 
 **Town**:
-A **Group** whose **Members** are its **Businesses**, its **Folks** and its **Factions**, and the **Owner** of its treasury and public buildings. Its **Mind** defers to its **Government**.
+A **Group** whose **Members** are its **Businesses**, its **Folks** and its **Factions**, and the **Owner** of its public buildings. Its **Purse** is its **Treasury**, and its **Mind** defers to its **Government**.
 _Avoid_: City, Settlement (in prose; a town's size names it in the world, not in the model)
 
 **Government**:
@@ -93,6 +93,14 @@ _Avoid_: Guild (one kind of Faction), Party (that is adventurers), Estate
 **Member**:
 A **Being** that belongs to a **Group**. It keeps its own **Mind** and may break off from the Group's **Plan**, but it joins or leaves only by an explicit **Action** (join, leave, expel). A Being may be a Member of several Groups, such as a **Worker** of a **Business** who is also in a **Faction**.
 _Avoid_: Child, Part
+
+**Purse**:
+The gold a **Being** has, part of its state. Every Being has one: a **Party**'s is shared by its **Members**, and a **Business**'s is not its **Proprietor**'s.
+_Avoid_: Wallet, Till, Funds
+
+**Treasury**:
+A **Town**'s **Purse**, named apart because who may spend it is a matter for its **Government**: taking from it for oneself is an **Action** like any other.
+_Avoid_: Coffers, Public purse
 
 **Knowledge**:
 What a **Being** believes about the world beyond its own state: what it sees where it is and what it learned before, which may be out of date or wrong. Its **Nature** and **Mind** read only its state and its Knowledge, never the world itself.
@@ -262,7 +270,7 @@ The squares a creature controls on the battlefield. In the 2024 rules a Huge cre
 
 ## Flagged ambiguities
 
-- Open: the being model has not yet named its gold. In the current game **Purse** is a company's gold and **Treasury** an employer's, but a **Town** now owns a treasury and a **Business**'s gold is kept apart from its **Proprietor**'s, with no name yet.
+- In the current game **Purse** is a company's gold and **Treasury** an employer's. In the being model every **Being** has a Purse, and Treasury is only the **Town**'s.
 - Open: who inherits a **Business**, or any **Thing**, when its **Owner** or **Proprietor** dies. Until it is settled, the Thing simply has no Owner.
 
 - In the current game a **Bounty** is accepted like a **Contract** and posted only by the guild. In the being model a Bounty is never taken: whoever clears the Lair claims it, and any Being may post one.

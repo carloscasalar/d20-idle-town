@@ -10,4 +10,4 @@ Use the standard five issue states. See `docs/agents/triage-labels.md`.
 
 ### Domain docs
 
-This is a single-context repo. Read root `CONTEXT.md` and relevant `docs/adr/` entries when they exist. See `docs/agents/domain.md`.
+This is a single-context repo. Read root `GLOSSARY.md` and relevant `docs/adr/` entries when they exist. See `docs/agents/domain.md`.

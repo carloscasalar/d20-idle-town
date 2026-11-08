@@ -11,7 +11,7 @@ You answer one product question so an implementation can continue. You stand in 
 
 1. The issue file and its `## Comments` (earlier decisions bind).
 2. The PRD, then the other files of the PRD folder: maps, tickets, research, assets. Where they disagree, follow the precedence the PRD states.
-3. `CONTEXT.md` and the decisions in `docs/adr/`, if any.
+3. `GLOSSARY.md` and the decisions in `docs/adr/`, if any.
 4. The project's north star named in `docs/agents/implementation.md` (for this project, the D&D 2024 rules), researched from a primary source when the documents above are silent.
 5. How the code behaves today, as evidence of intent: read it, do not change it.
 

@@ -14,7 +14,7 @@ You are a strict design and code reviewer. You judge one commit against the issu
 
 ## What to read first
 
-The issue file you were given (the contract), its parent PRD, `.claude/skills/implement-prd/RULES.md` (the implementer's rules), `docs/agents/implementation.md` (check commands, regression guard, sweep) and `CONTEXT.md`.
+The issue file you were given (the contract), its parent PRD, `.claude/skills/implement-prd/RULES.md` (the implementer's rules), `docs/agents/implementation.md` (check commands, regression guard, sweep) and `GLOSSARY.md`.
 
 ## What to check, with evidence
 

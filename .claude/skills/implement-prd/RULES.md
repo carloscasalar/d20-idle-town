@@ -2,7 +2,7 @@
 
 Every turn prompt refers to this file. They apply to any agent that writes code in a run of `implement-prd`.
 
-1. **The issue is the contract.** Build what its "What to build" and "Acceptance criteria" say, in the vocabulary of `CONTEXT.md`. Where the issue and the PRD disagree, the issue wins.
+1. **The issue is the contract.** Build what its "What to build" and "Acceptance criteria" say, in the vocabulary of `GLOSSARY.md`. Where the issue and the PRD disagree, the issue wins.
 2. **Work the way the `implement` skill does.** With the `implement` skill of mattpocock-skills loaded, follow it. Without it, do the same by hand: test-first at the seams the issue names (for each acceptance criterion, a test that fails for the right reason, then the code that passes it); typecheck often; run single test files while you work and the full suite once at the end; review your own diff against the issue before you finish; commit your work to the current branch. Tests go through a module's own interface: observable outcomes, exact expected values, no spying on internals, no assertion that restates the code's formula.
 3. **Change only what the issue describes.** Behaviour outside the acceptance criteria stays as it is. Tests the issue names as surviving unchanged are left exactly as they are and still pass. When the project's regression guard (see `docs/agents/implementation.md`) has to change, it changes once, and your report says which criterion caused it.
 4. **A product question stops the turn.** If the issue does not say what should happen in a case you must decide, stop and report the question with the options you see. Leave the decision to the orchestrator.

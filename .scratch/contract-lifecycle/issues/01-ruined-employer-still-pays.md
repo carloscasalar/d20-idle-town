@@ -57,7 +57,7 @@ No random draw is added, removed or reordered. Results of the default game chang
 - [ ] A failed Contract of a ruined employer leaves that employer's treasury, reputation and counters unchanged.
 - [ ] Work settled while its employer is not ruined pays, rewards and reports exactly as today, pinned with exact figures.
 - [ ] The regression hashes are re-recorded in this change and the report says which tests changed and why; no other seeded expectation is edited without naming it in the report.
-- [ ] `docs/ARCHITECTURE.md` and `CHANGELOG.md` describe the rule; `CONTEXT.md` is changed only if it says what a ruined employer pays.
+- [ ] `docs/ARCHITECTURE.md` and `CHANGELOG.md` describe the rule; `GLOSSARY.md` is changed only if it says what a ruined employer pays.
 - [ ] `pnpm typecheck` and `pnpm test` are green.
 
 **Out of scope:**

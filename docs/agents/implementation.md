@@ -43,7 +43,7 @@ It must finish with no crash.
 
 ## North star
 
-Domain questions are answered by the D&D 5e 2024 rules (SRD 5.2.1). Where the game diverges, or the combat engine (battlecast-engine) cannot model a rule, the current behaviour stays behind a name taken from the D&D term and the divergence is recorded as an issue. New D&D knowledge goes into `CONTEXT.md`.
+Domain questions are answered by the D&D 5e 2024 rules (SRD 5.2.1). Where the game diverges, or the combat engine (battlecast-engine) cannot model a rule, the current behaviour stays behind a name taken from the D&D term and the divergence is recorded as an issue. New D&D knowledge goes into `GLOSSARY.md`.
 
 ## The pool
 

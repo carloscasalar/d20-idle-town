@@ -46,7 +46,7 @@ The owner chose the second rule of the issue. The cap counts open Contracts only
 - [ ] A Bounty is posted on a Board that holds the cap's worth of open Contracts, as today.
 - [ ] The regression hashes are re-recorded in this change and the report says which tests changed and why; no other seeded expectation is edited without naming it in the report.
 - [ ] The tuning comparison of `scripts/tune.ts` against `scripts/tune-baseline.json` is run and its output recorded in the Comments. If a metric leaves its band, no tuning value is moved, `world.maxOpenQuests` included: the output and the metric are reported and the issue is left for the owner.
-- [ ] `docs/CONFIGURATION.md` describes `world.maxOpenQuests` as the cap of open Contracts; `docs/ARCHITECTURE.md` and `CHANGELOG.md` describe the rule; `CONTEXT.md` is changed only if it describes the cap.
+- [ ] `docs/CONFIGURATION.md` describes `world.maxOpenQuests` as the cap of open Contracts; `docs/ARCHITECTURE.md` and `CHANGELOG.md` describe the rule; `GLOSSARY.md` is changed only if it describes the cap.
 - [ ] `pnpm typecheck` and `pnpm test` are green.
 
 **Out of scope:**
