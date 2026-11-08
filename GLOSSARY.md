@@ -51,12 +51,12 @@ A **Being** whose **Actions** head to pillage, killing and stealing. Most have a
 _Avoid_: Creature (in prose; the combat engine's word for anything that fights)
 
 **Horde**:
-A **Group** of **Monsters**, led by its strongest or deadliest **Member** or by a **Boss**. When its leader falls, each Member's own needs decide whether it flees, follows a new leader or stays.
+A **Group** of **Monsters**, led by its **Boss**. When its Boss falls, each Member's own needs decide whether it flees, follows a new Boss or stays.
 _Avoid_: Warband, Pack
 
 **Boss**:
-A **Being** that leads a **Horde** and needs to gather wealth, followers, minions and territory. It is the **Owner** of its **Lair** and the Lair's **Hoard**.
-_Avoid_: Villain, Overlord
+The **Monster** that leads a **Horde**: the one with the highest challenge rating, with a **Contest** among those tied. Boss is a role, not a kind of Being. It needs to gather wealth, followers, minions and territory, and it is the **Owner** of its **Lair** and the Lair's **Hoard**.
+_Avoid_: Villain, Overlord, Leader
 
 **Business**:
 A **Group** that makes or sells something, headed by its **Proprietor** and staffed by **Workers**. It is the **Owner** of its stock and its building, and its **Purse** is not its Proprietor's.
@@ -150,6 +150,14 @@ _Avoid_: Log, Chronicle (the chronicle is what the player reads)
 Something in the world with state and rules but no will of its own, such as a building, a Holding, a Lair, a Contract or an item.
 _Avoid_: Object, Asset (in prose)
 
+**Road**:
+A way out of the town, named after where it ends and marked in **Milestones**. How far a place is from the town is the Milestone it stands at on its Road.
+_Avoid_: Route, Path
+
+**Milestone**:
+A point on a **Road** a fixed travel time from the one before it; the town and everything in it stand at Milestone 0. Holdings whose workers live in town stand close in; farther out a Holding needs buildings, supply and guards of its own, and the most dangerous Lairs lie farthest.
+_Avoid_: Dot, Waypoint, Stage
+
 ### Current game
 
 **Company**:
@@ -235,7 +243,8 @@ The squares a creature controls on the battlefield. In the 2024 rules a Huge cre
 - The **Board** is a **Thing** whose **Owner** is the **Town**. Each posted job's **Owner** is the Being that posted it, and it answers the requests to take it.
 - Several Contracts and Bounties may target the same threat, posted by different Beings; together they make clearing it more attractive.
 - A **Contract** is a hire: a **Party** asks its poster to take it, and once taken it is that Party's alone. A **Bounty** is open: nobody takes it, and whoever shows its poster that the **Lair** is cleared claims the reward, which the poster, as its **Owner**, may pay or refuse. One Party may collect a Contract and a Bounty for the same deed, and Parties may race for one Bounty.
-- The gold promised in a posted job is set aside in its poster's own state, so its **Nature** sees less gold free.
+- The gold promised in a posted job is set aside in its poster's own state, so its **Nature** sees less gold free. A Being never promises more than its free gold, and one whose free gold is below the minimum reward cannot post a job, so posting never leaves a **Purse** negative.
+- A **Party** takes its **Long rest** in an inn, or under the open sky when there is no room.
 
 ### Current game
 

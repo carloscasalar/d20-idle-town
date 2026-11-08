@@ -18,10 +18,10 @@ A `PRD.md` in this directory for the first vertical slice of the new core descri
 
 ## Decisions so far
 
+- [Slice story](issues/01-slice-story.md): Parties (2, with 3- and 10-Party runs) save a Business-owned Holding from a Boss-led Horde through a Contract on a Board owned by a placeholder Town, along one Road of Milestones; gold is starting Purses, Holding income while safe and set-aside rewards.
+
 ## Not yet specified
 
-- The slice's economy: where gold comes from and goes (Holding income, upkeep, a Business's production), and the coin movement reasons in Being terms. Waits on the slice story.
-- How places and distance are represented, and how long travelling a stretch of road takes. Waits on the slice story and on Tick settlement.
 - Whether the slice needs balance targets at all, or only behaviour that reads as plausible.
 - Performance: how many Beings a Tick can afford, and how often Minds are consulted in practice.
 
@@ -31,3 +31,5 @@ A `PRD.md` in this directory for the first vertical slice of the new core descri
 - LLM or decision-model Minds. The being contract keeps room for them; only rule-based and scripted Minds are in the slice.
 - Switching the UI over to the new core and retiring the current game.
 - Who inherits a Thing when its Owner or Proprietor dies (the glossary's open ambiguity). Until settled, the Thing has no Owner.
+- Current-game behaviours left for a later slice ([Slice story](issues/01-slice-story.md)): Job intelligence, the Company roster, Bounty, Lair growth and escalating raids, ravaged Holdings and Loot, taking the Hoard, potion sales and restocking, inns, XP and levelling, Contract expiry. The slice tells one story, and these would widen it.
+- Several Roads in a radial layout, Holdings beyond Milestone 2 (buildings, supply, guards), outposts and another town's protection ([Slice story](issues/01-slice-story.md)). The slice needs only one Road as a measure of distance.
