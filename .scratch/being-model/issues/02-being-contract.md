@@ -36,7 +36,7 @@ type Failure = { action: Action; how: 'refused' | 'contest-lost' | 'impossible';
 type Decision = { reason: Reason } & (
   | { kind: 'commit'; forNeed; steps: Action[]; resolve: Urgency; reliesOn: ThingId[] }
   | { kind: 'carry-on'; resolve: Urgency }          // must exceed the Need that met the Resolve, so a Need at 20 cannot be carried past
-  | { kind: 'wait'; resolve: Urgency }              // 1 when nothing is lacking
+  | { kind: 'wait'; resolve: Urgency; reliesOn: ThingId[] }   // 1 when nothing is lacking
   | { kind: 'answers'; answers: { request: string; accept: boolean; reason: Reason }[] })
 
 interface Mind<S, K> { consult(q: Question, c: { needs: Need[]; state: S; knowledge: K; rng: Rng }): Decision }
@@ -80,3 +80,4 @@ Decisions while working the ticket (folded into the Answer on resolution):
 8b. **A Plan names the Things it relies on (the shop, the Lair, the Contract), and a change in the Being's Knowledge about any of them consults its Mind.** The check needs no Mind. This adds a fifth reason to consult a Mind, so the glossary's Tick and ADR 0002's list of triggers are updated on resolution. How Knowledge is learned stays with the ticket "Knowledge in the slice".
 9. **A Nature's rule reads only state and Knowledge and gives one Need or none. A Need carries a kind, an Urgency, an optional `about` naming a Thing, and a short note in words.** `about` lets two Needs of the same kind stand side by side (two threatened Holdings), and identifies the Plan's own Need and the Things a Plan relies on. The note feeds Reasons and gives an LLM Mind a reading of the Need.
 10. **Resolve runs 1–20, like Urgency, and a Need at 20 cannot be ignored**, like a natural 20. No Resolve can exceed it, so the Mind must commit to a Plan for it, at which point it is the Plan's own Need and stops counting. A Mind that refuses is consulted every Tick while the Need stays at 20.
+11. **A waiting Plan also names the Things it relies on**, the same as any Plan (8b). Ilsa waits watching the woods, so learning that the wolf has gone consults her Mind.
