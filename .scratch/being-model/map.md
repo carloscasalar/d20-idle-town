@@ -20,6 +20,7 @@ A `PRD.md` in this directory for the first vertical slice of the new core descri
 
 - [Slice story](issues/01-slice-story.md): Parties (2, with 3- and 10-Party runs) save a Business-owned Holding from a Boss-led Horde through a Contract on a Board owned by a placeholder Town, along one Road of Milestones; gold is starting Purses, Holding income while safe and set-aside rewards.
 - [Being contract](issues/02-being-contract.md): Needs carry kind, Urgency 1–20 and an optional `about`; a Mind has one `consult(question)` returning a Decision with a Reason; a Plan is a fixed list of Actions with a Resolve (a DC met by any other Need) and the Things it relies on; waiting is a Plan with no steps; a failed step consults the Mind next Tick, and news about a Thing the Plan relies on consults it as soon as the Being learns it.
+- [Code layout and carry-over](issues/04-code-layout-and-carry-over.md): new core in `src/being/`; `src/core/` and `src/items/` (potions moved in) shared and frozen, hero record, Hit Dice rolls and the coin engine copied and trimmed; a vitest import test keeps three zones apart.
 
 ## Not yet specified
 
