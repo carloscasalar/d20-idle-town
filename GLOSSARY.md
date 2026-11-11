@@ -143,7 +143,7 @@ The short sentence a **Mind** gives for a **Decision**, such as "raise taxes: th
 _Avoid_: Rationale, Explanation
 
 **Journal**:
-The record of every **Decision** of a run. Replaying a run reads each Decision from the Journal instead of consulting a Mind that may not decide the same way twice.
+The record of every **Decision** of a run. Each entry records one consultation of a **Mind**: the **Tick**, the **Being**, the question, the **Needs** and **Knowledge** the Mind saw, and the Decision with its **Reason**. Replaying a run reads each Decision from the Journal instead of consulting a Mind that may not decide the same way twice, and fails at once if the run no longer matches it.
 _Avoid_: Log, Chronicle (the chronicle is what the player reads)
 
 **Thing**:
