@@ -35,7 +35,7 @@ The fixed sequence of **Actions** a **Mind** commits to in order to meet one **N
 _Avoid_: Course, Undertaking, Task
 
 **Group**:
-A **Being** made of member Beings, such as a party, a horde, a business or a town. Its **Nature** combines its members' needs with its own; its **Mind** is how it governs itself: a strong leader, consensus, a vote, a council.
+A **Being** made of member Beings, such as a party, a horde, a business or a town. Its **Nature** combines its members' needs with its own; its **Mind** is how it governs itself: a strong leader, consensus, a vote, a council, chosen when the Group forms.
 _Avoid_: Composite, Collective
 
 **Adventurer**:
