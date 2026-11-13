@@ -123,7 +123,7 @@ The **Urgency** at which another **Need** makes a **Being** break off its **Plan
 _Avoid_: Threshold, Breaking point
 
 **Tick**:
-One hour of world time. Each tick every **Being**'s **Nature** derives its needs afresh and the Being takes the next step of its **Plan**; its **Mind** is consulted only when it has no Plan, a step fails, it learns something new about a **Thing** its Plan relies on, requests reach it as an **Owner**, or a need meets its **Resolve**. The world then settles every Action of the tick in fixed phases, and what comes of them reaches each Mind only in the next tick.
+One hour of world time. Each tick every **Being**'s **Nature** derives its needs afresh and the Being takes the next step of its **Plan**; its **Mind** is consulted only when it has no Plan, a step fails, it learns something new about a **Thing** its Plan relies on, requests reach it as an **Owner**, its **Group** asks its vote, or a need meets its **Resolve**. The world then settles every Action of the tick in fixed phases, and what comes of them reaches each Mind only in the next tick.
 _Avoid_: Turn, Round (those belong to combat)
 
 **Fight**:
