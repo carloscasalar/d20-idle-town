@@ -107,15 +107,15 @@ What a **Being** believes about the world beyond its own state: what it sees whe
 _Avoid_: Perception, View, World state
 
 **Owner**:
-The **Being** that has the say over a **Thing**, such as the apothecary **Business** over its potions or a job's poster over its Contract. Every **Action** on an owned Thing is a request its Owner accepts or refuses; a Thing whose Owner is gone has no Owner, and anyone may take from it.
+The **Being** that has the say over a **Thing**, such as the apothecary **Business** over its potions or a job's poster over its Contract. Every peaceful **Action** on an owned Thing is a request its Owner accepts or refuses; a hostile one (occupying, attacking, stealing) is taken by force and happens unless someone resists it. The Owner's own Actions on its Things ask nobody and settle before the requests. A Thing whose Owner is gone has no Owner, and anyone may take from it.
 _Avoid_: Keeper, Controller
 
 **Claim**:
-Two or more **Beings** attempting, in the same tick, **Actions** that cannot all happen, such as buying the last potion. The **Owner** of the Thing they want answers all the requests at once; with no Owner, a **Contest** decides.
+Two or more **Beings** attempting, in the same tick, peaceful **Actions** on one Thing that cannot all happen, such as buying the last potion. The **Owner** of the Thing they want answers all the requests at once and may accept no more than the Thing allows; accepting more fails the run. With no Owner, a **Contest** decides.
 _Avoid_: Conflict, Race
 
 **Contest**:
-A roll between the Beings of a **Claim**, with the check the **Action** calls for: Stealth to slip in first, Athletics to grab, and so on.
+A roll between the Beings of a **Claim**, with the check the **Action** calls for: Stealth to slip in first, Athletics to grab, and so on. The world rolls it from the Thing's own dice for that tick, in a fixed order, so the order Beings are asked never changes it.
 _Avoid_: Tie-break, Opposed roll
 
 **Resolve**:
@@ -123,7 +123,7 @@ The **Urgency** at which another **Need** makes a **Being** break off its **Plan
 _Avoid_: Threshold, Breaking point
 
 **Tick**:
-One hour of world time. Each tick every **Being**'s **Nature** derives its needs afresh and the Being takes the next step of its **Plan**; its **Mind** is consulted only when it has no Plan, a step fails, it learns something new about a **Thing** its Plan relies on, requests reach it as an **Owner**, or a need meets its **Resolve**.
+One hour of world time. Each tick every **Being**'s **Nature** derives its needs afresh and the Being takes the next step of its **Plan**; its **Mind** is consulted only when it has no Plan, a step fails, it learns something new about a **Thing** its Plan relies on, requests reach it as an **Owner**, or a need meets its **Resolve**. The world then settles every Action of the tick in fixed phases, and what comes of them reaches each Mind only in the next tick.
 _Avoid_: Turn, Round (those belong to combat)
 
 **Fight**:
@@ -245,6 +245,8 @@ The squares a creature controls on the battlefield. In the 2024 rules a Huge cre
 - A **Contract** is a hire: a **Party** asks its poster to take it, and once taken it is that Party's alone. A **Bounty** is open: nobody takes it, and whoever shows its poster that the **Lair** is cleared claims the reward, which the poster, as its **Owner**, may pay or refuse. One Party may collect a Contract and a Bounty for the same deed, and Parties may race for one Bounty.
 - The gold promised in a posted job is set aside in its poster's own state, so its **Nature** sees less gold free. A Being never promises more than its free gold, and one whose free gold is below the minimum reward cannot post a job, so posting never leaves a **Purse** negative.
 - A **Party** takes its **Long rest** in an inn, or under the open sky when there is no room.
+- An **Action** that lasts several **Ticks**, such as travelling a stretch of **Road** or a **Long rest**, is taken one tick at a time. Its progress is the Being's own state, such as where it stands on the Road, so breaking off leaves the Being where it is.
+- A **Long rest** broken by any other **Action** starts over; the hours rested before count as a **Short rest**.
 
 ### Current game
 

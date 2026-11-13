@@ -11,3 +11,5 @@ How do the slice's Groups work? Decide how a Party's and a Horde's Nature combin
 ## Comments
 
 From the user, while working the ticket "Being contract": in combat, a threat to flee is faced by the whole Group, not by each Member alone. The Group's Mind decides, and may ask its Members' Minds before deciding. A Group splitting because its Members are polarized is for later, once the being engine is refined; the first slice does not need it.
+
+From [Tick settlement](03-tick-settlement.md): a Contest rolls one check per Being in it. Decide which Member's bonus a Group rolls with, and whether a Group's Action and its Members' Actions are gathered apart.
