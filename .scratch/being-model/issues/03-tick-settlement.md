@@ -27,3 +27,5 @@ Settlement as prototyped, before the forks are decided. Each Tick runs in fixed 
 No Mind is consulted twice for the same reason within a Tick, and a failure reaches the Mind at the start of the next Tick.
 
 Decisions while working the ticket (folded into the Answer on resolution):
+
+1. **A hostile Action on an owned Thing is not a request: it is taken by force.** Occupying a Holding, attacking a Being or stealing never goes to the Owner for an answer. It happens unless someone there resists, and resisting sets up a Fight ("Fight as a Thing"). Only peaceful Actions on an owned Thing are requests the Owner accepts or refuses. Otherwise the goblins would ask Mara for her Herb garden, she would refuse, and the slice story would never start. The glossary's Owner and Claim entries change to match on resolution.
