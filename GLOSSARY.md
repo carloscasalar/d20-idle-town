@@ -31,7 +31,7 @@ One step a **Being** attempts in the world, such as buying a potion or travellin
 _Avoid_: Move, Command
 
 **Plan**:
-The fixed sequence of **Actions** a **Mind** commits to in order to meet one **Need**, such as travel, fight, return and collect. The Being follows it step by step and decides again only when it ends, when its Need is gone, when a step fails, when it learns something new about a **Thing** the Plan relies on, or when another Need meets its **Resolve**. Waiting is a Plan with no steps.
+The fixed sequence of **Actions** a **Mind** commits to in order to meet one **Need**, such as travel, fight, return and collect. The Being follows it step by step and decides again only when it ends, when its Need is gone, when a step fails, when it learns something new about a **Thing** the Plan relies on, or when another Need meets its **Resolve**. Waiting is a Plan with no steps; following its **Group** is a Plan whose steps are the Group's.
 _Avoid_: Course, Undertaking, Task
 
 **Group**:
