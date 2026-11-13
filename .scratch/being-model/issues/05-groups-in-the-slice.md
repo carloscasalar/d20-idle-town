@@ -23,3 +23,4 @@ Decisions while working the ticket (folded into the Answer on resolution):
    - `majority`: the Group's Mind asks every following Member's Mind, and a tie goes to the leader's view.
 
    Choosing the strategy is a Group's first decision when it forms. In the slice every Group starts formed, so configuration names the strategy: a Party defaults to `majority`, and a Horde uses `leader` with its Boss as leader. A three-Party run can show a led Party beside a voting one.
+4. **A Party's leader is chosen by its Members when the Party forms, for example by a Contest.** Configuration does not name it, and neither does a fixed rule such as highest level. How the slice makes that choice, and when it happens given that its Parties start formed, is decision 5.
