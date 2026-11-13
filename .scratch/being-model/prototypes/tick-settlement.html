@@ -1,0 +1,600 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tick settlement prototype</title>
+<style>
+  :root { --ink:#1d2330; --mute:#6b7385; --line:#e3e6ec; --bg:#f7f8fa; --card:#fff; --accent:#2f6fdb; --soft:#e9f0fc; --bad:#c2412d; --ok:#2f8a4e; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width:1180px; margin:0 auto; padding:24px 16px 64px; }
+  h1 { font-size:24px; margin:0 0 4px; }
+  h2 { font-size:17px; margin:28px 0 10px; }
+  h3 { font-size:15px; margin:0 0 6px; }
+  p { margin:6px 0; }
+  .mute { color:var(--mute); }
+  .banner { background:#fff6e5; border:1px solid #f0d9a8; border-radius:8px; padding:10px 14px; margin:12px 0; font-size:14px; }
+  .panel { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:14px 16px; }
+  .row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+  button { font:inherit; font-size:14px; border:1px solid var(--line); background:#fff; border-radius:7px; padding:6px 11px; cursor:pointer; }
+  button:hover:not(:disabled) { border-color:var(--accent); }
+  button.primary { background:var(--accent); color:#fff; border-color:var(--accent); }
+  button:disabled { opacity:.45; cursor:default; }
+  button.done { background:var(--soft); color:var(--mute); }
+  .forks { display:grid; grid-template-columns:repeat(auto-fit, minmax(260px, 1fr)); gap:10px; }
+  .fork { border:1px solid var(--line); border-radius:8px; padding:8px 10px; font-size:14px; }
+  .fork b { display:block; margin-bottom:4px; }
+  .fork label { display:block; margin:2px 0; }
+  .beings { display:grid; grid-template-columns:repeat(auto-fit, minmax(270px, 1fr)); gap:12px; }
+  .kv { display:grid; grid-template-columns:96px 1fr; gap:2px 10px; font-size:14px; }
+  .kv dt { color:var(--mute); } .kv dd { margin:0; }
+  .need { font-size:14px; }
+  .steps { margin:4px 0 0; padding-left:20px; font-size:14px; }
+  .steps li.done { color:var(--mute); text-decoration:line-through; }
+  .steps li.next { font-weight:600; }
+  .tag { display:inline-block; font-size:12px; padding:1px 7px; border-radius:10px; background:var(--soft); color:var(--accent); }
+  .tag.bad { background:#fbe9e6; color:var(--bad); }
+  table { width:100%; border-collapse:collapse; font-size:14px; }
+  th, td { text-align:left; vertical-align:top; padding:5px 8px; border-bottom:1px solid var(--line); }
+  th { color:var(--mute); font-weight:500; }
+  .ok { color:var(--ok); } .bad { color:var(--bad); }
+  .tabs { display:flex; gap:4px; flex-wrap:wrap; margin-bottom:10px; }
+  .tabs button.on { background:var(--accent); color:#fff; border-color:var(--accent); }
+  .walk ol { padding-left:20px; } .walk li { margin:6px 0; }
+  .road { position:relative; height:74px; margin:8px 6px 4px; }
+  .road .line { position:absolute; left:0; right:0; top:30px; height:3px; background:var(--line); }
+  .road .ms { position:absolute; top:22px; width:2px; height:19px; background:var(--mute); }
+  .road .msl { position:absolute; top:44px; font-size:12px; color:var(--mute); transform:translateX(-50%); white-space:nowrap; }
+  .road .tok { position:absolute; font-size:12px; padding:0 6px; border-radius:9px; background:var(--accent); color:#fff; transform:translateX(-50%); white-space:nowrap; }
+  .road .tok.horde { background:var(--bad); } .road .tok.place { background:#8a6d2f; }
+  .phase { font-weight:600; white-space:nowrap; }
+  .err { color:var(--bad); font-weight:600; }
+  .scroll { max-height:340px; overflow:auto; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Tick settlement — prototype</h1>
+  <p class="mute">Throwaway prototype for the wayfinder ticket "Tick settlement". Not part of <code>src/</code>. Built on the resolved "Being contract".</p>
+  <div class="panel">
+    <p><b>The question.</b> How does the world settle one <b>Tick</b>? Every <b>Being</b> first decides on its own, against the world as it stood when the Tick began. Then the world gathers every <b>Action</b> and settles them in fixed phases: requests go to each Thing's <b>Owner</b>, who answers them all in one consultation. A <b>Contest</b> settles a Thing that has no Owner. Then outcomes are applied and the Things' own rules run. A failed step reaches the Being's <b>Mind</b> at the start of the next Tick, never later in the same one. Lasting Actions such as travel and the Long rest are taken one Tick at a time. Their progress is real state: where the Party stands on the Road, how many hours it has rested.</p>
+    <p>The run is the slice story, kept small. Grakk's goblins march from their Lair to Mara's Herb garden. Mara's Apothecary posts a Contract on the Board. Red Hand and the Grey Owls both want it.</p>
+  </div>
+  <div class="banner">Placeholders, owned by other tickets: a Milestone takes 3 Ticks ("Milestone travel time"); every Being sees the world as it is ("Knowledge in the slice"); a Fight resolves in one roll inside the Tick ("Fight as a Thing"); a Party is one Being with one Athletics bonus ("Groups in the slice").</div>
+
+  <h2>Open forks</h2>
+  <div class="forks" id="forks"></div>
+
+  <h2>Guided walkthroughs</h2>
+  <div class="panel walk">
+    <div class="tabs" id="tabs"></div>
+    <div id="walk"></div>
+  </div>
+
+  <h2>Free play</h2>
+  <div class="panel">
+    <div class="row" id="free"></div>
+  </div>
+
+  <h2 id="stateTitle">The world</h2>
+  <div class="panel">
+    <div class="road" id="road"></div>
+    <div id="things"></div>
+  </div>
+  <div class="beings" id="beings" style="margin-top:12px"></div>
+
+  <h2>This Tick, phase by phase</h2>
+  <div class="panel"><table id="log"></table></div>
+
+  <h2>Journal <span class="mute" style="font-weight:400;font-size:14px">(every consultation, newest first; n = its number within the Tick)</span></h2>
+  <div class="panel scroll"><table id="journal"></table></div>
+</main>
+
+<script>
+// ================= Settlement module (pure: no DOM) =================
+const Settle = (() => {
+  const MILESTONE_TICKS = 3, REST_TICKS = 8, HOLDING_AT = 6, LAIR_AT = 9, REWARD = 50;
+
+  function hash(s) { let h = 2166136261 >>> 0; for (const c of s) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619) >>> 0; } return h; }
+  function rngFrom(state) {
+    let a = state >>> 0;
+    return {
+      d20() { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return 1 + Math.floor((((t ^ (t >>> 14)) >>> 0) / 4294967296) * 20); },
+      get state() { return a; },
+    };
+  }
+  const clone = o => JSON.parse(JSON.stringify(o));
+  const byId = (a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+  class ContractBreak extends Error {}
+
+  function place(h) {
+    if (h === 0) return 'in town';
+    const m = Math.floor(h / MILESTONE_TICKS), r = h % MILESTONE_TICKS;
+    return r ? `between Milestone ${m} and ${m + 1}` : `at Milestone ${m}`;
+  }
+
+  function initial() {
+    const being = (o) => ({ plan: null, failure: null, needs: [], knowledge: {}, prevKnowledge: {}, gone: false, ...o });
+    const party = (o) => being({ kind: 'party', hours: 0, purse: 10, rest: { hours: 0, interruptions: 0 }, extraNeeds: [], ...o });
+    return {
+      seed: 'd20', tick: 0, sharedRng: hash('d20:world'), broken: null, log: [], journal: [],
+      beings: {
+        goblins: being({ id: 'goblins', name: "Grakk's goblins", kind: 'horde', hours: LAIR_AT }),
+        mara: being({ id: 'mara', name: "Mara's Apothecary", kind: 'business', purse: 120, setAside: 0, changeOfHeart: false, greedy: false }),
+        owls: party({ id: 'owls', name: 'Grey Owls', hp: 22, maxHp: 22, athletics: 3, resolve: 9, mind: 'cautious' }),
+        red: party({ id: 'red', name: 'Red Hand', hp: 20, maxHp: 20, athletics: 5, resolve: 15, mind: 'bold' }),
+        town: being({ id: 'town', name: 'Town (placeholder)', kind: 'town' }),
+      },
+      things: {
+        board: { id: 'board', name: 'Board', owner: 'town' },
+        holding: { id: 'holding', name: 'Herb garden', owner: 'mara', hours: HOLDING_AT, threatenedBy: null, income: 2 },
+        contract: null,
+      },
+    };
+  }
+
+  const isOpen = c => !!c && !c.withdrawn && !c.takenBy && !c.paid;
+  const nameOf = (w, id) => (w.beings[id] || {}).name || id;
+
+  // ---- Knowledge (placeholder: perfect) ----
+  function knowledgeOf(b, w) {
+    const c = w.things.contract;
+    return {
+      contract: !c ? 'none' : c.paid ? 'paid' : c.withdrawn ? 'withdrawn'
+        : (c.takenBy ? `taken by ${nameOf(w, c.takenBy)}${c.fulfilled ? ', work done' : ''}` : 'open') + (c.owner ? '' : ', no Owner'),
+      holding: w.things.holding.threatenedBy ? 'threatened' : 'safe',
+    };
+  }
+
+  // ---- Natures: state + Knowledge -> Needs ----
+  function needsOf(b, w) {
+    const N = [], c = w.things.contract, h = w.things.holding;
+    if (b.kind === 'business') {
+      if (h.owner === b.id && h.threatenedBy) N.push({ kind: 'protect', urgency: 12, about: 'holding', note: 'goblins hold the Herb garden; no income' });
+      if (b.changeOfHeart && c && c.owner === b.id && isOpen(c)) N.push({ kind: 'cut-losses', urgency: 20, about: 'contract', note: 'wants the reward back' });
+    }
+    if (b.kind === 'party') {
+      const mine = c && c.takenBy === b.id && !c.paid;
+      if (mine && !c.fulfilled) N.push({ kind: 'fulfil', urgency: 10, about: 'contract', note: 'holds the Contract' });
+      if (mine && c.fulfilled) N.push({ kind: 'get-paid', urgency: 10, about: 'contract', note: 'the work is done; the reward is owed' });
+      if (!mine && isOpen(c)) N.push({ kind: 'work', urgency: 8, about: 'contract', note: 'a Contract is open on the Board' });
+      if (b.hp < b.maxHp) N.push({ kind: 'heal', urgency: b.hp * 2 <= b.maxHp ? (b.hours > 0 ? 14 : 9) : 6, note: `${b.hp}/${b.maxHp} hp${b.hours > 0 ? ', away from town' : ''}` });
+      for (const x of b.extraNeeds) N.push(x);
+    }
+    if (b.kind === 'horde' && !h.threatenedBy) N.push({ kind: 'plunder', urgency: 10, about: 'holding', note: 'the Herb garden lies unguarded' });
+    return N;
+  }
+
+  // ---- Minds: one way in, consult(question) -> Decision ----
+  const top = needs => [...needs].sort((a, b) => b.urgency - a.urgency)[0];
+  const travelTo = (b, to) => b.hours === to ? [] : [{ kind: 'travel', to }];
+
+  function consult(b, q, needs, w) {
+    if (q.kind === 'requests') {
+      if (b.kind === 'town') return { kind: 'answers', reason: 'the Board takes every job', answers: q.requests.map(r => ({ request: r.id, accept: true, reason: 'posted' })) };
+      // business
+      const c = w.things.contract;
+      const takers = q.requests.filter(r => r.action.kind === 'take').map(r => w.beings[r.actor]);
+      const fav = [...takers].sort((x, y) => y.maxHp - x.maxHp || (x.id < y.id ? -1 : 1))[0];
+      const answers = q.requests.map(r => {
+        const k = r.action.kind;
+        if (k === 'take') {
+          if (b.greedy) return { request: r.id, accept: true, reason: 'more hands, more chance' };
+          return r.actor === fav.id ? { request: r.id, accept: true, reason: `${fav.name} looks the strongest` }
+                                    : { request: r.id, accept: false, reason: `promised to ${fav.name}` };
+        }
+        if (k === 'collect') return c && c.fulfilled && c.takenBy === r.actor ? { request: r.id, accept: true, reason: 'the Herb garden is safe again' } : { request: r.id, accept: false, reason: 'the work is not done' };
+        if (k === 'occupy') return { request: r.id, accept: false, reason: 'my land is not for plundering' };
+        return { request: r.id, accept: false, reason: 'no' };
+      });
+      return { kind: 'answers', reason: 'answers every request at once', answers };
+    }
+
+    // what-next
+    const pre = q.why === 'step-failed' ? `${q.failure.why}; ` : '';
+    const t = top(needs);
+    if (b.kind === 'business') {
+      const c = w.things.contract;
+      if (t && t.kind === 'cut-losses') return { kind: 'commit', forNeed: { kind: 'cut-losses', about: 'contract' }, steps: [{ kind: 'withdraw', thing: 'contract' }], resolve: 20, reliesOn: ['contract'], reason: pre + 'withdraw the Contract: I want the reward back' };
+      if (needs.some(n => n.kind === 'protect') && (!c || c.withdrawn) && !b.changeOfHeart && b.purse - b.setAside >= REWARD)
+        return { kind: 'commit', forNeed: { kind: 'protect', about: 'holding' }, steps: [{ kind: 'post', thing: 'board' }], resolve: 15, reliesOn: ['holding'], reason: pre + 'post a Contract: goblins hold the Herb garden' };
+      return { kind: 'wait', resolve: t ? Math.min(20, t.urgency + 1) : 1, reliesOn: ['holding', 'contract'], reason: pre + (t ? 'wait: the Contract is up' : 'wait: nothing lacking') };
+    }
+    if (b.kind === 'horde') {
+      if (t && t.kind === 'plunder') return { kind: 'commit', forNeed: { kind: 'plunder', about: 'holding' }, steps: [...travelTo(b, HOLDING_AT), { kind: 'occupy', thing: 'holding' }], resolve: 18, reliesOn: ['holding'], reason: pre + 'march on the Herb garden' };
+      return { kind: 'wait', resolve: 1, reliesOn: [], reason: pre + 'hold the Herb garden' };
+    }
+    if (b.kind === 'town') return { kind: 'wait', resolve: 1, reliesOn: [], reason: 'placeholder Town: nothing to do' };
+    // party
+    if (q.why === 'resolve-met' && q.plan && q.plan.forNeed && t && t.kind === q.plan.forNeed.kind)
+      return { kind: 'carry-on', resolve: Math.min(20, q.metBy.urgency + 1), reason: `carry on: ${q.plan.forNeed.kind} still comes first` };
+    const R = b.resolve;
+    if (!t) return { kind: 'wait', resolve: 5, reliesOn: ['contract'], reason: pre + 'wait for work' };
+    switch (t.kind) {
+      case 'safety': return { kind: 'commit', forNeed: { kind: 'safety' }, steps: [{ kind: 'watch' }], resolve: 17, reliesOn: [], reason: pre + 'stand watch: wolves near the camp' };
+      case 'heal': return { kind: 'commit', forNeed: { kind: 'heal' }, steps: [...travelTo(b, 0), { kind: 'long-rest' }], resolve: R, reliesOn: [], reason: pre + (b.hours ? 'head home and rest: badly hurt' : 'long rest under the open sky') };
+      case 'get-paid': return { kind: 'commit', forNeed: { kind: 'get-paid', about: 'contract' }, steps: [...travelTo(b, 0), { kind: 'collect', thing: 'contract' }], resolve: R, reliesOn: ['contract'], reason: pre + 'go back and collect the reward' };
+      case 'fulfil': return { kind: 'commit', forNeed: { kind: 'fulfil', about: 'contract' }, steps: [...travelTo(b, HOLDING_AT), { kind: 'fight', target: 'goblins' }], resolve: R, reliesOn: ['contract', 'holding'], reason: pre + 'go and save the Herb garden' };
+      case 'work': return { kind: 'commit', forNeed: { kind: 'work', about: 'contract' }, steps: [{ kind: 'take', thing: 'contract' }], resolve: R, reliesOn: ['contract'], reason: pre + 'ask to take the Contract' };
+    }
+    return { kind: 'wait', resolve: 5, reliesOn: ['contract'], reason: pre + 'wait' };
+  }
+
+  function check(b, d, q) {
+    const fail = m => { throw new ContractBreak(`${b.name} broke the being contract: ${m}`); };
+    if (!d.reason) fail('a Decision with no Reason');
+    if (d.kind !== 'answers' && !(Number.isInteger(d.resolve) && d.resolve >= 1 && d.resolve <= 20)) fail('a Resolve outside 1–20');
+    if (d.kind === 'commit' && !d.steps.length) fail('a commit with no steps');
+    if (d.kind === 'carry-on' && !(q.metBy && d.resolve > q.metBy.urgency)) fail('a carry-on that does not raise the Resolve above the Need that met it');
+    if (d.kind === 'answers') {
+      const ids = d.answers.map(a => a.request).sort().join(), want = q.requests.map(r => r.id).sort().join();
+      if (ids !== want) fail('answers that do not answer each request exactly once');
+    }
+  }
+
+  const describeAction = (w, a) => ({
+    travel: () => `travel toward ${a.to === 0 ? 'town' : 'the Herb garden'}`,
+    'long-rest': () => 'Long rest', watch: () => 'stand watch',
+    take: () => 'take the Contract', collect: () => 'collect the reward', post: () => 'post a Contract on the Board',
+    withdraw: () => 'withdraw the Contract', occupy: () => 'occupy the Herb garden', fight: () => `fight ${nameOf(w, a.target)}`,
+  }[a.kind] || (() => a.kind))();
+
+  function describeQuestion(w, q) {
+    if (q.kind === 'requests') return 'requests: ' + q.requests.map(r => `${nameOf(w, r.actor)} → ${describeAction(w, r.action)}`).join('; ');
+    const extra = q.why === 'step-failed' ? ` (${q.failure.how})` : q.why === 'resolve-met' ? ` (${q.metBy.kind} ${q.metBy.urgency})` : q.why === 'news' ? ` (about the ${q.about})` : '';
+    return `what next? ${q.why}${extra}`;
+  }
+  function describeDecision(w, d) {
+    if (d.kind === 'commit') return `commit: ${d.steps.map(s => describeAction(w, s)).join(' → ')} · Resolve ${d.resolve}`;
+    if (d.kind === 'wait') return `wait · Resolve ${d.resolve}`;
+    if (d.kind === 'carry-on') return `carry on · Resolve ${d.resolve}`;
+    return d.answers.map(a => `${a.accept ? 'accept' : 'refuse'} ${a.request.split(':')[0]} (${a.reason})`).join('; ');
+  }
+
+  const sameNeed = (n, f) => f && n.kind === f.kind && n.about === f.about;
+
+  // ---- One Tick ----
+  function tick(w0, opts) {
+    const w = clone(w0); w.tick++; w.log = [];
+    const L = (phase, text, cls = '') => w.log.push({ phase, text, cls });
+    const counter = {};
+    const ask = (b, q, needs) => {
+      const n = counter[b.id] = (counter[b.id] ?? -1) + 1;
+      const d = consult(b, q, needs, w);
+      check(b, d, q);
+      w.journal.push({ tick: w.tick, being: b.name, n, question: describeQuestion(w, q), needs: needs.map(x => `${x.kind} ${x.urgency}`).join(', ') || '—', decision: describeDecision(w, d), reason: d.reason });
+      return d;
+    };
+    let live = Object.values(w.beings).filter(b => !b.gone).sort(byId);
+    if (opts.askOrder === 'reverse') live.reverse();
+    const worldRng = key => opts.worldRandom === 'per-thing' ? rngFrom(hash(`${w.seed}:${w.tick}:${key}`)) : null;
+    const shared = () => { const r = rngFrom(w.sharedRng); return { d20() { const v = r.d20(); w.sharedRng = r.state; return v; } }; };
+    const dice = key => worldRng(key) || shared();
+
+    try {
+      // 1. Knowledge
+      for (const b of live) { b.prevKnowledge = b.knowledge; b.knowledge = knowledgeOf(b, w); }
+      L('1 Knowledge', 'Every Being takes in the world as it stands at the start of the Tick.');
+
+      // 2. Decide — each Being alone, against the same start-of-Tick world
+      const gathered = [];
+      for (const b of live) {
+        const needs = b.needs = needsOf(b, w);
+        const p = b.plan; let q = null;
+        if (b.failure) q = { why: 'step-failed', failure: b.failure };
+        else if (!p) q = { why: 'no-plan' };
+        else if (p.steps.length && p.next >= p.steps.length) q = { why: 'plan-finished' };
+        else if (p.forNeed && !needs.some(n => sameNeed(n, p.forNeed))) q = { why: 'need-gone' };
+        else { const id = p.reliesOn.find(t => JSON.stringify(b.knowledge[t]) !== JSON.stringify(b.prevKnowledge[t])); if (id) q = { why: 'news', about: id }; }
+        if (!q && p) { const met = needs.filter(n => !sameNeed(n, p.forNeed)).sort((x, y) => y.urgency - x.urgency)[0]; if (met && met.urgency >= p.resolve) q = { why: 'resolve-met', metBy: met }; }
+        if (q) {
+          q.kind = 'what-next'; q.plan = p;
+          const d = ask(b, q, needs);
+          b.plan = d.kind === 'carry-on' ? { ...p, resolve: d.resolve } : { forNeed: d.kind === 'commit' ? d.forNeed : null, steps: d.kind === 'commit' ? d.steps : [], next: 0, resolve: d.resolve, reliesOn: d.reliesOn };
+          b.failure = null;
+          L('2 Decide', `${b.name}: Mind consulted (${q.why}) → ${describeDecision(w, d)}. “${d.reason}”`);
+        }
+        const step = b.plan.steps[b.plan.next];
+        if (step) gathered.push({ actor: b.id, action: step, result: null });
+        else L('2 Decide', `${b.name} waits (Resolve ${b.plan.resolve}).`, 'mute');
+      }
+      L('3 Gather', gathered.length ? gathered.map(g => `${nameOf(w, g.actor)}: ${describeAction(w, g.action)}`).join(' · ') : 'no Actions');
+
+      const fail = (g, how, why) => { g.result = { status: 'failed', how, why }; };
+      const done = g => { g.result = { status: 'done' }; };
+      const thingOf = g => g.action.thing ? w.things[g.action.thing] : null;
+      const modeOf = g => {
+        const k = g.action.kind;
+        if (['travel', 'long-rest', 'watch'].includes(k)) return 'free';
+        if (k === 'fight') return 'force';
+        if (k === 'occupy' && opts.hostile === 'force') return 'force';
+        const t = thingOf(g); if (!t) return 'missing';
+        if (t.owner === g.actor) return 'own';
+        if (t.owner && !w.beings[t.owner].gone) return 'leave';
+        return 'unowned';
+      };
+      for (const g of gathered) g.mode = modeOf(g);
+      for (const g of gathered.filter(g => g.mode === 'missing')) { fail(g, 'impossible', 'there is no Contract'); L('4 Settle', `${nameOf(w, g.actor)}: ${describeAction(w, g.action)} is impossible: there is no Contract.`, 'bad'); }
+
+      // apply helpers
+      const applyAccepted = g => {
+        const c = w.things.contract, a = g.action, actor = w.beings[g.actor];
+        if (a.kind === 'post') {
+          if (actor.purse - actor.setAside < REWARD) return fail(g, 'impossible', 'not enough free gold');
+          w.things.contract = { id: 'contract', name: 'Save the Herb garden', owner: actor.id, reward: REWARD, takenBy: null, fulfilled: false, paid: false, withdrawn: false };
+          actor.setAside += REWARD; return done(g);
+        }
+        if (a.kind === 'take') { c.takenBy = actor.id; return done(g); }
+        if (a.kind === 'collect') { const o = w.beings[c.owner]; o.setAside -= c.reward; o.purse -= c.reward; actor.purse += c.reward; c.paid = true; return done(g); }
+        if (a.kind === 'occupy') { w.things.holding.threatenedBy = actor.id; return done(g); }
+      };
+      const feasible = g => {
+        const c = w.things.contract, k = g.action.kind;
+        if (k === 'take' && !isOpen(c)) return c && c.withdrawn ? 'the Contract was withdrawn' : 'the Contract is no longer open';
+        if (k === 'collect' && !(c && c.fulfilled && c.takenBy === g.actor)) return 'the work is not done';
+        if (k === 'withdraw' && !isOpen(c)) return `the Contract is already ${c.takenBy ? 'taken by ' + nameOf(w, c.takenBy) : 'closed'}`;
+        if (k === 'occupy' && w.beings[g.actor].hours !== w.things.holding.hours) return 'not at the Herb garden';
+        return null;
+      };
+
+      const ownPhase = label => {
+        for (const g of gathered.filter(g => g.mode === 'own' && !g.result)) {
+          const why = feasible(g);
+          if (why) { fail(g, 'impossible', why); L(label, `${nameOf(w, g.actor)} acts on its own Thing: ${describeAction(w, g.action)} — impossible: ${why}.`, 'bad'); continue; }
+          if (g.action.kind === 'withdraw') { const c = w.things.contract, o = w.beings[g.actor]; c.withdrawn = true; o.setAside -= c.reward; o.changeOfHeart = false; done(g); }
+          L(label, `${nameOf(w, g.actor)} acts on its own Thing, asking nobody: ${describeAction(w, g.action)}.`, 'ok');
+        }
+      };
+      if (opts.ownerOrder === 'own-first') ownPhase('4 Owners act');
+
+      // 5. Requests: each Owner answers all its requests in one consultation
+      const leave = gathered.filter(g => g.mode === 'leave' && !g.result);
+      for (const g of leave) { const why = feasible(g); if (why) { fail(g, 'impossible', why); L('5 Requests', `${nameOf(w, g.actor)}: ${describeAction(w, g.action)} — impossible, the Owner is not asked: ${why}.`, 'bad'); } }
+      const owners = [...new Set(leave.filter(g => !g.result).map(g => thingOf(g).owner))].sort();
+      for (const oid of owners) {
+        const o = w.beings[oid], mine = leave.filter(g => !g.result && thingOf(g).owner === oid);
+        const requests = mine.map(g => ({ id: `${nameOf(w, g.actor)}:${g.action.kind}`, actor: g.actor, action: g.action }));
+        const d = ask(o, { kind: 'requests', requests }, o.needs);
+        L('5 Requests', `${o.name} answers ${requests.length} request${requests.length > 1 ? 's' : ''} at once: ${describeDecision(w, d)}.`);
+        const answerOf = g => d.answers.find(a => a.request === `${nameOf(w, g.actor)}:${g.action.kind}`);
+        const ordered = d.answers.map(a => mine.find(g => `${nameOf(w, g.actor)}:${g.action.kind}` === a.request));
+        const takes = ordered.filter(g => g.action.kind === 'take' && answerOf(g).accept);
+        if (takes.length > 1) {
+          if (opts.overAccept === 'break') throw new ContractBreak(`${o.name} accepted ${takes.length} Parties for one Contract, which only one can take. The run fails.`);
+          L('5 Requests', `${o.name} accepted ${takes.length} Parties for one Contract; the world keeps the first in its answers.`, 'bad');
+        }
+        for (const g of ordered) {
+          const a = answerOf(g);
+          if (!a.accept) { fail(g, 'refused', `${o.name} refused: ${a.reason}`); continue; }
+          const why = feasible(g);
+          if (why) { fail(g, 'impossible', why); L('5 Requests', `${nameOf(w, g.actor)} was accepted, but ${why}.`, 'bad'); continue; }
+          applyAccepted(g);
+        }
+      }
+
+      if (opts.ownerOrder === 'requests-first') ownPhase('6 Owners act');
+
+      // 7. Contests on Things with no Owner
+      const unowned = gathered.filter(g => g.mode === 'unowned' && !g.result);
+      for (const g of unowned) { const why = feasible(g) || (g.action.kind === 'collect' ? 'nobody owns the Contract to pay it' : null); if (why) { fail(g, 'impossible', why); L('7 Contest', `${nameOf(w, g.actor)}: ${describeAction(w, g.action)} — impossible: ${why}.`, 'bad'); } }
+      const takers = unowned.filter(g => !g.result && g.action.kind === 'take');
+      if (takers.length === 1) { applyAccepted(takers[0]); L('7 Contest', `${nameOf(w, takers[0].actor)} takes the ownerless Contract; nobody else wants it.`, 'ok'); }
+      if (takers.length > 1) {
+        const r = dice('contract');
+        const contestants = opts.worldRandom === 'per-thing' ? [...takers].sort((x, y) => x.actor < y.actor ? -1 : 1) : takers;
+        let pool = contestants, round = 0, winner = null;
+        while (!winner) {
+          round++;
+          const rolls = pool.map(g => { const d = r.d20(), b = w.beings[g.actor]; return { g, d, total: d + b.athletics }; });
+          L('7 Contest', `Athletics to grab the notice${round > 1 ? ' (reroll)' : ''}: ` + rolls.map(x => `${nameOf(w, x.g.actor)} rolls ${x.d} + ${w.beings[x.g.actor].athletics} = ${x.total}`).join(', ') + `. Rolled in this order, from ${opts.worldRandom === 'per-thing' ? 'the Contract\'s own stream for this Tick' : 'the one shared world stream'}.`);
+          const best = Math.max(...rolls.map(x => x.total));
+          const tops = rolls.filter(x => x.total === best);
+          if (tops.length === 1) winner = tops[0].g; else pool = tops.map(x => x.g);
+        }
+        applyAccepted(winner);
+        for (const g of takers) if (g !== winner) fail(g, 'contest-lost', `lost the Contest to ${nameOf(w, winner.actor)}`);
+        L('7 Contest', `${nameOf(w, winner.actor)} wins the Contract.`, 'ok');
+      }
+      for (const g of unowned.filter(g => !g.result && g.action.kind === 'occupy')) { applyAccepted(g); L('7 Contest', `${nameOf(w, g.actor)} occupies the ownerless Herb garden.`); }
+
+      // 8. Force
+      for (const g of gathered.filter(g => g.mode === 'force' && !g.result)) {
+        const actor = w.beings[g.actor];
+        if (g.action.kind === 'occupy') {
+          const why = feasible(g);
+          if (why) { fail(g, 'impossible', why); continue; }
+          applyAccepted(g);
+          L('8 Force', `${actor.name} takes the Herb garden by force; Mara is not asked, and nobody is there to defend it.`, 'ok');
+        }
+        if (g.action.kind === 'fight') {
+          const foe = w.beings[g.action.target];
+          if (!foe || foe.gone || foe.hours !== actor.hours) { fail(g, 'impossible', `${nameOf(w, g.action.target)} is not here`); L('8 Force', `${actor.name}: no ${nameOf(w, g.action.target)} here to fight.`, 'bad'); continue; }
+          const roll = dice(`fight:${actor.id}:${foe.id}`).d20();
+          if (roll >= 8) {
+            foe.gone = true; w.things.holding.threatenedBy = null; w.things.contract.fulfilled = true; actor.hp = Math.max(1, actor.hp - 8);
+            L('8 Force', `A Fight is set up (stub, rolled ${roll} ≥ 8): ${actor.name} wins; the goblins are gone and the Herb garden is safe.`, 'ok');
+          } else {
+            actor.hp = 3; w.things.contract.takenBy = null;
+            L('8 Force', `A Fight is set up (stub, rolled ${roll} < 8): ${actor.name} flees badly hurt; the Contract goes back on the Board.`, 'bad');
+          }
+          done(g);
+        }
+      }
+
+      // 9. Lasting and free Actions, one Tick each
+      for (const g of gathered.filter(g => g.mode === 'free')) {
+        const b = w.beings[g.actor], a = g.action;
+        if (a.kind === 'travel') {
+          if (b.hours !== a.to) b.hours += a.to > b.hours ? 1 : -1;
+          if (b.hours === a.to) done(g); else g.result = { status: 'progress' };
+          L('9 Lasting', `${b.name} travels one hour: now ${place(b.hours)}${g.result.status === 'done' ? ' — arrived' : ''}.`);
+        }
+        if (a.kind === 'long-rest') {
+          b.rest.hours++;
+          const need = REST_TICKS + (opts.restInterrupted === 'resume' ? b.rest.interruptions : 0);
+          if (b.rest.hours >= need) { b.hp = b.maxHp; b.rest = { hours: 0, interruptions: 0 }; done(g); L('9 Lasting', `${b.name} finishes its Long rest: full hit points.`, 'ok'); }
+          else { g.result = { status: 'progress' }; L('9 Lasting', `${b.name} rests: ${b.rest.hours} of ${need} hours.`); }
+        }
+        if (a.kind === 'watch') { done(g); L('9 Lasting', `${b.name} stands watch.`); }
+      }
+      for (const g of gathered) {
+        const b = w.beings[g.actor];
+        if (b.kind === 'party' && g.action.kind !== 'long-rest' && b.rest.hours > 0) {
+          const h = b.rest.hours, sr = h >= 1 ? ' The hours so far count as a Short rest.' : '';
+          if (opts.restInterrupted === 'start-over') b.rest = { hours: 0, interruptions: 0 };
+          if (opts.restInterrupted === 'resume') b.rest.interruptions++;
+          const what = { 'start-over': 'it must start over', resume: `it may resume, needing ${REST_TICKS + b.rest.interruptions} hours in all`, keep: 'its hours are kept' }[opts.restInterrupted];
+          L('9 Lasting', `${b.name}'s Long rest is interrupted after ${h} hours: ${what}.${sr}`, 'bad');
+        }
+      }
+
+      // 10. Things' own rules
+      const h = w.things.holding;
+      if (!h.threatenedBy && h.owner && !w.beings[h.owner].gone) { w.beings[h.owner].purse += h.income; L('10 Things', `The Herb garden is safe: ${h.income} gp to ${nameOf(w, h.owner)}.`); }
+      else L('10 Things', h.threatenedBy ? 'The Herb garden is threatened: no income.' : 'The Herb garden has no Owner: its income goes to nobody.', 'mute');
+
+      // 11. Outcomes reach the Beings
+      for (const g of gathered) {
+        const b = w.beings[g.actor];
+        if (!g.result) { fail(g, 'impossible', 'nothing came of it'); }
+        if (g.result.status === 'done') b.plan.next++;
+        if (g.result.status === 'failed') { b.failure = { action: g.action, how: g.result.how, why: g.result.why }; L('11 Outcomes', `${b.name}'s step failed (${g.result.how}: ${g.result.why}). Its Mind hears of it at the start of the next Tick.`, 'bad'); }
+      }
+      for (const b of Object.values(w.beings)) if (b.kind === 'party') b.extraNeeds = [];
+    } catch (e) {
+      if (!(e instanceof ContractBreak)) throw e;
+      w.broken = e.message; L('Broken', e.message, 'err');
+    }
+    return w;
+  }
+
+  // ---- outside nudges (free-play) ----
+  const nudge = {
+    woundOwls: w => { w = clone(w); w.beings.owls.hp = 4; return w; },
+    woundRed: w => { w = clone(w); w.beings.red.hp = 8; return w; },
+    wolves: w => { w = clone(w); w.beings.red.extraNeeds = [{ kind: 'safety', urgency: 16, note: 'wolves near the camp' }]; return w; },
+    changeOfHeart: w => { w = clone(w); w.beings.mara.changeOfHeart = true; return w; },
+    greedy: w => { w = clone(w); w.beings.mara.greedy = true; return w; },
+    maraGone: w => {
+      w = clone(w); w.beings.mara.gone = true;
+      for (const t of Object.values(w.things)) if (t && t.owner === 'mara') t.owner = null;
+      return w;
+    },
+  };
+
+  return { initial, tick, nudge, place, describeAction, needsOf, MILESTONE_TICKS, LAIR_AT, HOLDING_AT };
+})();
+
+// ================= Page (throwaway) =================
+const FORKS = [
+  { key: 'hostile', title: 'Q1 · A hostile Action on an owned Thing (the goblins occupying Mara\'s Herb garden)', opts: [['force', 'A · by force: not a request; it happens unless someone resists'], ['leave', 'B · a request like any other: the Owner answers it']] },
+  { key: 'ownerOrder', title: 'Q2 · An Owner acting on its own Thing in the same Tick others ask about it', opts: [['own-first', 'A · the Owner\'s own Action settles first, then the requests'], ['requests-first', 'B · requests are answered first, then the Owner\'s own Action']] },
+  { key: 'overAccept', title: 'Q3 · An Owner accepts more requests than the Thing allows', opts: [['break', 'A · it breaks the being contract: the run fails'], ['cap', 'B · the world keeps the first accepted, in the Owner\'s answer order']] },
+  { key: 'worldRandom', title: 'Q4 · The world\'s own dice (Contests, Fights)', opts: [['per-thing', 'A · a stream per Thing per Tick; contestants roll in id order'], ['shared', 'B · one shared world stream, drawn in the order Actions were gathered']] },
+  { key: 'restInterrupted', title: 'Q5 · An interrupted Long rest', opts: [['resume', 'A · resume, needing one more hour per interruption'], ['start-over', 'B · start over from zero'], ['keep', 'C · keep the hours rested']] },
+  { key: 'askOrder', title: 'Order the Beings are asked (to test Q4, not a decision)', opts: [['id', 'by id'], ['reverse', 'reversed']] },
+];
+const DEFAULT_OPTS = { hostile: 'force', ownerOrder: 'own-first', overAccept: 'break', worldRandom: 'per-thing', restInterrupted: 'resume', askOrder: 'id' };
+
+const app = { w: Settle.initial(), opts: { ...DEFAULT_OPTS }, history: [] };
+const next = (n = 1) => { for (let i = 0; i < n && !app.w.broken; i++) { app.history.push(app.w); app.w = Settle.tick(app.w, app.opts); } };
+const runTo = t => { while (app.w.tick < t && !app.w.broken) next(); };
+const doNudge = k => { app.history.push(app.w); app.w = Settle.nudge[k](app.w); };
+const reset = (opts = {}) => { app.w = Settle.initial(); app.opts = { ...DEFAULT_OPTS, ...opts }; app.history = []; };
+const setOpt = (k, v) => { app.opts[k] = v; };
+
+const FREE = [
+  ['Next Tick', () => next(), 'primary'], ['Next 5 Ticks', () => next(5)], ['Back one step', () => { if (app.history.length) app.w = app.history.pop(); }],
+  ['Wound the Grey Owls', () => doNudge('woundOwls')], ['Wound Red Hand', () => doNudge('woundRed')], ['Wolves near Red Hand\'s camp', () => doNudge('wolves')],
+  ['Mara has a change of heart', () => doNudge('changeOfHeart')], ['Mara accepts every request', () => doNudge('greedy')], ['Mara is gone', () => doNudge('maraGone')],
+  ['Reset', () => reset(app.opts)],
+];
+
+const S = (label, fn) => ({ label, fn });
+const SCENARIOS = [
+  { name: 'The story', opts: {}, text: 'The whole slice story with the recommended answers. The goblins march and take the Herb garden. Mara posts a Contract. Both Parties ask for it in the same Tick, which makes a Claim. Mara answers both requests in one consultation. The Grey Owls travel, fight, return, collect the reward and rest. Watch the Journal: each Being\'s Mind is consulted only when the Being Contract says it must be.',
+    steps: [S('Next 4 Ticks: the goblins march and occupy', () => next(4)), S('Next Tick: Mara posts the Contract', () => next()), S('Next Tick: both Parties ask, a Claim', () => next()), S('Next 6 Ticks: the Owls travel out', () => next(6)), S('Next Tick: the Fight', () => next()), S('Next 7 Ticks: back to town and collect', () => next(7)), S('Next 9 Ticks: Long rest', () => next(9))] },
+  { name: 'Claim on the Contract', opts: {}, text: 'Two Parties ask for one Contract in the same Tick. Mara is its Owner. She is consulted once for her own next step (n = 0), then once more with both requests together (n = 1), and she answers them in the same Tick. The refused Party hears of it at the start of the next Tick, not before.',
+    steps: [S('Run to Tick 5 (Contract posted)', () => runTo(5)), S('Next Tick: the Claim', () => next()), S('Next Tick: Red Hand hears the refusal', () => next())] },
+  { name: 'Owner acts too (Q2)', opts: { ownerOrder: 'own-first' }, text: 'Mara changes her mind in the very Tick both Parties ask for the Contract. With A, her own withdrawal settles first, and the requests fail as impossible without her being asked. With B, she answers the requests first and her own withdrawal fails, because the Contract is already taken.',
+    steps: [S('Run to Tick 5', () => runTo(5)), S('Mara has a change of heart', () => doNudge('changeOfHeart')), S('Next Tick (A: own Action first)', () => next()),
+            S('Again with B: requests first', () => { reset({ ownerOrder: 'requests-first' }); runTo(5); doNudge('changeOfHeart'); next(); })] },
+  { name: 'Accepts both (Q3)', opts: { overAccept: 'break' }, text: 'Mara\'s Mind accepts every request, so both Parties get one Contract that only one can take. With A, the run fails at once, the same way a Decision with no Reason does. With B, the world keeps whichever request came first in Mara\'s answers and fails the other as impossible.',
+    steps: [S('Run to Tick 5', () => runTo(5)), S('Mara accepts every request', () => doNudge('greedy')), S('Next Tick (A: run fails)', () => next()),
+            S('Again with B: the world caps it', () => { reset({ overAccept: 'cap' }); runTo(5); doNudge('greedy'); next(); })] },
+  { name: 'Nobody owns it', opts: {}, text: 'Mara is gone after posting, so the Contract has no Owner. Nobody can answer the requests, so a Contest decides: an Athletics roll to grab the notice. The loser\'s step fails as a lost Contest. Later nobody can pay the reward either: collecting it is impossible.',
+    steps: [S('Run to Tick 5', () => runTo(5)), S('Mara is gone', () => doNudge('maraGone')), S('Next Tick: the Contest', () => next()), S('Next Tick', () => next())] },
+  { name: 'Same dice (Q4)', opts: { worldRandom: 'per-thing' }, text: 'The same Contest, asking the Beings in two different orders. With A, the dice come from the Contract\'s own stream for this Tick, and the contestants roll in id order, so the order the Beings are asked changes nothing. With B, one shared stream is drawn in the order Actions were gathered, so asking in reverse changes who wins.',
+    steps: [S('A, asked by id: run the Contest', () => { reset({ worldRandom: 'per-thing' }); runTo(5); doNudge('maraGone'); next(); }),
+            S('A, asked in reverse', () => { reset({ worldRandom: 'per-thing', askOrder: 'reverse' }); runTo(5); doNudge('maraGone'); next(); }),
+            S('B, asked by id', () => { reset({ worldRandom: 'shared' }); runTo(5); doNudge('maraGone'); next(); }),
+            S('B, asked in reverse', () => { reset({ worldRandom: 'shared', askOrder: 'reverse' }); runTo(5); doNudge('maraGone'); next(); })] },
+  { name: 'Turning back mid-road', opts: {}, text: 'The Grey Owls hold the Contract and are halfway to the Herb garden when they are badly wounded. Their heal Need reaches 14, which meets their cautious Resolve of 9, so their Mind is consulted between two hours of travel. They turn back from where they stand. The road they covered is real state, not lost progress. On the way home the Contract Need (10) still meets their Resolve, so the Mind carries on and raises the Resolve to 11.',
+    steps: [S('Run to Tick 6 (Owls hold the Contract)', () => runTo(6)), S('Next 3 Ticks: travelling out', () => next(3)), S('Wound the Grey Owls', () => doNudge('woundOwls')), S('Next Tick: they turn back', () => next()), S('Next Tick: carry on', () => next()), S('Next 3 Ticks', () => next(3))] },
+  { name: 'Broken Long rest (Q5)', opts: { restInterrupted: 'resume' }, text: 'Red Hand is hurt and takes a Long rest under the open sky. Four hours in, wolves come near the camp. Its safety Need of 16 meets its Resolve of 15, so it stands watch for one Tick and then rests again. The four hours count as a Short rest in every case. What happens to the Long rest depends on Q5. I checked the 2024 rule only in secondary sources: the extra-hour version (A) comes from a community copy, not the SRD itself.',
+    steps: [S('Wound Red Hand', () => doNudge('woundRed')), S('Next 4 Ticks: resting', () => next(4)), S('Wolves near the camp', () => doNudge('wolves')), S('Next Tick: stand watch', () => next()), S('Next 5 Ticks: rest again, 9 hours in all', () => next(5)),
+            S('Again with B: start over (8 more hours)', () => { reset({ restInterrupted: 'start-over' }); doNudge('woundRed'); next(4); doNudge('wolves'); next(9); }),
+            S('Again with C: keep the hours (4 more)', () => { reset({ restInterrupted: 'keep' }); doNudge('woundRed'); next(4); doNudge('wolves'); next(5); })] },
+  { name: 'Goblins on Mara\'s land (Q1)', opts: { hostile: 'leave' }, text: 'The glossary says every Action on an owned Thing is a request its Owner answers. Taken literally (B), the goblins ask Mara for her Herb garden, she refuses, and the story never starts. With A, hostile Actions are not requests: they happen unless someone resists, which is how a Fight is set up.',
+    steps: [S('B: next 6 Ticks', () => next(6)), S('Again with A: by force', () => { reset({ hostile: 'force' }); next(6); })] },
+];
+
+// ---- render ----
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+let current = 0, stepAt = 0;
+
+function render() {
+  const w = app.w;
+  $('forks').innerHTML = FORKS.map(f => `<div class="fork"><b>${f.title}</b>${f.opts.map(([v, l]) => `<label><input type="radio" name="${f.key}" value="${v}" ${app.opts[f.key] === v ? 'checked' : ''}> ${l}</label>`).join('')}</div>`).join('');
+  document.querySelectorAll('#forks input').forEach(i => i.onchange = () => { setOpt(i.name, i.value); render(); });
+
+  $('tabs').innerHTML = SCENARIOS.map((s, i) => `<button class="${i === current ? 'on' : ''}" data-i="${i}">${s.name}</button>`).join('');
+  document.querySelectorAll('#tabs button').forEach(b => b.onclick = () => startScenario(+b.dataset.i));
+  const sc = SCENARIOS[current];
+  $('walk').innerHTML = `<p>${sc.text}</p><ol>${sc.steps.map((s, i) => `<li><button data-i="${i}" class="${i < stepAt ? 'done' : i === stepAt ? 'primary' : ''}" ${i !== stepAt ? 'disabled' : ''}>${s.label}</button></li>`).join('')}</ol><button id="restart">Restart this walkthrough</button>`;
+  document.querySelectorAll('#walk ol button').forEach(b => b.onclick = () => { sc.steps[+b.dataset.i].fn(); stepAt++; render(); });
+  $('restart').onclick = () => startScenario(current);
+
+  $('free').innerHTML = FREE.map(([l, , c], i) => `<button data-i="${i}" class="${c || ''}" ${w.broken && i < 2 ? 'disabled' : ''}>${l}</button>`).join('');
+  document.querySelectorAll('#free button').forEach(b => b.onclick = () => { FREE[+b.dataset.i][1](); render(); });
+
+  $('stateTitle').innerHTML = `The world at the end of Tick ${w.tick}` + (w.broken ? ` <span class="err">— run failed</span>` : '');
+  const max = Settle.LAIR_AT, pct = h => 3 + (h / max) * 94;
+  let road = '<div class="line"></div>';
+  for (let m = 0; m <= max / Settle.MILESTONE_TICKS; m++) { const h = m * Settle.MILESTONE_TICKS; road += `<div class="ms" style="left:${pct(h)}%"></div><div class="msl" style="left:${pct(h)}%">${m === 0 ? 'Town · M0' : 'M' + m}${h === Settle.HOLDING_AT ? ' · Herb garden' : h === Settle.LAIR_AT ? ' · Lair' : ''}</div>`; }
+  const beingsOnRoad = Object.values(w.beings).filter(b => b.hours !== undefined && !b.gone);
+  const stack = {};
+  for (const b of beingsOnRoad) { const s = stack[b.hours] = (stack[b.hours] || 0) + 1; road += `<div class="tok ${b.kind === 'horde' ? 'horde' : ''}" style="left:${pct(b.hours)}%;top:${30 - s * 18 + 4}px">${esc(b.name)}</div>`; }
+  $('road').innerHTML = road;
+
+  const c = w.things.contract, h = w.things.holding;
+  const owner = id => id ? esc(w.beings[id].name) : '<span class="bad">nobody</span>';
+  $('things').innerHTML = `<table><tr><th>Thing</th><th>Owner</th><th>State</th></tr>
+    <tr><td>Herb garden (Holding)</td><td>${owner(h.owner)}</td><td>${h.threatenedBy ? `<span class="bad">threatened by ${esc(w.beings[h.threatenedBy].name)}</span>` : 'safe, earns 2 gp a Tick'}</td></tr>
+    <tr><td>Board</td><td>${owner(w.things.board.owner)}</td><td>${c && !c.withdrawn && !c.paid ? 'holds the Contract' : 'empty'}</td></tr>
+    <tr><td>Contract</td><td>${c ? owner(c.owner) : '—'}</td><td>${!c ? 'not posted' : c.paid ? 'paid' : c.withdrawn ? 'withdrawn' : c.takenBy ? `taken by ${esc(w.beings[c.takenBy].name)}${c.fulfilled ? ', work done' : ''}` : 'open'}${c ? ` · reward ${c.reward} gp` : ''}</td></tr></table>`;
+
+  $('beings').innerHTML = Object.values(w.beings).map(b => {
+    const p = b.plan;
+    const steps = !p ? '<span class="mute">no Plan yet</span>' : !p.steps.length ? `<span class="tag">waiting</span> Resolve ${p.resolve}` :
+      `<span class="tag">for ${p.forNeed.kind}</span> Resolve ${p.resolve}<ol class="steps">${p.steps.map((s, i) => `<li class="${i < p.next ? 'done' : i === p.next ? 'next' : ''}">${esc(Settle.describeAction(w, s))}</li>`).join('')}</ol>`;
+    const extra = b.kind === 'party' ? `<dt>Hit points</dt><dd>${b.hp}/${b.maxHp}</dd><dt>Where</dt><dd>${Settle.place(b.hours)}</dd><dt>Long rest</dt><dd>${b.rest.hours} h${b.rest.interruptions ? `, ${b.rest.interruptions} interruption(s)` : ''}</dd><dt>Purse</dt><dd>${b.purse} gp</dd><dt>Mind</dt><dd>${b.mind}</dd>`
+      : b.kind === 'business' ? `<dt>Purse</dt><dd>${b.purse} gp (${b.setAside} set aside)</dd>` : b.kind === 'horde' ? `<dt>Where</dt><dd>${Settle.place(b.hours)}</dd>` : '';
+    return `<div class="panel"><h3>${esc(b.name)} ${b.gone ? '<span class="tag bad">gone</span>' : ''}</h3><dl class="kv">${extra}
+      <dt>Needs <span title="as the Nature derived them at the start of the Tick">(start)</span></dt><dd class="need">${(b.needs || []).map(n => `${n.kind} <b>${n.urgency}</b> <span class="mute">${esc(n.note)}</span>`).join('<br>') || '<span class="mute">none</span>'}</dd>
+      <dt>Plan</dt><dd>${steps}</dd>
+      ${b.failure ? `<dt>Failed step</dt><dd class="bad">${b.failure.how}: ${esc(b.failure.why)}</dd>` : ''}</dl></div>`;
+  }).join('');
+
+  $('log').innerHTML = w.log.length ? w.log.map(l => `<tr><td class="phase">${l.phase}</td><td class="${l.cls}">${esc(l.text)}</td></tr>`).join('') : '<tr><td class="mute">No Tick settled yet.</td></tr>';
+  $('journal').innerHTML = '<tr><th>Tick</th><th>Being</th><th>n</th><th>Question</th><th>Needs seen</th><th>Decision</th><th>Reason</th></tr>' +
+    [...w.journal].reverse().map(j => `<tr><td>${j.tick}</td><td>${esc(j.being)}</td><td>${j.n}</td><td>${esc(j.question)}</td><td>${esc(j.needs)}</td><td>${esc(j.decision)}</td><td>${esc(j.reason)}</td></tr>`).join('');
+}
+
+function startScenario(i) { current = i; stepAt = 0; reset(SCENARIOS[i].opts); render(); }
+startScenario(0);
+</script>
+</body>
+</html>
