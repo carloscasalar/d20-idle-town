@@ -115,7 +115,7 @@ Two or more **Beings** attempting, in the same tick, peaceful **Actions** on one
 _Avoid_: Conflict, Race
 
 **Contest**:
-A roll between the Beings of a **Claim**, with the check the **Action** calls for: Stealth to slip in first, Athletics to grab, and so on. The world rolls it from the Thing's own dice for that tick, in a fixed order, so the order Beings are asked never changes it.
+A roll between **Beings**, to settle a **Claim** or to choose who leads a **Group**. In a Claim each rolls the check the **Action** calls for: Stealth to slip in first, Athletics to grab, and so on. To lead, each rolls its own best skill. The world rolls it from the dice for that tick of the Thing or Group at stake, in a fixed order, so the order Beings are asked never changes it.
 _Avoid_: Tie-break, Opposed roll
 
 **Resolve**:
